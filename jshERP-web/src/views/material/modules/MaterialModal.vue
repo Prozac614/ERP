@@ -330,9 +330,9 @@
         manyUnitStatus: true,
         unitChecked: false,
         switchDisabled: false, //开关的启用状态
-        barCodeSwitch: false, //生成条码开关
-        maxBarCodeInfo: '', //最大条码
-        meDeleteIdList: [], //删除条码信息的id数组
+        barCodeSwitch: false, //生成唛头开关
+        maxBarCodeInfo: '', //最大唛头
+        meDeleteIdList: [], //删除唛头信息的id数组
         prefixNo: 'material',
         attributeStatus: false,
         materialAttributeList: [],
@@ -366,9 +366,9 @@
           dataSource: [],
           columns: [
             {
-              title: '条码', key: 'barCode', width: '15%', type: FormTypes.input, defaultValue: '', placeholder: '请输入${title}',
+              title: '唛头', key: 'barCode', width: '15%', type: FormTypes.input, defaultValue: '', placeholder: '请输入${title}',
               validateRules: [{ required: true, message: '${title}不能为空' },
-                { pattern: /^.{4,40}$/, message: '长度为4到40位' },
+                { pattern: /^.{2,40}$/, message: '长度为2到40位' },
                 { handler: this.validateBarCode}]
             },
             {
@@ -561,7 +561,7 @@
           this.requestDepotTableData(this.url.depotWithStock, { mId: 0 }, this.depotTable)
         }
       },
-      /** 查询条码tab的数据 */
+      /** 查询唛头tab的数据 */
       requestMeTableData(url, params, tab) {
         tab.loading = true
         getAction(url, params).then(res => {
@@ -574,7 +574,7 @@
           }
           tab.dataSource = res.data.rows || []
           this.meOldDataSource = res.data.rows || []
-          //复制新增商品-初始化条码信息
+          //复制新增商品-初始化唛头信息
           if(this.action === 'copyAdd') {
             getMaxBarCode({}).then((res)=> {
               if (res && res.code === 200) {
@@ -661,7 +661,7 @@
           formData.tenantId = ''
         }
         if(formData.meList.length === 0) {
-          this.$message.warning('抱歉，请输入条码信息！');
+          this.$message.warning('抱歉，请输入唛头信息！');
           return;
         }
         if(formData.enableSerialNumber === '1' && formData.enableBatchNumber === '1') {
@@ -712,16 +712,16 @@
               if(!formData.unit) {
                 //此时为多单位
                 if (formData.meList.length<2){
-                  this.$message.warning('多单位的商品条码行数至少要有两行，请再新增一行条码信息！');
+                  this.$message.warning('多单位的商品唛头行数至少要有两行，请再新增一行唛头信息！');
                   return;
                 }
                 if(formData.meList[0].commodityUnit != basicUnit) {
-                  this.$message.warning('条码之后的单位填写有误，单位【' + formData.meList[0].commodityUnit
+                  this.$message.warning('唛头之后的单位填写有误，单位【' + formData.meList[0].commodityUnit
                     + '】请修改为【' + basicUnit + '】！');
                   return;
                 }
                 if(formData.meList[1].commodityUnit != otherUnit) {
-                  this.$message.warning('条码之后的单位填写有误，单位【' + formData.meList[1].commodityUnit
+                  this.$message.warning('唛头之后的单位填写有误，单位【' + formData.meList[1].commodityUnit
                     + '】请修改为【' + otherUnit + '】！');
                   return;
                 }
@@ -731,13 +731,13 @@
                 let commodityUnit = formData.meList[i].commodityUnit;
                 if(formData.unit) {
                   if(commodityUnit != formData.unit) {
-                    this.$message.warning('条码之后的单位填写有误，单位【' + commodityUnit + '】请修改为【'
+                    this.$message.warning('唛头之后的单位填写有误，单位【' + commodityUnit + '】请修改为【'
                       + formData.unit + '】！');
                     return;
                   }
                 } else if(formData.unitId) {
                   if(commodityUnit != basicUnit && commodityUnit != otherUnit && commodityUnit != otherUnitTwo && commodityUnit != otherUnitThree) {
-                    let warnInfo = '条码之后的单位填写有误，单位【' + commodityUnit + '】请修改为【' + basicUnit+ '】或【' + otherUnit+ '】'
+                    let warnInfo = '唛头之后的单位填写有误，单位【' + commodityUnit + '】请修改为【' + basicUnit+ '】或【' + otherUnit+ '】'
                     if(otherUnitTwo) {
                       warnInfo += '或【' + otherUnitTwo+ '】'
                     }
@@ -823,7 +823,7 @@
             if(!res.data.status){
               callback(true);
             } else {
-              callback(false, '该条码已经存在');
+              callback(false, '该唛头已经存在');
             }
           } else {
             callback(false, res.data);
@@ -899,7 +899,7 @@
             })
           }
         }
-        //控制条码列表中的多属性列
+        //控制唛头列表中的多属性列
         if(value.length>0) {
           this.meTable.columns[2].type = FormTypes.input
         } else {
@@ -1173,7 +1173,7 @@
       batchSetPriceModalFormOk(price, batchType) {
         let arr = this.meTable.dataSource
         if(arr.length === 0) {
-          this.$message.warning('请先录入条码、单位等信息！');
+          this.$message.warning('请先录入唛头、单位等信息！');
         } else {
           let meTableData = []
           for (let i = 0; i < arr.length; i++) {

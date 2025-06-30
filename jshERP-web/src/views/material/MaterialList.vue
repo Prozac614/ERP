@@ -17,7 +17,7 @@
               </a-col>
               <a-col :md="6" :sm="24">
                 <a-form-item label="关键词" :labelCol="labelCol" :wrapperCol="wrapperCol">
-                  <a-input placeholder="请输入条码、名称、助记码等查询" v-model="queryParam.materialParam"></a-input>
+                  <a-input placeholder="请输入唛头、名称、助记码等查询" v-model="queryParam.materialParam"></a-input>
                 </a-form-item>
               </a-col>
               <a-col :md="6" :sm="24">
@@ -299,7 +299,7 @@
             scopedSlots: { customRender: 'action' },
           },
           {title: '图片', dataIndex: 'pic', width: 60, scopedSlots: { customRender: 'customPic' }},
-          {title: '条码', dataIndex: 'mBarCode', width: 120},
+          {title: '唛头', dataIndex: 'mBarCode', width: 120},
           {title: '名称', dataIndex: 'name', width: 160, scopedSlots: { customRender: 'customName' }},
           {title: '规格', dataIndex: 'standard', width: 120},
           {title: '型号', dataIndex: 'model', width: 120},

@@ -784,9 +784,6 @@
     <select id="checkIsExist" resultType="java.lang.Integer">
         select count(1) from jsh_material m
         where ifnull(m.delete_flag,'0') !='1'
-        <if test="name != null">
-            and m.name = #{name}
-        </if>
         <if test="model != null">
             and m.model = #{model}
         </if>

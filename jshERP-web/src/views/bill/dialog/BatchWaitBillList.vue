@@ -26,7 +26,7 @@
             </a-col>
             <a-col :md="6" :sm="24">
               <a-form-item label="商品信息" :labelCol="{span: 5}" :wrapperCol="{span: 18, offset: 1}">
-                <a-input placeholder="条码|名称|规格|型号" v-model="queryParam.materialParam"></a-input>
+                <a-input placeholder="唛头|名称|规格|型号" v-model="queryParam.materialParam"></a-input>
               </a-form-item>
             </a-col>
             <a-col :md="6" :sm="24">

@@ -29,7 +29,7 @@ import static com.jsh.erp.utils.ResponseJsonUtil.returnStr;
  */
 @RestController
 @RequestMapping(value = "/materialsExtend")
-@Api(tags = {"商品价格扩展"})
+@Api(tags = { "商品价格扩展" })
 public class MaterialExtendController {
     private Logger logger = LoggerFactory.getLogger(MaterialExtendController.class);
     @Resource
@@ -38,10 +38,10 @@ public class MaterialExtendController {
     @GetMapping(value = "/info")
     @ApiOperation(value = "根据id获取信息")
     public String getList(@RequestParam("id") Long id,
-                          HttpServletRequest request) throws Exception {
+            HttpServletRequest request) throws Exception {
         MaterialExtend materialExtend = materialExtendService.getMaterialExtend(id);
         Map<String, Object> objectMap = new HashMap<>();
-        if(materialExtend != null) {
+        if (materialExtend != null) {
             objectMap.put("info", materialExtend);
             return returnJson(objectMap, ErpInfo.OK.name, ErpInfo.OK.code);
         } else {
@@ -51,7 +51,7 @@ public class MaterialExtendController {
 
     @PostMapping(value = "/add")
     @ApiOperation(value = "新增")
-    public String addResource(@RequestBody JSONObject obj, HttpServletRequest request)throws Exception {
+    public String addResource(@RequestBody JSONObject obj, HttpServletRequest request) throws Exception {
         Map<String, Object> objectMap = new HashMap<>();
         int insert = materialExtendService.insertMaterialExtend(obj, request);
         return returnStr(objectMap, insert);
@@ -59,7 +59,7 @@ public class MaterialExtendController {
 
     @PutMapping(value = "/update")
     @ApiOperation(value = "修改")
-    public String updateResource(@RequestBody JSONObject obj, HttpServletRequest request)throws Exception {
+    public String updateResource(@RequestBody JSONObject obj, HttpServletRequest request) throws Exception {
         Map<String, Object> objectMap = new HashMap<>();
         int update = materialExtendService.updateMaterialExtend(obj, request);
         return returnStr(objectMap, update);
@@ -67,7 +67,7 @@ public class MaterialExtendController {
 
     @DeleteMapping(value = "/delete")
     @ApiOperation(value = "删除")
-    public String deleteResource(@RequestParam("id") Long id, HttpServletRequest request)throws Exception {
+    public String deleteResource(@RequestParam("id") Long id, HttpServletRequest request) throws Exception {
         Map<String, Object> objectMap = new HashMap<>();
         int delete = materialExtendService.deleteMaterialExtend(id, request);
         return returnStr(objectMap, delete);
@@ -75,7 +75,7 @@ public class MaterialExtendController {
 
     @DeleteMapping(value = "/deleteBatch")
     @ApiOperation(value = "批量删除")
-    public String batchDeleteResource(@RequestParam("ids") String ids, HttpServletRequest request)throws Exception {
+    public String batchDeleteResource(@RequestParam("ids") String ids, HttpServletRequest request) throws Exception {
         Map<String, Object> objectMap = new HashMap<>();
         int delete = materialExtendService.batchDeleteMaterialExtendByIds(ids, request);
         return returnStr(objectMap, delete);
@@ -84,16 +84,16 @@ public class MaterialExtendController {
     @GetMapping(value = "/getDetailList")
     @ApiOperation(value = "价格信息列表")
     public BaseResponseInfo getDetailList(@RequestParam("materialId") Long materialId,
-                                          HttpServletRequest request)throws Exception {
+            HttpServletRequest request) throws Exception {
         BaseResponseInfo res = new BaseResponseInfo();
         try {
             List<MaterialExtendVo4List> dataList = new ArrayList<MaterialExtendVo4List>();
-            if(materialId!=0) {
+            if (materialId != 0) {
                 dataList = materialExtendService.getDetailList(materialId);
             }
             JSONObject outer = new JSONObject();
             outer.put("total", dataList.size());
-            //存放数据json数组
+            // 存放数据json数组
             JSONArray dataArray = new JSONArray();
             if (null != dataList) {
                 for (MaterialExtendVo4List md : dataList) {
@@ -101,7 +101,7 @@ public class MaterialExtendController {
                     item.put("id", md.getId());
                     item.put("barCode", md.getBarCode());
                     item.put("commodityUnit", md.getCommodityUnit());
-                    if(StringUtil.isNotEmpty(md.getSku())){
+                    if (StringUtil.isNotEmpty(md.getSku())) {
                         item.put("sku", md.getSku());
                     }
                     item.put("purchaseDecimal", md.getPurchaseDecimal());
@@ -123,16 +123,17 @@ public class MaterialExtendController {
     }
 
     /**
-     * 根据条码查询商品信息
+     * 根据唛头查询商品信息
+     * 
      * @param barCode
      * @param request
      * @return
      * @throws Exception
      */
     @GetMapping(value = "/getInfoByBarCode")
-    @ApiOperation(value = "根据条码查询商品信息")
+    @ApiOperation(value = "根据唛头查询商品信息")
     public BaseResponseInfo getInfoByBarCode(@RequestParam("barCode") String barCode,
-                                          HttpServletRequest request)throws Exception {
+            HttpServletRequest request) throws Exception {
         BaseResponseInfo res = new BaseResponseInfo();
         Map<String, Object> map = new HashMap<String, Object>();
         try {
@@ -148,7 +149,8 @@ public class MaterialExtendController {
     }
 
     /**
-     * 校验条码是否存在
+     * 校验唛头是否存在
+     * 
      * @param id
      * @param barCode
      * @param request
@@ -156,15 +158,15 @@ public class MaterialExtendController {
      * @throws Exception
      */
     @GetMapping(value = "/checkIsBarCodeExist")
-    @ApiOperation(value = "校验条码是否存在")
+    @ApiOperation(value = "校验唛头是否存在")
     public BaseResponseInfo checkIsBarCodeExist(@RequestParam("id") Long id,
-                                                @RequestParam("barCode") String barCode,
-                                             HttpServletRequest request)throws Exception {
+            @RequestParam("barCode") String barCode,
+            HttpServletRequest request) throws Exception {
         BaseResponseInfo res = new BaseResponseInfo();
         Map<String, Object> map = new HashMap<>();
         try {
             int exist = materialExtendService.checkIsBarCodeExist(id, barCode);
-            if(exist > 0) {
+            if (exist > 0) {
                 map.put("status", true);
             } else {
                 map.put("status", false);

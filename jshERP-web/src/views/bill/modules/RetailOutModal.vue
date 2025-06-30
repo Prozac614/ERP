@@ -81,12 +81,12 @@
               @added="onAdded"
               @deleted="onDeleted">
               <template #buttonAfter>
-                <a-row :gutter="24" style="float:left;" data-step="4" data-title="扫码录入" data-intro="此功能支持扫码枪扫描商品条码进行录入">
+                <a-row :gutter="24" style="float:left;" data-step="4" data-title="扫码录入" data-intro="此功能支持扫码枪扫描商品唛头进行录入">
                   <a-col v-if="scanStatus" :md="6" :sm="24">
                     <a-button @click="scanEnter">扫码录入</a-button>
                   </a-col>
                   <a-col v-if="!scanStatus" :md="16" :sm="24" style="padding: 0 6px 0 12px">
-                    <a-input placeholder="请扫条码或序列号并回车" v-model="scanBarCode" @pressEnter="scanPressEnter" ref="scanBarCode"/>
+                    <a-input placeholder="请扫唛头或序列号并回车" v-model="scanBarCode" @pressEnter="scanPressEnter" ref="scanBarCode"/>
                   </a-col>
                   <a-col v-if="!scanStatus" :md="6" :sm="24" style="padding: 0px 18px 0 0">
                     <a-button @click="stopScan">收起扫码</a-button>
@@ -242,7 +242,7 @@
             { title: '仓库名称', key: 'depotId', width: '10%', type: FormTypes.select, placeholder: '请选择${title}', options: [],
               allowSearch:true, validateRules: [{ required: true, message: '${title}不能为空' }]
             },
-            { title: '条码', key: 'barCode', width: '16%', type: FormTypes.popupJsh, kind: 'material', multi: true,
+            { title: '唛头', key: 'barCode', width: '16%', type: FormTypes.popupJsh, kind: 'material', multi: true,
               validateRules: [{ required: true, message: '${title}不能为空' }]
             },
             { title: '名称', key: 'name', width: '12%', type: FormTypes.normal },

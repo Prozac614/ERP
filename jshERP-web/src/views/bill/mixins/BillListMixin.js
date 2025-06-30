@@ -37,7 +37,7 @@ export const BillListMixin = {
       defDetailColumns: [],
       retailOutColumns: [
         { title: '仓库名称', dataIndex: 'depotName'},
-        { title: '条码', dataIndex: 'barCode'},
+        { title: '唛头', dataIndex: 'barCode'},
         { title: '名称', dataIndex: 'name'},
         { title: '规格', dataIndex: 'standard'},
         { title: '型号', dataIndex: 'model'},
@@ -62,7 +62,7 @@ export const BillListMixin = {
       ],
       retailBackColumns: [
         { title: '仓库名称', dataIndex: 'depotName'},
-        { title: '条码', dataIndex: 'barCode'},
+        { title: '唛头', dataIndex: 'barCode'},
         { title: '名称', dataIndex: 'name'},
         { title: '规格', dataIndex: 'standard'},
         { title: '型号', dataIndex: 'model'},
@@ -86,7 +86,7 @@ export const BillListMixin = {
         { title: '备注', dataIndex: 'remark'}
       ],
       purchaseApplyColumns: [
-        { title: '条码', dataIndex: 'barCode'},
+        { title: '唛头', dataIndex: 'barCode'},
         { title: '名称', dataIndex: 'name'},
         { title: '规格', dataIndex: 'standard'},
         { title: '型号', dataIndex: 'model'},
@@ -103,7 +103,7 @@ export const BillListMixin = {
         { title: '备注', dataIndex: 'remark'}
       ],
       purchaseOrderColumns: [
-        { title: '条码', dataIndex: 'barCode'},
+        { title: '唛头', dataIndex: 'barCode'},
         { title: '名称', dataIndex: 'name'},
         { title: '规格', dataIndex: 'standard'},
         { title: '型号', dataIndex: 'model'},
@@ -127,7 +127,7 @@ export const BillListMixin = {
       ],
       purchaseInColumns: [
         { title: '仓库名称', dataIndex: 'depotName'},
-        { title: '条码', dataIndex: 'barCode'},
+        { title: '唛头', dataIndex: 'barCode'},
         { title: '名称', dataIndex: 'name'},
         { title: '规格', dataIndex: 'standard'},
         { title: '型号', dataIndex: 'model'},
@@ -156,7 +156,7 @@ export const BillListMixin = {
       ],
       purchaseBackColumns: [
         { title: '仓库名称', dataIndex: 'depotName'},
-        { title: '条码', dataIndex: 'barCode'},
+        { title: '唛头', dataIndex: 'barCode'},
         { title: '名称', dataIndex: 'name'},
         { title: '规格', dataIndex: 'standard'},
         { title: '型号', dataIndex: 'model'},
@@ -184,7 +184,7 @@ export const BillListMixin = {
         { title: '备注', dataIndex: 'remark'}
       ],
       saleOrderColumns: [
-        { title: '条码', dataIndex: 'barCode'},
+        { title: '唛头', dataIndex: 'barCode'},
         { title: '名称', dataIndex: 'name'},
         { title: '规格', dataIndex: 'standard'},
         { title: '型号', dataIndex: 'model'},
@@ -208,7 +208,7 @@ export const BillListMixin = {
       ],
       saleOutColumns: [
         { title: '仓库名称', dataIndex: 'depotName'},
-        { title: '条码', dataIndex: 'barCode'},
+        { title: '唛头', dataIndex: 'barCode'},
         { title: '名称', dataIndex: 'name'},
         { title: '规格', dataIndex: 'standard'},
         { title: '型号', dataIndex: 'model'},
@@ -237,7 +237,7 @@ export const BillListMixin = {
       ],
       saleBackColumns: [
         { title: '仓库名称', dataIndex: 'depotName'},
-        { title: '条码', dataIndex: 'barCode'},
+        { title: '唛头', dataIndex: 'barCode'},
         { title: '名称', dataIndex: 'name'},
         { title: '规格', dataIndex: 'standard'},
         { title: '型号', dataIndex: 'model'},
@@ -266,7 +266,7 @@ export const BillListMixin = {
       ],
       otherInColumns: [
         { title: '仓库名称', dataIndex: 'depotName'},
-        { title: '条码', dataIndex: 'barCode'},
+        { title: '唛头', dataIndex: 'barCode'},
         { title: '名称', dataIndex: 'name'},
         { title: '规格', dataIndex: 'standard'},
         { title: '型号', dataIndex: 'model'},
@@ -291,7 +291,7 @@ export const BillListMixin = {
       ],
       otherOutColumns: [
         { title: '仓库名称', dataIndex: 'depotName'},
-        { title: '条码', dataIndex: 'barCode'},
+        { title: '唛头', dataIndex: 'barCode'},
         { title: '名称', dataIndex: 'name'},
         { title: '规格', dataIndex: 'standard'},
         { title: '型号', dataIndex: 'model'},
@@ -316,7 +316,7 @@ export const BillListMixin = {
       ],
       allocationOutColumns: [
         { title: '仓库名称', dataIndex: 'depotName'},
-        { title: '条码', dataIndex: 'barCode'},
+        { title: '唛头', dataIndex: 'barCode'},
         { title: '名称', dataIndex: 'name'},
         { title: '规格', dataIndex: 'standard'},
         { title: '型号', dataIndex: 'model'},
@@ -340,7 +340,7 @@ export const BillListMixin = {
       assembleColumns: [
         { title: '商品类型', dataIndex: 'mType'},
         { title: '仓库名称', dataIndex: 'depotName'},
-        { title: '条码', dataIndex: 'barCode'},
+        { title: '唛头', dataIndex: 'barCode'},
         { title: '名称', dataIndex: 'name'},
         { title: '规格', dataIndex: 'standard'},
         { title: '型号', dataIndex: 'model'},
@@ -361,7 +361,7 @@ export const BillListMixin = {
       disassembleColumns: [
         { title: '商品类型', dataIndex: 'mType'},
         { title: '仓库名称', dataIndex: 'depotName'},
-        { title: '条码', dataIndex: 'barCode'},
+        { title: '唛头', dataIndex: 'barCode'},
         { title: '名称', dataIndex: 'name'},
         { title: '规格', dataIndex: 'standard'},
         { title: '型号', dataIndex: 'model'},
@@ -381,7 +381,7 @@ export const BillListMixin = {
       ],
       stockCheckReplayColumns: [
         { title: '仓库名称', dataIndex: 'depotName'},
-        { title: '条码', dataIndex: 'barCode'},
+        { title: '唛头', dataIndex: 'barCode'},
         { title: '名称', dataIndex: 'name'},
         { title: '规格', dataIndex: 'standard'},
         { title: '型号', dataIndex: 'model'},

@@ -76,7 +76,7 @@
         categoryTree:[],
         columns: [
           {dataIndex: 'batchNumber', title: '批号', width: 100, align: 'left', ellipsis:true},
-          {dataIndex: 'barCode', title: '条码', width: 100, ellipsis:true},
+          {dataIndex: 'barCode', title: '唛头', width: 100, ellipsis:true},
           {dataIndex: 'name', title: '名称', width: 100, ellipsis:true},
           {dataIndex: 'standard', title: '规格', width: 80, ellipsis:true},
           {dataIndex: 'model', title: '型号', width: 80, ellipsis:true},

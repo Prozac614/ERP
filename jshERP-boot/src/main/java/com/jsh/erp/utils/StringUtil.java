@@ -11,7 +11,7 @@ import java.util.*;
 import java.util.regex.Pattern;
 
 /**
- * @author jishenghua qq752718920  2018-10-7 15:26:27
+ * @author jishenghua qq752718920 2018-10-7 15:26:27
  */
 public class StringUtil {
 
@@ -25,7 +25,8 @@ public class StringUtil {
             "| use | use|use | insert | insert|insert | delete | delete|delete | update | update|update " +
             "| select | select|select | count | count|count | group | group|group | union | union|union " +
             "| create | create|create | drop | drop|drop | truncate | truncate|truncate | alter | alter|alter " +
-            "| grant | grant|grant | execute | execute|execute | exec | exec|exec | xp_cmdshell | xp_cmdshell|xp_cmdshell " +
+            "| grant | grant|grant | execute | execute|execute | exec | exec|exec | xp_cmdshell | xp_cmdshell|xp_cmdshell "
+            +
             "| call | call|call | declare | declare|declare | source | source|source | sql | sql|sql ";
 
     /** 下划线 */
@@ -39,10 +40,10 @@ public class StringUtil {
         }
     }
 
-    public static boolean stringEquels(String source,String target) {
-        if(isEmpty(source)||isEmpty(target)){
+    public static boolean stringEquels(String source, String target) {
+        if (isEmpty(source) || isEmpty(target)) {
             return false;
-        }else{
+        } else {
             return source.equals(target);
         }
     }
@@ -54,10 +55,8 @@ public class StringUtil {
     /**
      * 驼峰转下划线命名
      */
-    public static String toUnderScoreCase(String str)
-    {
-        if (str == null)
-        {
+    public static String toUnderScoreCase(String str) {
+        if (str == null) {
             return null;
         }
         StringBuilder sb = new StringBuilder();
@@ -67,31 +66,23 @@ public class StringUtil {
         boolean curreCharIsUpperCase = true;
         // 下一字符是否大写
         boolean nexteCharIsUpperCase = true;
-        for (int i = 0; i < str.length(); i++)
-        {
+        for (int i = 0; i < str.length(); i++) {
             char c = str.charAt(i);
-            if (i > 0)
-            {
+            if (i > 0) {
                 preCharIsUpperCase = Character.isUpperCase(str.charAt(i - 1));
-            }
-            else
-            {
+            } else {
                 preCharIsUpperCase = false;
             }
 
             curreCharIsUpperCase = Character.isUpperCase(c);
 
-            if (i < (str.length() - 1))
-            {
+            if (i < (str.length() - 1)) {
                 nexteCharIsUpperCase = Character.isUpperCase(str.charAt(i + 1));
             }
 
-            if (preCharIsUpperCase && curreCharIsUpperCase && !nexteCharIsUpperCase)
-            {
+            if (preCharIsUpperCase && curreCharIsUpperCase && !nexteCharIsUpperCase) {
                 sb.append(SEPARATOR);
-            }
-            else if ((i != 0 && !preCharIsUpperCase) && curreCharIsUpperCase)
-            {
+            } else if ((i != 0 && !preCharIsUpperCase) && curreCharIsUpperCase) {
                 sb.append(SEPARATOR);
             }
             sb.append(Character.toLowerCase(c));
@@ -106,8 +97,7 @@ public class StringUtil {
      * @param object Object
      * @return true：为空 false：非空
      */
-    public static boolean isNull(Object object)
-    {
+    public static boolean isNull(Object object) {
         return object == null;
     }
 
@@ -117,8 +107,7 @@ public class StringUtil {
      * @param object Object
      * @return true：非空 false：空
      */
-    public static boolean isNotNull(Object object)
-    {
+    public static boolean isNotNull(Object object) {
         return !isNull(object);
     }
 
@@ -212,7 +201,7 @@ public class StringUtil {
         }
     }
 
-    //是否是JSON
+    // 是否是JSON
     public static boolean containsAny(String str, String... flag) {
         if (str != null) {
             if (flag == null || flag.length == 0) {
@@ -259,7 +248,7 @@ public class StringUtil {
 
     public static BigDecimal getArrSum(String[] strings) {
         BigDecimal sum = BigDecimal.ZERO;
-        for(int i=0;i<strings.length;i++){
+        for (int i = 0; i < strings.length; i++) {
             sum = sum.add(new BigDecimal(strings[i]));
         }
         return sum;
@@ -273,10 +262,10 @@ public class StringUtil {
      * @return
      */
     public static List<Long> strToLongList(String strArr) {
-        List<Long> idList=new ArrayList<Long>();
-        String[] d=strArr.split(",");
+        List<Long> idList = new ArrayList<Long>();
+        String[] d = strArr.split(",");
         for (int i = 0, size = d.length; i < size; i++) {
-            if(d[i]!=null) {
+            if (d[i] != null) {
                 idList.add(Long.parseLong(d[i]));
             }
         }
@@ -291,10 +280,10 @@ public class StringUtil {
      * @return
      */
     public static List<BigDecimal> strToBigDecimalList(String strArr) {
-        List<BigDecimal> idList=new ArrayList<>();
-        String[] d=strArr.split(",");
+        List<BigDecimal> idList = new ArrayList<>();
+        String[] d = strArr.split(",");
         for (int i = 0, size = d.length; i < size; i++) {
-            if(d[i]!=null) {
+            if (d[i] != null) {
                 idList.add(new BigDecimal(d[i]));
             }
         }
@@ -309,13 +298,13 @@ public class StringUtil {
      * @return
      */
     public static List<String> strToStringList(String strArr) {
-        if(StringUtils.isEmpty(strArr)){
+        if (StringUtils.isEmpty(strArr)) {
             return null;
         }
-        List<String> idList=new ArrayList<String>();
-        String[] d=strArr.split(",");
+        List<String> idList = new ArrayList<String>();
+        String[] d = strArr.split(",");
         for (int i = 0, size = d.length; i < size; i++) {
-            if(d[i]!=null) {
+            if (d[i] != null) {
                 idList.add(d[i].toString());
             }
         }
@@ -325,18 +314,18 @@ public class StringUtil {
     public static List<String> searchCondition(String search) {
         if (isEmpty(search)) {
             return new ArrayList<String>();
-        }else{
-            //String[] split = search.split(" ");
-			String[] split = search.split("#");
+        } else {
+            // String[] split = search.split(" ");
+            String[] split = search.split("#");
             return stringToListArray(split);
         }
     }
 
-    public static String getInfo(String search, String key){
+    public static String getInfo(String search, String key) {
         String value = null;
-        if(StringUtil.isNotEmpty(search)) {
-            search = search.replace("{}","");
-            if(StringUtil.isNotEmpty(search)) {
+        if (StringUtil.isNotEmpty(search)) {
+            search = search.replace("{}", "");
+            if (StringUtil.isNotEmpty(search)) {
                 JSONObject obj = JSONObject.parseObject(search);
                 if (obj.get(key) != null) {
                     value = obj.getString(key).trim();
@@ -352,7 +341,7 @@ public class StringUtil {
     }
 
     public static String toNull(String value) {
-        if(isEmpty(value)) {
+        if (isEmpty(value)) {
             value = null;
         } else {
             value = value.trim();
@@ -361,9 +350,9 @@ public class StringUtil {
     }
 
     public static boolean isExist(Object value) {
-        if(value!=null) {
+        if (value != null) {
             String str = value.toString();
-            if("".equals(str.trim())) {
+            if ("".equals(str.trim())) {
                 return false;
             } else {
                 return true;
@@ -375,14 +364,15 @@ public class StringUtil {
 
     /**
      * 判断对象是否为正整数
+     * 
      * @param value
      * @return
      */
     public static boolean isPositiveLong(Object value) {
-        if(value!=null) {
+        if (value != null) {
             String str = value.toString();
-            if(isNotEmpty(str)) {
-                if((str.matches("[0-9]+"))&&(Long.parseLong(str)>0)) {
+            if (isNotEmpty(str)) {
+                if ((str.matches("[0-9]+")) && (Long.parseLong(str) > 0)) {
                     return true;
                 } else {
                     return false;
@@ -396,15 +386,18 @@ public class StringUtil {
     }
 
     /**
-     * 校验条码长度为4到40位
+     * 校验唛头长度为4到40位（现在已修改为2到40位）
+     * 
      * @param value
      * @return
      */
     public static boolean checkBarCodeLength(Object value) {
-        if(value!=null) {
+        if (value != null) {
             String str = value.toString();
-            if(isNotEmpty(str)) {
-                if(str.length()>=4 && str.length()<=40 ) {
+            if (isNotEmpty(str)) {
+                // 唛头长度为2到40位
+                if (str.length() >= 2 && str.length() <= 40) {
+                    // if(str.length()>=4 && str.length()<=40 ) {
                     return true;
                 } else {
                     return false;
@@ -419,33 +412,36 @@ public class StringUtil {
 
     /**
      * 判断对象是否为数字（含小数）
+     * 
      * @param str
      * @return
      */
-    public static boolean isPositiveBigDecimal(String str){
+    public static boolean isPositiveBigDecimal(String str) {
         Pattern pattern = Pattern.compile("[0-9]*");
-        if(str.indexOf(".")>0){//判断是否有小数点
-            if(str.indexOf(".")==str.lastIndexOf(".") && str.split("\\.").length==2){ //判断是否只有一个小数点
-                return pattern.matcher(str.replace(".","")).matches();
-            }else {
+        if (str.indexOf(".") > 0) {// 判断是否有小数点
+            if (str.indexOf(".") == str.lastIndexOf(".") && str.split("\\.").length == 2) { // 判断是否只有一个小数点
+                return pattern.matcher(str.replace(".", "")).matches();
+            } else {
                 return false;
             }
-        }else {
+        } else {
             return pattern.matcher(str).matches();
         }
     }
 
     /**
      * sql注入过滤，保障sql的安全执行
+     * 
      * @param originStr
      * @return
      */
-    public static String safeSqlParse(String originStr){
+    public static String safeSqlParse(String originStr) {
         return originStr.replaceAll("(?i)" + regex, "");
     }
 
     /**
      * 判断字符串是否为纯数字
+     * 
      * @param str 输入的字符串
      * @return 如果字符串为纯数字，返回 true；否则返回 false
      */

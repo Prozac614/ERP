@@ -9,7 +9,7 @@
             <a-row :gutter="24">
               <a-col :md="6" :sm="24">
                 <a-form-item label="商品信息" :labelCol="labelCol" :wrapperCol="wrapperCol">
-                  <a-input placeholder="请输入条码、名称、助记码、规格、型号等信息" v-model="queryParam.materialParam"></a-input>
+                  <a-input placeholder="请输入唛头、名称、助记码、规格、型号等信息" v-model="queryParam.materialParam"></a-input>
                 </a-form-item>
               </a-col>
               <a-col :md="6" :sm="24">
@@ -239,7 +239,7 @@
             title: '单据编号', dataIndex: 'number', width: 100,
             scopedSlots: { customRender: 'numberCustomRender' },
           },
-          {title: '条码', dataIndex: 'barCode', sorter: (a, b) => a.barCode - b.barCode, width: 80},
+          {title: '唛头', dataIndex: 'barCode', sorter: (a, b) => a.barCode - b.barCode, width: 80},
           {title: '名称', dataIndex: 'mname', width: 120, ellipsis:true},
           {title: '规格', dataIndex: 'standard', width: 60, ellipsis:true},
           {title: '型号', dataIndex: 'model', width: 60, ellipsis:true},
@@ -372,7 +372,7 @@
       },
       exportExcel() {
         let list = []
-        let head = '单据编号,条码,名称,规格,型号,颜色,品牌,制造商,单位,多属性,数量,单价,金额,税率(%),税额,往来单位,仓库,入库日期,备注'
+        let head = '单据编号,唛头,名称,规格,型号,颜色,品牌,制造商,单位,多属性,数量,单价,金额,税率(%),税额,往来单位,仓库,入库日期,备注'
         for (let i = 0; i < this.dataSource.length; i++) {
           let item = []
           let ds = this.dataSource[i]

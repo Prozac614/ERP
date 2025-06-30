@@ -1248,7 +1248,7 @@
         defColumns: [],
         retailOutColumns: [
           { title: '仓库名称', dataIndex: 'depotName'},
-          { title: '条码', dataIndex: 'barCode'},
+          { title: '唛头', dataIndex: 'barCode'},
           { title: '名称', dataIndex: 'name'},
           { title: '规格', dataIndex: 'standard'},
           { title: '型号', dataIndex: 'model'},
@@ -1273,7 +1273,7 @@
         ],
         retailBackColumns: [
           { title: '仓库名称', dataIndex: 'depotName'},
-          { title: '条码', dataIndex: 'barCode'},
+          { title: '唛头', dataIndex: 'barCode'},
           { title: '名称', dataIndex: 'name'},
           { title: '规格', dataIndex: 'standard'},
           { title: '型号', dataIndex: 'model'},
@@ -1297,7 +1297,7 @@
           { title: '备注', dataIndex: 'remark'}
         ],
         purchaseApplyColumns: [
-          { title: '条码', dataIndex: 'barCode'},
+          { title: '唛头', dataIndex: 'barCode'},
           { title: '名称', dataIndex: 'name'},
           { title: '规格', dataIndex: 'standard'},
           { title: '型号', dataIndex: 'model'},
@@ -1314,7 +1314,7 @@
           { title: '备注', dataIndex: 'remark'}
         ],
         purchaseOrderColumns: [
-          { title: '条码', dataIndex: 'barCode'},
+          { title: '唛头', dataIndex: 'barCode'},
           { title: '名称', dataIndex: 'name'},
           { title: '规格', dataIndex: 'standard'},
           { title: '型号', dataIndex: 'model'},
@@ -1338,7 +1338,7 @@
         ],
         purchaseInColumns: [
           { title: '仓库名称', dataIndex: 'depotName'},
-          { title: '条码', dataIndex: 'barCode'},
+          { title: '唛头', dataIndex: 'barCode'},
           { title: '名称', dataIndex: 'name'},
           { title: '规格', dataIndex: 'standard'},
           { title: '型号', dataIndex: 'model'},
@@ -1367,7 +1367,7 @@
         ],
         purchaseBackColumns: [
           { title: '仓库名称', dataIndex: 'depotName'},
-          { title: '条码', dataIndex: 'barCode'},
+          { title: '唛头', dataIndex: 'barCode'},
           { title: '名称', dataIndex: 'name'},
           { title: '规格', dataIndex: 'standard'},
           { title: '型号', dataIndex: 'model'},
@@ -1395,7 +1395,7 @@
           { title: '备注', dataIndex: 'remark'}
         ],
         saleOrderColumns: [
-          { title: '条码', dataIndex: 'barCode'},
+          { title: '唛头', dataIndex: 'barCode'},
           { title: '名称', dataIndex: 'name'},
           { title: '规格', dataIndex: 'standard'},
           { title: '型号', dataIndex: 'model'},
@@ -1419,7 +1419,7 @@
         ],
         saleOutColumns: [
           { title: '仓库名称', dataIndex: 'depotName'},
-          { title: '条码', dataIndex: 'barCode'},
+          { title: '唛头', dataIndex: 'barCode'},
           { title: '名称', dataIndex: 'name'},
           { title: '规格', dataIndex: 'standard'},
           { title: '型号', dataIndex: 'model'},
@@ -1448,7 +1448,7 @@
         ],
         saleBackColumns: [
           { title: '仓库名称', dataIndex: 'depotName'},
-          { title: '条码', dataIndex: 'barCode'},
+          { title: '唛头', dataIndex: 'barCode'},
           { title: '名称', dataIndex: 'name'},
           { title: '规格', dataIndex: 'standard'},
           { title: '型号', dataIndex: 'model'},
@@ -1477,7 +1477,7 @@
         ],
         otherInColumns: [
           { title: '仓库名称', dataIndex: 'depotName'},
-          { title: '条码', dataIndex: 'barCode'},
+          { title: '唛头', dataIndex: 'barCode'},
           { title: '名称', dataIndex: 'name'},
           { title: '规格', dataIndex: 'standard'},
           { title: '型号', dataIndex: 'model'},
@@ -1502,7 +1502,7 @@
         ],
         otherOutColumns: [
           { title: '仓库名称', dataIndex: 'depotName'},
-          { title: '条码', dataIndex: 'barCode'},
+          { title: '唛头', dataIndex: 'barCode'},
           { title: '名称', dataIndex: 'name'},
           { title: '规格', dataIndex: 'standard'},
           { title: '型号', dataIndex: 'model'},
@@ -1527,7 +1527,7 @@
         ],
         allocationOutColumns: [
           { title: '仓库名称', dataIndex: 'depotName'},
-          { title: '条码', dataIndex: 'barCode'},
+          { title: '唛头', dataIndex: 'barCode'},
           { title: '名称', dataIndex: 'name'},
           { title: '规格', dataIndex: 'standard'},
           { title: '型号', dataIndex: 'model'},
@@ -1551,7 +1551,7 @@
         assembleColumns: [
           { title: '商品类型', dataIndex: 'mType'},
           { title: '仓库名称', dataIndex: 'depotName'},
-          { title: '条码', dataIndex: 'barCode'},
+          { title: '唛头', dataIndex: 'barCode'},
           { title: '名称', dataIndex: 'name'},
           { title: '规格', dataIndex: 'standard'},
           { title: '型号', dataIndex: 'model'},
@@ -1572,7 +1572,7 @@
         disassembleColumns: [
           { title: '商品类型', dataIndex: 'mType'},
           { title: '仓库名称', dataIndex: 'depotName'},
-          { title: '条码', dataIndex: 'barCode'},
+          { title: '唛头', dataIndex: 'barCode'},
           { title: '名称', dataIndex: 'name'},
           { title: '规格', dataIndex: 'standard'},
           { title: '型号', dataIndex: 'model'},
@@ -1592,7 +1592,7 @@
         ],
         stockCheckReplayColumns: [
           { title: '仓库名称', dataIndex: 'depotName'},
-          { title: '条码', dataIndex: 'barCode'},
+          { title: '唛头', dataIndex: 'barCode'},
           { title: '名称', dataIndex: 'name'},
           { title: '规格', dataIndex: 'standard'},
           { title: '型号', dataIndex: 'model'},
@@ -1977,7 +1977,7 @@
       //零售出库|零售退货入库
       retailExportExcel() {
         let list = []
-        let head = '仓库名称,条码,名称,规格,型号,颜色,' + this.otherFieldTitle + ',库存,单位,序列号,批号,有效期,多属性,数量,单价,金额,备注'
+        let head = '仓库名称,唛头,名称,规格,型号,颜色,' + this.otherFieldTitle + ',库存,单位,序列号,批号,有效期,多属性,数量,单价,金额,备注'
         for (let i = 0; i < this.dataSource.length; i++) {
           let item = []
           let ds = this.dataSource[i]
@@ -1992,7 +1992,7 @@
       //请购单
       applyExportExcel() {
         let list = []
-        let head = '条码,名称,规格,型号,颜色,' + this.otherFieldTitle + ',单位,多属性,原数量,已采购,数量,备注'
+        let head = '唛头,名称,规格,型号,颜色,' + this.otherFieldTitle + ',单位,多属性,原数量,已采购,数量,备注'
         for (let i = 0; i < this.dataSource.length; i++) {
           let item = []
           let ds = this.dataSource[i]
@@ -2015,7 +2015,7 @@
           finishType = '已出库'
           organType = '客户：'
         }
-        let head = '条码,名称,规格,型号,颜色,' + this.otherFieldTitle + ',库存,单位,多属性,数量,' + finishType + ',单价,金额,税率(%),税额,价税合计,备注'
+        let head = '唛头,名称,规格,型号,颜色,' + this.otherFieldTitle + ',库存,单位,多属性,数量,' + finishType + ',单价,金额,税率(%),税额,价税合计,备注'
         for (let i = 0; i < this.dataSource.length; i++) {
           let item = []
           let ds = this.dataSource[i]
@@ -2036,7 +2036,7 @@
         } else if(this.billType === '销售出库' || this.billType === '销售退货入库') {
           organType = '客户：'
         }
-        let head = '仓库名称,条码,名称,规格,型号,颜色,' + this.otherFieldTitle + ',库存,单位,序列号,批号,有效期,多属性,数量,单价,金额,税率(%),税额,价税合计,重量,备注'
+        let head = '仓库名称,唛头,名称,规格,型号,颜色,' + this.otherFieldTitle + ',库存,单位,序列号,批号,有效期,多属性,数量,单价,金额,税率(%),税额,价税合计,重量,备注'
         for (let i = 0; i < this.dataSource.length; i++) {
           let item = []
           let ds = this.dataSource[i]
@@ -2059,7 +2059,7 @@
         } else if(this.billType === '其它出库') {
           organType = '客户：'
         }
-        let head = '仓库名称,条码,名称,规格,型号,颜色,' + this.otherFieldTitle + ',库存,单位,序列号,批号,有效期,多属性,数量,单价,金额,备注'
+        let head = '仓库名称,唛头,名称,规格,型号,颜色,' + this.otherFieldTitle + ',库存,单位,序列号,批号,有效期,多属性,数量,单价,金额,备注'
         for (let i = 0; i < this.dataSource.length; i++) {
           let item = []
           let ds = this.dataSource[i]
@@ -2074,7 +2074,7 @@
       //调拨出库
       allocationOutExportExcel() {
         let list = []
-        let head = '仓库名称,条码,名称,规格,型号,颜色,' + this.otherFieldTitle + ',库存,调入仓库,单位,多属性,数量,单价,金额,备注'
+        let head = '仓库名称,唛头,名称,规格,型号,颜色,' + this.otherFieldTitle + ',库存,调入仓库,单位,多属性,数量,单价,金额,备注'
         for (let i = 0; i < this.dataSource.length; i++) {
           let item = []
           let ds = this.dataSource[i]
@@ -2088,7 +2088,7 @@
       //组装单|拆卸单
       assembleExportExcel() {
         let list = []
-        let head = ['商品类型,仓库名称,条码,名称,规格,型号,颜色,' + this.otherFieldTitle + ',库存,单位,多属性,数量,单价,金额,备注']
+        let head = ['商品类型,仓库名称,唛头,名称,规格,型号,颜色,' + this.otherFieldTitle + ',库存,单位,多属性,数量,单价,金额,备注']
         for (let i = 0; i < this.dataSource.length; i++) {
           let item = []
           let ds = this.dataSource[i]
@@ -2102,7 +2102,7 @@
       //盘点复盘
       stockCheckReplayExportExcel() {
         let list = []
-        let head = '仓库名称,条码,名称,规格,型号,' + this.otherFieldTitle + ',库存,单位,多属性,数量,单价,金额,备注'
+        let head = '仓库名称,唛头,名称,规格,型号,' + this.otherFieldTitle + ',库存,单位,多属性,数量,单价,金额,备注'
         for (let i = 0; i < this.dataSource.length; i++) {
           let item = []
           let ds = this.dataSource[i]

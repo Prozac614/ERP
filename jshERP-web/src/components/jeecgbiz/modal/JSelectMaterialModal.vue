@@ -18,7 +18,7 @@
             <a-row :gutter="24">
               <a-col :md="6" :sm="8">
                 <a-form-item label="关键词" :labelCol="labelCol" :wrapperCol="wrapperCol">
-                  <a-input ref="material" placeholder="请输入条码、名称、助记码等查询" v-model="queryParam.q"></a-input>
+                  <a-input ref="material" placeholder="请输入唛头、名称、助记码等查询" v-model="queryParam.q"></a-input>
                 </a-form-item>
               </a-col>
               <a-col :md="6" :sm="8">
@@ -191,7 +191,7 @@
         },
         categoryTree:[],
         columns: [
-          {dataIndex: 'mBarCode', title: '条码', scopedSlots: { customRender: 'customBarCode' }},
+          {dataIndex: 'mBarCode', title: '唛头', scopedSlots: { customRender: 'customBarCode' }},
           {dataIndex: 'name', title: '名称', scopedSlots: { customRender: 'customName' }},
           {dataIndex: 'categoryName', title: '类别'},
           {dataIndex: 'standard', title: '规格'},
