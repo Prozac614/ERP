@@ -31,6 +31,16 @@ public class ValidationDifference {
      */
     private Integer affectedBills;
 
+    /**
+     * 商品唛头
+     */
+    private String materialBarCode;
+
+    /**
+     * 商品名称
+     */
+    private String materialName;
+
     public ValidationDifference() {
     }
 
@@ -78,5 +88,21 @@ public class ValidationDifference {
 
     public void setAffectedBills(Integer affectedBills) {
         this.affectedBills = affectedBills;
+    }
+
+    public String getMaterialBarCode() {
+        return materialBarCode;
+    }
+
+    public void setMaterialBarCode(String materialBarCode) {
+        this.materialBarCode = materialBarCode;
+    }
+
+    public String getMaterialName() {
+        return materialName;
+    }
+
+    public void setMaterialName(String materialName) {
+        this.materialName = materialName;
     }
 }

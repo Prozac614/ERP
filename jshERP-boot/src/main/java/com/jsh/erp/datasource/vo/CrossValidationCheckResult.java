@@ -23,6 +23,11 @@ public class CrossValidationCheckResult {
      */
     private List<String> currentUserIds;
 
+    /**
+     * 单据总数
+     */
+    private int totalBills;
+
     public boolean isHasOtherUsers() {
         return hasOtherUsers;
     }
@@ -45,5 +50,13 @@ public class CrossValidationCheckResult {
 
     public void setCurrentUserIds(List<String> currentUserIds) {
         this.currentUserIds = currentUserIds;
+    }
+
+    public int getTotalBills() {
+        return totalBills;
+    }
+
+    public void setTotalBills(int totalBills) {
+        this.totalBills = totalBills;
     }
 }

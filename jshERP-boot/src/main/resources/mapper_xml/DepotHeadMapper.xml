@@ -657,6 +657,26 @@
     ORDER BY dh.creator
   </select>
   
+  <select id="getUserBillSummaryByDate" resultType="com.jsh.erp.datasource.vo.TodayUserBillSummary">
+    SELECT 
+      dh.creator as userId,
+      u.user_name as userName,
+      u.name as realName,
+      COUNT(dh.id) as billCount,
+      MIN(dh.create_time) as firstBillTime,
+      MAX(dh.create_time) as lastBillTime
+    FROM jsh_depot_head dh
+    LEFT JOIN jsh_user u ON dh.creator = u.id
+    WHERE dh.type = '出库' 
+      AND dh.sub_type = '销售'
+      AND dh.delete_flag = '0'
+      AND DATE(dh.create_time) = #{validationDate}
+      AND dh.tenant_id = #{tenantId}
+      AND dh.creator != #{currentUserId}
+    GROUP BY dh.creator, u.user_name, u.name
+    ORDER BY dh.creator
+  </select>
+  
   <select id="getTodayBillsByUser" resultType="com.jsh.erp.datasource.entities.DepotHead">
     SELECT 
       <include refid="Base_Column_List" />

@@ -1,5 +1,6 @@
 package com.jsh.erp.service;
 
+import com.jsh.erp.datasource.entities.User;
 import com.jsh.erp.datasource.mappers.DepotHeadMapper;
 import com.jsh.erp.datasource.vo.BillMaterialSummary;
 import com.jsh.erp.datasource.vo.CrossValidationCheckResult;
@@ -59,8 +60,9 @@ public class CrossValidationService {
             }
 
             // 获取当前用户和租户信息
-            Long currentUserId = userService.getCurrentUserId();
-            Long tenantId = userService.getCurrentTenantId();
+            User currentUser = userService.getCurrentUser();
+            Long currentUserId = currentUser.getId();
+            Long tenantId = currentUser.getTenantId();
 
             // 查询指定日期其他用户的单据汇总情况
             List<TodayUserBillSummary> otherUsers = getTodayUserBillSummaryByDate(validationDate, tenantId, currentUserId);
@@ -106,7 +108,8 @@ public class CrossValidationService {
             }
 
             // 获取当前用户和租户信息
-            Long tenantId = userService.getCurrentTenantId();
+            User currentUser = userService.getCurrentUser();
+            Long tenantId = currentUser.getTenantId();
 
             // 获取指定日期和用户的商品唛头汇总数据
             List<BillMaterialSummary> materialSummaries = depotHeadMapper.getBillMaterialSummaryByDateAndUsers(
@@ -160,9 +163,8 @@ public class CrossValidationService {
      */
     private List<TodayUserBillSummary> getTodayUserBillSummaryByDate(String validationDate, Long tenantId, Long currentUserId) {
         try {
-            // 这里需要创建一个专门的方法来查询指定日期的用户单据汇总
-            // 由于原有的 getTodayUserBillSummary 方法是查询当天的，我们需要修改查询逻辑
-            return depotHeadMapper.getTodayUserBillSummary(tenantId, currentUserId);
+            // 调用指定日期的用户单据汇总查询方法
+            return depotHeadMapper.getUserBillSummaryByDate(validationDate, tenantId, currentUserId);
         } catch (Exception e) {
             logger.error("获取指定日期用户单据汇总失败，日期: {}, 租户ID: {}, 当前用户ID: {}", validationDate, tenantId, currentUserId);
             throw e;
