@@ -216,7 +216,7 @@
         <sale-back-modal ref="transferModalForm" @ok="modalFormOk" @close="modalFormClose"></sale-back-modal>
         <bill-detail ref="modalDetail" @ok="modalFormOk" @close="modalFormClose"></bill-detail>
         <bill-excel-iframe ref="billExcelIframe" @ok="modalFormOk" @close="modalFormClose"></bill-excel-iframe>
-        <user-selection-modal ref="userSelectionModal" @ok="modalFormOk"></user-selection-modal>
+        <user-selection-modal ref="userSelectionModal" @validation-success="handleValidationSuccess" @validation-failed="handleValidationFailed"></user-selection-modal>
         <validation-differences-modal ref="validationDifferencesModal"></validation-differences-modal>
         
         <!-- 日期选择器模态框 -->
@@ -441,6 +441,25 @@
       handleDateCancel() {
         this.validationDateVisible = false;
         this.selectedValidationDate = null;
+      },
+      
+      showValidationDifferences(differences) {
+        // 显示校验差异界面
+        console.log('显示校验差异:', differences);
+        this.$refs.validationDifferencesModal.show(differences);
+      },
+      
+      handleValidationSuccess(result) {
+        // 处理校验成功
+        console.log('校验成功:', result);
+        this.$message.success(`校验通过！共有 ${result.totalBills} 张单据数据一致。`);
+        this.loadData(); // 刷新列表
+      },
+      
+      handleValidationFailed(differences) {
+        // 处理校验失败，显示差异
+        console.log('校验失败:', differences);
+        this.showValidationDifferences(differences);
       }
     }
   }

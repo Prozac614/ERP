@@ -3,6 +3,7 @@ package com.jsh.erp.datasource.mappers;
 import com.jsh.erp.datasource.entities.DepotHead;
 import com.jsh.erp.datasource.entities.DepotHeadExample;
 import com.jsh.erp.datasource.vo.TodayUserBillSummary;
+import com.jsh.erp.datasource.vo.BillMaterialSummary;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
@@ -47,4 +48,17 @@ public interface DepotHeadMapper {
      * @return 今日指定用户的单据列表
      */
     List<DepotHead> getTodayBillsByUser(@Param("tenantId") Long tenantId, @Param("userId") Long userId);
+
+    /**
+     * 获取指定日期和用户的商品唛头出库汇总
+     * 
+     * @param validationDate 校验日期
+     * @param tenantId       租户ID
+     * @param userIds        用户ID列表
+     * @return 商品唛头出库汇总列表
+     */
+    List<BillMaterialSummary> getBillMaterialSummaryByDateAndUsers(
+            @Param("validationDate") String validationDate, 
+            @Param("tenantId") Long tenantId,
+            @Param("userIds") List<Long> userIds);
 }

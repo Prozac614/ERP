@@ -669,4 +669,33 @@
       AND creator = #{userId}
     ORDER BY create_time
   </select>
+  
+  <select id="getBillMaterialSummaryByDateAndUsers" resultType="com.jsh.erp.datasource.vo.BillMaterialSummary">
+    SELECT 
+      dh.creator as userId,
+      u.user_name as userName,
+      m.bar_code as materialBarCode,
+      m.name as materialName,
+      SUM(di.oper_number) as totalOutNumber,
+      dh.create_time as createTime
+    FROM jsh_depot_head dh
+    LEFT JOIN jsh_user u ON dh.creator = u.id
+    LEFT JOIN jsh_depot_item di ON dh.id = di.header_id
+    LEFT JOIN jsh_material m ON di.material_id = m.id
+    WHERE dh.type = '出库' 
+      AND dh.sub_type = '销售'
+      AND dh.delete_flag = '0'
+      AND di.delete_flag = '0'
+      AND m.delete_flag = '0'
+      AND DATE(dh.create_time) = #{validationDate}
+      AND dh.tenant_id = #{tenantId}
+      AND dh.creator IN 
+      <foreach collection="userIds" item="userId" open="(" close=")" separator=",">
+        #{userId}
+      </foreach>
+      AND m.bar_code IS NOT NULL
+      AND m.bar_code != ''
+    GROUP BY dh.creator, u.user_name, m.bar_code, m.name
+    ORDER BY m.bar_code, dh.creator
+  </select>
 </mapper>

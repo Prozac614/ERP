@@ -574,6 +574,29 @@ public class ExceptionConstants {
     public static final String SYSTEM_CONFIG_TEST_USER_MSG = "演示用户禁止操作";
 
     /**
+     * 交叉校验信息
+     * type = 120
+     */
+    // 交叉校验查询失败
+    public static final int CROSS_VALIDATION_QUERY_FAILED_CODE = 12000000;
+    public static final String CROSS_VALIDATION_QUERY_FAILED_MSG = "交叉校验查询失败";
+    // 交叉校验执行失败
+    public static final int CROSS_VALIDATION_EXECUTE_FAILED_CODE = 12000001;
+    public static final String CROSS_VALIDATION_EXECUTE_FAILED_MSG = "交叉校验执行失败";
+    // 交叉校验数据不一致
+    public static final int CROSS_VALIDATION_DATA_INCONSISTENT_CODE = 12000002;
+    public static final String CROSS_VALIDATION_DATA_INCONSISTENT_MSG = "发现数据不一致，请查看差异详情";
+    // 交叉校验无数据
+    public static final int CROSS_VALIDATION_NO_DATA_CODE = 12000003;
+    public static final String CROSS_VALIDATION_NO_DATA_MSG = "指定日期无相关单据数据";
+    // 交叉校验用户参数错误
+    public static final int CROSS_VALIDATION_USER_PARAM_ERROR_CODE = 12000004;
+    public static final String CROSS_VALIDATION_USER_PARAM_ERROR_MSG = "用户参数错误";
+    // 交叉校验日期格式错误
+    public static final int CROSS_VALIDATION_DATE_FORMAT_ERROR_CODE = 12000005;
+    public static final String CROSS_VALIDATION_DATE_FORMAT_ERROR_MSG = "日期格式错误";
+
+    /**
      * 标准正常返回/操作成功返回
      * 
      * @return

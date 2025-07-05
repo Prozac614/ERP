@@ -119,10 +119,11 @@ export default {
     },
     
     handleValidationResult(result) {
+      console.log('处理校验结果:', result);
       if (result.isConsistent) {
         this.$message.success(`校验通过！共有 ${result.totalBills} 张单据已自动进入审核状态。`)
         this.visible = false
-        this.$emit('ok')
+        this.$emit('validation-success', result)
       } else {
         // 显示校验差异
         this.showValidationDifferences(result.differences)
@@ -131,7 +132,10 @@ export default {
     
     showValidationDifferences(differences) {
       // TODO: 显示校验差异界面，后续在阶段二完善
-      this.$message.error('校验失败，存在差异：' + differences.map(d => d.description).join('; '))
+       console.log('显示校验差异:', differences);
+      
+      // 发送校验失败事件，让父组件处理差异显示
+      this.$emit('validation-failed', differences)
       this.visible = false
     },
     
