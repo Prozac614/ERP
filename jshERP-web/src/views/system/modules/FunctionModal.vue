@@ -88,7 +88,8 @@
             { text: '导出', value: '3' },
             { text: '启用禁用', value: '4' },
             { text: '打印', value: '5' },
-            { text: '作废', value: '6' }
+            { text: '作废', value: '6' },
+            { text: '校验', value: '8' }
           ],
           value: ''
         },

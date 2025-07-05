@@ -122,6 +122,7 @@
           </a-tooltip>
           <a-button v-if="checkFlag && btnEnableList.indexOf(2)>-1" icon="check" @click="batchSetStatus(1)">审核</a-button>
           <a-button v-if="checkFlag && btnEnableList.indexOf(7)>-1" icon="stop" @click="batchSetStatus(0)">反审核</a-button>
+          <a-button v-if="btnEnableList.indexOf(8)>-1" icon="eye" @click="batchValidation">校验</a-button>
           <a-button v-if="isShowExcel && btnEnableList.indexOf(3)>-1" icon="download" @click="handleExport">导出</a-button>
           <a-popover trigger="click" placement="right">
             <template slot="content">
@@ -215,6 +216,28 @@
         <sale-back-modal ref="transferModalForm" @ok="modalFormOk" @close="modalFormClose"></sale-back-modal>
         <bill-detail ref="modalDetail" @ok="modalFormOk" @close="modalFormClose"></bill-detail>
         <bill-excel-iframe ref="billExcelIframe" @ok="modalFormOk" @close="modalFormClose"></bill-excel-iframe>
+        <user-selection-modal ref="userSelectionModal" @ok="modalFormOk"></user-selection-modal>
+        <validation-differences-modal ref="validationDifferencesModal"></validation-differences-modal>
+        
+        <!-- 日期选择器模态框 -->
+        <a-modal
+          title="选择校验日期"
+          :visible="validationDateVisible"
+          @ok="handleDateConfirm"
+          @cancel="handleDateCancel"
+          okText="确定"
+          cancelText="取消"
+        >
+          <div style="margin-bottom: 16px;">
+            <p>请选择要进行交叉校验的日期：</p>
+            <j-date
+              v-model="selectedValidationDate"
+              placeholder="请选择日期"
+              dateFormat="YYYY-MM-DD"
+              style="width: 100%"
+            />
+          </div>
+        </a-modal>
       </a-card>
     </a-col>
   </a-row>
@@ -224,11 +247,15 @@
   import SaleBackModal from './modules/SaleBackModal'
   import BillDetail from './dialog/BillDetail'
   import BillExcelIframe from '@/components/tools/BillExcelIframe'
+  import UserSelectionModal from './components/UserSelectionModal'
+  import ValidationDifferencesModal from './components/ValidationDifferencesModal'
   import { JeecgListMixin } from '@/mixins/JeecgListMixin'
   import { BillListMixin } from './mixins/BillListMixin'
   import JEllipsis from '@/components/jeecg/JEllipsis'
   import JDate from '@/components/jeecg/JDate'
   import Vue from 'vue'
+  import { postAction } from '@/api/manage'
+  import moment from 'moment'
   export default {
     name: "SaleOutList",
     mixins:[JeecgListMixin,BillListMixin],
@@ -237,6 +264,8 @@
       SaleBackModal,
       BillDetail,
       BillExcelIframe,
+      UserSelectionModal,
+      ValidationDifferencesModal,
       JEllipsis,
       JDate
     },
@@ -260,6 +289,9 @@
         prefixNo: 'XSCK',
         //出入库管理开关，适合独立仓管场景
         inOutManageFlag: false,
+        // 交叉验证日期选择
+        validationDateVisible: false,
+        selectedValidationDate: null,
         labelCol: {
           span: 5
         },
@@ -343,6 +375,73 @@
       this.getDepotByCurrentUser()
     },
     methods: {
+      batchValidation() {
+        let that = this;
+        this.$confirm({
+          title: "交叉验证确认",
+          content: "校验将会自动校验指定日期所有用户的未审核单据数据，只有在每个用户提交的销售单据统计数据一致时，会自动通过审核。是否继续？",
+          onOk: function () {
+            console.log('确认对话框 onOk 被调用');
+            console.log('that 指向:', that);
+            console.log('that.showDateSelector 类型:', typeof that.showDateSelector);
+            that.showDateSelector();
+          }
+        });
+      },
+      handleValidation(validationDate) {
+        // 执行校验逻辑
+        this.loading = true;
+        const requestData = {
+          validationDate: validationDate
+        };
+        postAction('/depotHead/checkTodayUsers', requestData).then((res) => {
+          console.log('checkTodayUsers响应:', res);
+          if(res.code === 200) {
+            if(res.data.hasOtherUsers) {
+              // 有其他用户，显示用户选择界面
+              this.showUserSelectionModal(res.data, validationDate);
+            } else {
+              this.$message.error("校验失败：" + validationDate + " 没有其他用户保存销售出库单据！");
+            }
+          } else {
+            this.$message.error(res.msg || "校验失败");
+          }
+        }).catch((error) => {
+          console.error('checkTodayUsers请求错误:', error);
+          this.$message.error("校验请求失败");
+        }).finally(() => {
+          this.loading = false;
+        });
+      },
+      
+      showUserSelectionModal(data, validationDate) {
+        // 显示用户选择界面
+        this.$refs.userSelectionModal.show(data, validationDate);
+      },
+      
+      showDateSelector() {
+        // 显示日期选择器
+        console.log('showDateSelector 被调用');
+        this.selectedValidationDate = moment().format('YYYY-MM-DD'); // 默认选择今天
+        this.validationDateVisible = true;
+        console.log('validationDateVisible 设置为:', this.validationDateVisible);
+        console.log('selectedValidationDate 设置为:', this.selectedValidationDate);
+      },
+      
+      handleDateConfirm() {
+        if (!this.selectedValidationDate) {
+          this.$message.warning('请选择校验日期！');
+          return;
+        }
+        console.log('确认选择的日期:', this.selectedValidationDate);
+        this.validationDateVisible = false;
+        this.handleValidation(this.selectedValidationDate);
+      },
+      
+      handleDateCancel() {
+        this.validationDateVisible = false;
+        this.selectedValidationDate = null;
+      }
     }
   }
 </script>
