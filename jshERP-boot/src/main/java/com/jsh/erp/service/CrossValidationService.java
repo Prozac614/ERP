@@ -163,10 +163,24 @@ public class CrossValidationService {
      */
     private List<TodayUserBillSummary> getTodayUserBillSummaryByDate(String validationDate, Long tenantId, Long currentUserId) {
         try {
+            logger.info("查询指定日期用户单据汇总，参数: validationDate={}, tenantId={}, currentUserId={}", 
+                    validationDate, tenantId, currentUserId);
+            
             // 调用指定日期的用户单据汇总查询方法
-            return depotHeadMapper.getUserBillSummaryByDate(validationDate, tenantId, currentUserId);
+            List<TodayUserBillSummary> result = depotHeadMapper.getUserBillSummaryByDate(validationDate, tenantId, currentUserId);
+            
+            logger.info("查询指定日期用户单据汇总完成，返回结果数量: {}", result == null ? 0 : result.size());
+            if (result != null && !result.isEmpty()) {
+                for (TodayUserBillSummary summary : result) {
+                    logger.info("用户单据汇总详情: userId={}, userName={}, billCount={}", 
+                            summary.getUserId(), summary.getUserName(), summary.getBillCount());
+                }
+            }
+            
+            return result;
         } catch (Exception e) {
-            logger.error("获取指定日期用户单据汇总失败，日期: {}, 租户ID: {}, 当前用户ID: {}", validationDate, tenantId, currentUserId);
+            logger.error("获取指定日期用户单据汇总失败，日期: {}, 租户ID: {}, 当前用户ID: {}, 异常信息: {}", 
+                    validationDate, tenantId, currentUserId, e.getMessage(), e);
             throw e;
         }
     }

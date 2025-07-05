@@ -664,13 +664,16 @@
       u.name as realName,
       COUNT(dh.id) as billCount,
       MIN(dh.create_time) as firstBillTime,
-      MAX(dh.create_time) as lastBillTime
+      MAX(dh.create_time) as lastBillTime,
+      '${validationDate}' as debugDate,
+      #{tenantId} as debugTenantId,
+      #{currentUserId} as debugCurrentUserId
     FROM jsh_depot_head dh
     LEFT JOIN jsh_user u ON dh.creator = u.id
     WHERE dh.type = '出库' 
       AND dh.sub_type = '销售'
       AND dh.delete_flag = '0'
-      AND DATE(dh.create_time) = #{validationDate}
+      AND DATE(dh.create_time) = DATE(#{validationDate})
       AND dh.tenant_id = #{tenantId}
       AND dh.creator != #{currentUserId}
     GROUP BY dh.creator, u.user_name, u.name
@@ -707,7 +710,7 @@
       AND dh.delete_flag = '0'
       AND di.delete_flag = '0'
       AND m.delete_flag = '0'
-      AND DATE(dh.create_time) = #{validationDate}
+      AND DATE(dh.create_time) = DATE(#{validationDate})
       AND dh.tenant_id = #{tenantId}
       AND dh.creator IN 
       <foreach collection="userIds" item="userId" open="(" close=")" separator=",">
