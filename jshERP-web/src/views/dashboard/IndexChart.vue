@@ -137,9 +137,6 @@
             <a-button type="primary" icon="reload" @click="loadStockData" size="small" style="margin-right: 8px;">
               刷新
             </a-button>
-            <a-button icon="download" @click="exportData" size="small" style="margin-right: 12px;">
-              导出
-            </a-button>
             <a-tag color="blue" v-if="selectedRowKeys.length > 0">
               已选择 {{ selectedRowKeys.length }} 个商品
             </a-tag>
@@ -406,16 +403,26 @@
           this.selectedRowKeys.includes(item.key)
         )
         
-        // 模拟生成图表数据
+        // 生成日期范围数据
         const chartData = []
-        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        const startDate = this.dateRange && this.dateRange[0] ? this.dateRange[0] : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) // 默认30天前
+        const endDate = this.dateRange && this.dateRange[1] ? this.dateRange[1] : new Date() // 默认今天
         
+        // 生成日期数组
+        const dates = []
+        const currentDate = new Date(startDate)
+        while (currentDate <= endDate) {
+          dates.push(new Date(currentDate))
+          currentDate.setDate(currentDate.getDate() + 1)
+        }
+        
+        // 为每个选中的商品生成每日数据
         selectedItems.forEach(item => {
-          months.forEach((month, index) => {
+          dates.forEach(date => {
             chartData.push({
-              date: month,
+              date: date.toISOString().split('T')[0], // 格式: YYYY-MM-DD
               value: Math.floor(Math.random() * 30) + 5, // 随机生成5-35的数值
-              type: item.materialName
+              type: item.barCode || item.materialName // 使用唛头字段标识商品
             })
           })
         })
@@ -481,48 +488,6 @@
       clearSelection() {
         this.selectedRowKeys = []
         this.updateChartData()
-      },
-      exportData() {
-        // 实现导出功能
-        if (this.stockData.length === 0) {
-          this.$message.warning('暂无数据可导出')
-          return
-        }
-        
-        // 构建导出数据
-        const exportData = this.stockData.map(item => ({
-          '商品名称': item.materialName,
-          '唛头': item.barCode,
-          '上期结存': item.previousPeriodStock,
-          '本期结存': item.currentPeriodStock,
-          '上期出库': item.previousPeriodOut,
-          '本期出库': item.currentPeriodOut
-        }))
-        
-        // 简单的CSV导出
-        const csvContent = this.convertToCSV(exportData)
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-        const link = document.createElement('a')
-        const url = URL.createObjectURL(blob)
-        link.setAttribute('href', url)
-        link.setAttribute('download', '商品库存统计.csv')
-        link.style.visibility = 'hidden'
-        document.body.appendChild(link)
-        link.click()
-        document.body.removeChild(link)
-        
-        this.$message.success('导出成功')
-      },
-      convertToCSV(data) {
-        if (!data || data.length === 0) return ''
-        
-        const headers = Object.keys(data[0])
-        const csvContent = [
-          headers.join(','),
-          ...data.map(row => headers.map(header => row[header]).join(','))
-        ].join('\n')
-        
-        return '\uFEFF' + csvContent // 添加BOM以支持中文
       }
     }
   }
