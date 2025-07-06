@@ -45,6 +45,9 @@ public class CrossValidationService {
     private DepotHeadMapper depotHeadMapper;
 
     @Resource
+    private DepotHeadService depotHeadService;
+
+    @Resource
     private UserService userService;
 
     /**
@@ -463,13 +466,14 @@ public class CrossValidationService {
 
             logger.info("当前用户单据数量: {}, 其他用户单据数量: {}", currentUserBillIds.size(), otherUserBillIds.size());
 
-            // 更新当前用户的单据为已审核状态
+            // 更新当前用户的单据为已审核状态（使用batchSetStatus确保库存更新）
             if (!currentUserBillIds.isEmpty()) {
-                updateBillStatusByIds(currentUserBillIds, BusinessConstants.BILLS_STATUS_AUDIT);
-                logger.info("已将当前用户的 {} 张单据设置为已审核状态", currentUserBillIds.size());
+                String currentUserIds = currentUserBillIds.stream().map(String::valueOf).collect(Collectors.joining(","));
+                depotHeadService.batchSetStatus(BusinessConstants.BILLS_STATUS_AUDIT, currentUserIds);
+                logger.info("已将当前用户的 {} 张单据设置为已审核状态并更新库存", currentUserBillIds.size());
             }
 
-            // 更新其他用户的单据为完成出库状态
+            // 更新其他用户的单据为完成出库状态（直接更新，不需要库存更新）
             if (!otherUserBillIds.isEmpty()) {
                 updateBillStatusByIds(otherUserBillIds, BusinessConstants.BILLS_STATUS_SKIPED); // "2"完成出库状态
                 logger.info("已将其他用户的 {} 张单据设置为完成出库状态", otherUserBillIds.size());
