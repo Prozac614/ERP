@@ -1429,4 +1429,17 @@ public class DepotItemService {
         List<MaterialStockPeriodVo> list = depotItemMapperEx.getMaterialPeriodStock(materialParam);
         return list;
     }
+
+    /**
+     * 获取商品每日出库数据
+     * @param materialIds 商品ID列表，逗号分隔
+     * @param beginTime 开始时间
+     * @param endTime 结束时间
+     * @return
+     * @throws Exception
+     */
+    public List<Map<String, Object>> getDailyOutStock(String materialIds, String beginTime, String endTime) throws Exception {
+        List<Map<String, Object>> list = depotItemMapperEx.getDailyOutStock(materialIds, beginTime, endTime);
+        return list;
+    }
 }

@@ -147,9 +147,10 @@
           <div class="chart-container">
             <line-chart-multid
               :height="400"
-              :data="outStockChartData"
+              :dataSource="outStockChartData"
               :title="'出库数量趋势'"
               :yaxisText="'数量'"
+              :fields="outStockChartFields"
             />
           </div>
         </a-card>
@@ -229,7 +230,7 @@
   import LineChartMultid from '@/components/chart/LineChartMultid'
   import HeadInfo from '@/components/tools/HeadInfo.vue'
   import Trend from '@/components/Trend'
-  import { getPlatformConfigByKey, getMaterialPeriodStock } from '@/api/api'
+  import { getPlatformConfigByKey, getMaterialPeriodStock, getDailyOutStock } from '@/api/api'
   import { handleIntroJs } from "@/utils/util"
   import { getAction,postAction } from '../../api/manage'
 
@@ -277,6 +278,7 @@
         stockData: [],
         selectedRowKeys: [],
         outStockChartData: [],
+        outStockChartFields: [],
         stockColumns: [
           {
             title: '商品名称',
@@ -395,6 +397,7 @@
         // 根据选中的商品更新图表数据
         if (this.selectedRowKeys.length === 0) {
           this.outStockChartData = []
+          this.outStockChartFields = []
           return
         }
         
@@ -403,31 +406,79 @@
           this.selectedRowKeys.includes(item.key)
         )
         
-        // 生成日期范围数据
-        const chartData = []
-        const startDate = this.dateRange && this.dateRange[0] ? this.dateRange[0] : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) // 默认30天前
-        const endDate = this.dateRange && this.dateRange[1] ? this.dateRange[1] : new Date() // 默认今天
+        // 构建商品ID参数
+        const materialIds = selectedItems.map(item => item.materialId).join(',')
         
-        // 生成日期数组
+        // 构建日期参数
+        let beginTime = ''
+        let endTime = ''
+        if (this.dateRange && this.dateRange.length === 2) {
+          beginTime = this.dateRange[0].format('YYYY-MM-DD')
+          endTime = this.dateRange[1].format('YYYY-MM-DD')
+        } else {
+          // 默认显示过去30天
+          const endDate = new Date()
+          const beginDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+          beginTime = beginDate.toISOString().split('T')[0]
+          endTime = endDate.toISOString().split('T')[0]
+        }
+        
+        // 调用API获取真实数据
+        getDailyOutStock({
+          materialIds: materialIds,
+          beginTime: beginTime,
+          endTime: endTime
+        }).then(res => {
+          if (res.code === 200 && res.data) {
+            // 处理API返回的数据
+            this.processChartData(res.data, selectedItems, beginTime, endTime)
+          } else {
+            console.error('获取出库数据失败:', res.data)
+            this.outStockChartData = []
+            this.outStockChartFields = []
+          }
+        }).catch(error => {
+          console.error('获取出库数据失败:', error)
+          this.outStockChartData = []
+          this.outStockChartFields = []
+        })
+      },
+      
+      processChartData(apiData, selectedItems, beginTime, endTime) {
+        // 生成完整的日期范围
         const dates = []
+        const startDate = new Date(beginTime)
+        const endDate = new Date(endTime)
+        
         const currentDate = new Date(startDate)
         while (currentDate <= endDate) {
-          dates.push(new Date(currentDate))
+          dates.push(currentDate.toISOString().split('T')[0])
           currentDate.setDate(currentDate.getDate() + 1)
         }
         
-        // 为每个选中的商品生成每日数据
-        selectedItems.forEach(item => {
-          dates.forEach(date => {
-            chartData.push({
-              date: date.toISOString().split('T')[0], // 格式: YYYY-MM-DD
-              value: Math.floor(Math.random() * 30) + 5, // 随机生成5-35的数值
-              type: item.barCode || item.materialName // 使用唛头字段标识商品
-            })
+        // 将API数据转换为以日期为key的Map
+        const dataMap = new Map()
+        apiData.forEach(item => {
+          const key = `${item.outDate}_${item.barCode}`
+          dataMap.set(key, item.outQuantity)
+        })
+        
+        // 构建图表数据
+        const chartData = []
+        dates.forEach(date => {
+          const dayData = { type: date }
+          
+          selectedItems.forEach(item => {
+            const barCode = item.barCode || 'unknown'
+            const key = `${date}_${barCode}`
+            dayData[barCode] = dataMap.get(key) || 0
           })
+          
+          chartData.push(dayData)
         })
         
         this.outStockChartData = chartData
+        this.outStockChartFields = selectedItems.map(item => item.barCode || 'unknown')
       },
       initWithTenant() {
         getAction("/user/infoWithTenant",{}).then(res=>{

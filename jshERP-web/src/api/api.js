@@ -114,6 +114,8 @@ const getBatchNumberList = (params) => getAction("/depotItem/getBatchNumberList"
 const findFinancialDetailByNumber = (params) => getAction("/accountHead/getDetailByNumber", params);
 //商品期间库存统计
 const getMaterialPeriodStock = (params) => getAction("/depotItem/getMaterialPeriodStock", params);
+//商品每日出库数据
+const getDailyOutStock = (params) => getAction("/depotItem/getDailyOutStock", params);
 
 export {
   getBuyAndSaleStatistics,
@@ -207,7 +209,8 @@ export {
   findStockByDepotAndBarCode,
   getBatchNumberList,
   findFinancialDetailByNumber,
-  getMaterialPeriodStock
+  getMaterialPeriodStock,
+  getDailyOutStock
 }
 
 

@@ -264,4 +264,9 @@ public interface DepotItemMapperEx {
 
     List<MaterialStockPeriodVo> getMaterialPeriodStock(
             @Param("materialParam") String materialParam);
+
+    List<java.util.Map<String, Object>> getDailyOutStock(
+            @Param("materialIds") String materialIds,
+            @Param("beginTime") String beginTime,
+            @Param("endTime") String endTime);
 }

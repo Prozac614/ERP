@@ -1009,7 +1009,6 @@ public class DepotItemController {
 
     /**
      * 获取商品期间库存统计
-     * 
      * @param materialParam
      * @param request
      * @return
@@ -1020,10 +1019,45 @@ public class DepotItemController {
     public BaseResponseInfo getMaterialPeriodStock(
             @RequestParam(value = "materialParam", required = false) String materialParam,
             HttpServletRequest request) throws Exception {
-        
         BaseResponseInfo res = new BaseResponseInfo();
         try {
             List<MaterialStockPeriodVo> list = depotItemService.getMaterialPeriodStock(materialParam);
+            res.code = 200;
+            res.data = list;
+        } catch (Exception e) {
+            logger.error(e.getMessage(), e);
+            res.code = 500;
+            res.data = "获取数据失败";
+        }
+        return res;
+    }
+
+    /**
+     * 获取商品每日出库数据
+     * @param materialIds
+     * @param beginTime
+     * @param endTime
+     * @param request
+     * @return
+     * @throws Exception
+     */
+    @GetMapping(value = "/getDailyOutStock")
+    @ApiOperation(value = "获取商品每日出库数据")
+    public BaseResponseInfo getDailyOutStock(
+            @RequestParam(value = "materialIds", required = false) String materialIds,
+            @RequestParam(value = "beginTime", required = false) String beginTime,
+            @RequestParam(value = "endTime", required = false) String endTime,
+            HttpServletRequest request) throws Exception {
+        BaseResponseInfo res = new BaseResponseInfo();
+        try {
+            if (StringUtil.isNotEmpty(beginTime)) {
+                beginTime = beginTime + BusinessConstants.DAY_FIRST_TIME;
+            }
+            if (StringUtil.isNotEmpty(endTime)) {
+                endTime = endTime + BusinessConstants.DAY_LAST_TIME;
+            }
+            
+            List<Map<String, Object>> list = depotItemService.getDailyOutStock(materialIds, beginTime, endTime);
             res.code = 200;
             res.data = list;
         } catch (Exception e) {
