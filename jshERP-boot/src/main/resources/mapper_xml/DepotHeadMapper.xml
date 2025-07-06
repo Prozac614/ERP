@@ -696,7 +696,7 @@
     SELECT 
       dh.creator as userId,
       u.username as userName,
-      m.bar_code as materialBarCode,
+      me.bar_code as materialBarCode,
       m.name as materialName,
       SUM(di.oper_number) as totalOutNumber,
       dh.create_time as createTime
@@ -705,6 +705,8 @@
       AND (u.tenant_id = #{tenantId} OR (u.tenant_id IS NULL AND #{tenantId} IS NULL))
     LEFT JOIN jsh_depot_item di ON dh.id = di.header_id
     LEFT JOIN jsh_material m ON di.material_id = m.id
+    LEFT JOIN jsh_material_extend me ON di.material_extend_id = me.id 
+      AND ifnull(me.delete_flag,'0') != '1'
     WHERE dh.type = '出库' 
       AND dh.sub_type = '销售'
       AND dh.delete_flag = '0'
@@ -716,9 +718,9 @@
       <foreach collection="userIds" item="userId" open="(" close=")" separator=",">
         #{userId}
       </foreach>
-      AND m.bar_code IS NOT NULL
-      AND m.bar_code != ''
-    GROUP BY dh.creator, u.username, m.bar_code, m.name
-    ORDER BY m.bar_code, dh.creator
+      AND me.bar_code IS NOT NULL
+      AND me.bar_code != ''
+    GROUP BY dh.creator, u.username, me.bar_code, m.name
+    ORDER BY me.bar_code, dh.creator
   </select>
 </mapper>
