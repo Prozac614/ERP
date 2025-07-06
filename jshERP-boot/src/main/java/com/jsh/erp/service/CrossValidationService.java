@@ -147,12 +147,17 @@ public class CrossValidationService {
                         "当前用户租户信息异常，无法进行交叉校验");
             }
 
-            // 获取指定日期和用户的商品唛头汇总数据
-            logger.info("准备查询商品唛头汇总数据，日期: {}, 租户ID: {}, 用户列表: {}", 
-                    request.getValidationDate(), tenantId, request.getSelectedUserIds());
+            // 构建包含当前用户和选中用户的完整用户列表
+            List<Long> allUserIds = new ArrayList<>(request.getSelectedUserIds());
+            if (!allUserIds.contains(currentUser.getId())) {
+                allUserIds.add(currentUser.getId());
+            }
+            
+            logger.info("准备查询商品唛头汇总数据，日期: {}, 租户ID: {}, 当前用户ID: {}, 选中用户列表: {}, 完整用户列表: {}", 
+                    request.getValidationDate(), tenantId, currentUser.getId(), request.getSelectedUserIds(), allUserIds);
             
             List<BillMaterialSummary> materialSummaries = depotHeadMapper.getBillMaterialSummaryByDateAndUsers(
-                    request.getValidationDate(), tenantId, request.getSelectedUserIds());
+                    request.getValidationDate(), tenantId, allUserIds);
 
             logger.info("查询到商品唛头汇总数据条数: {}", materialSummaries == null ? 0 : materialSummaries.size());
             

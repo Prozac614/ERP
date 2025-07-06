@@ -120,8 +120,10 @@ export default {
     
     handleValidationResult(result) {
       console.log('处理校验结果:', result);
-      if (result.isConsistent) {
-        this.$message.success(`校验通过！共有 ${result.totalBills} 张单据已自动进入审核状态。`)
+      // 兼容处理字段名（可能是 consistent 或 isConsistent）
+      const isConsistent = result.isConsistent !== undefined ? result.isConsistent : result.consistent;
+      if (isConsistent) {
+        this.$message.success(`校验通过！共有 ${result.totalBills} 张单据数据一致。`)
         this.visible = false
         this.$emit('validation-success', result)
       } else {
