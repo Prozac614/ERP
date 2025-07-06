@@ -124,41 +124,84 @@
     -->
     <a-row :gutter="24">
       <a-col :sm="24" :md="24" :xl="24" :style="{ paddingRight: '0px',marginBottom: '12px' }">
-        <a-card :loading="loading" :bordered="false" title="出库统计分析">
-          <div slot="extra">
+        <a-card :loading="loading" :bordered="false" class="dashboard-header">
+          <div class="dashboard-title">
+            <a-icon type="dashboard" style="margin-right: 8px; color: #1890ff;" />
+            📊 库存出库分析仪表板
+          </div>
+          <div slot="extra" class="header-actions">
             <a-range-picker
               v-model="dateRange"
               @change="onDateRangeChange"
               format="YYYY-MM-DD"
               placeholder="选择时间范围"
-              style="width: 240px"
+              style="width: 240px; margin-right: 8px;"
+            />
+            <a-button type="primary" icon="reload" @click="loadStockData" style="margin-right: 8px;">
+              刷新
+            </a-button>
+            <a-button icon="download" @click="exportData">
+              导出
+            </a-button>
+          </div>
+        </a-card>
+      </a-col>
+    </a-row>
+    <a-row :gutter="24">
+      <a-col :sm="24" :md="24" :xl="24" :style="{ paddingRight: '0px',marginBottom: '12px' }">
+        <a-card :loading="loading" :bordered="false" title="📈 出库数量趋势图表" class="chart-card">
+          <div slot="extra">
+            <a-tag color="blue" v-if="selectedRowKeys.length > 0">
+              已选择 {{ selectedRowKeys.length }} 个商品
+            </a-tag>
+            <a-tag color="default" v-else>
+              请选择商品查看趋势
+            </a-tag>
+          </div>
+          <div class="chart-container">
+            <line-chart-multid
+              :height="400"
+              :data="outStockChartData"
+              :title="'出库数量趋势'"
+              :yaxisText="'数量'"
             />
           </div>
         </a-card>
       </a-col>
     </a-row>
     <a-row :gutter="24">
-      <a-col :sm="24" :md="12" :xl="12" :style="{ paddingRight: '0px',marginBottom: '12px' }">
-        <a-card :loading="loading" :bordered="false" title="商品库存统计">
+      <a-col :sm="24" :md="24" :xl="24" :style="{ paddingRight: '0px',marginBottom: '12px' }">
+        <a-card :loading="loading" :bordered="false" title="📋 商品库存明细表" class="table-card">
+          <div slot="extra" class="table-actions">
+            <a-button size="small" @click="selectAll" style="margin-right: 8px;">
+              全选
+            </a-button>
+            <a-button size="small" @click="selectInvert" style="margin-right: 8px;">
+              反选
+            </a-button>
+            <a-button size="small" @click="clearSelection" style="margin-right: 8px;">
+              清空选择
+            </a-button>
+            <a-tag color="processing" v-if="selectedRowKeys.length > 0">
+              已选择 {{ selectedRowKeys.length }} 个商品
+            </a-tag>
+          </div>
+          
           <a-table
             :columns="stockColumns"
             :data-source="stockData"
             :pagination="false"
             size="small"
             :row-selection="{ selectedRowKeys: selectedRowKeys, onChange: onSelectChange }"
-            :scroll="{ y: 300 }"
+            :scroll="{ y: 350 }"
+            class="stock-table"
           >
           </a-table>
-        </a-card>
-      </a-col>
-      <a-col :sm="24" :md="12" :xl="12" :style="{ paddingRight: '0px',marginBottom: '12px' }">
-        <a-card :loading="loading" :bordered="false" title="出库数量趋势">
-          <line-chart-multid
-            :height="300"
-            :data="outStockChartData"
-            :title="'出库数量趋势'"
-            :yaxisText="'数量'"
-          />
+          
+          <div class="table-footer-tip">
+            <a-icon type="bulb" style="color: #faad14; margin-right: 4px;" />
+            💡 选择商品行可在上方图表中查看趋势
+          </div>
         </a-card>
       </a-col>
     </a-row>
@@ -325,6 +368,7 @@
         this.loadStockData()
       },
       loadStockData() {
+        this.loading = true
         getMaterialPeriodStock().then(res => {
           if (res.code === 200 && res.data) {
             this.stockData = res.data.map((item, index) => ({
@@ -337,15 +381,24 @@
               previousPeriodOut: Number(item.previousPeriodOut || 0).toFixed(2),
               currentPeriodOut: Number(item.currentPeriodOut || 0).toFixed(2)
             }))
+            // 默认选中前3个商品
+            if (this.stockData.length > 0) {
+              this.selectedRowKeys = this.stockData.slice(0, Math.min(3, this.stockData.length)).map(item => item.key)
+              this.updateChartData()
+            }
           }
         }).catch(error => {
           console.error('获取库存数据失败:', error)
           this.stockData = []
+          this.$message.error('获取库存数据失败')
+        }).finally(() => {
+          this.loading = false
         })
       },
       onDateRangeChange(dates, dateStrings) {
         this.dateRange = dates
-        // 根据日期范围更新图表数据
+        // 根据日期范围更新数据
+        this.loadStockData()
         this.updateChartData()
       },
       onSelectChange(selectedRowKeys) {
@@ -353,25 +406,32 @@
         this.updateChartData()
       },
       updateChartData() {
-        // 根据选中的商品和日期范围更新图表数据
-        // 这里暂时使用模拟数据
-        this.outStockChartData = [
-          {
-            date: '2024-01-01',
-            value: 100,
-            type: '商品A'
-          },
-          {
-            date: '2024-01-02',
-            value: 120,
-            type: '商品A'
-          },
-          {
-            date: '2024-01-03',
-            value: 90,
-            type: '商品A'
-          }
-        ]
+        // 根据选中的商品更新图表数据
+        if (this.selectedRowKeys.length === 0) {
+          this.outStockChartData = []
+          return
+        }
+        
+        // 获取选中的商品数据
+        const selectedItems = this.stockData.filter(item => 
+          this.selectedRowKeys.includes(item.key)
+        )
+        
+        // 模拟生成图表数据
+        const chartData = []
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        
+        selectedItems.forEach(item => {
+          months.forEach((month, index) => {
+            chartData.push({
+              date: month,
+              value: Math.floor(Math.random() * 30) + 5, // 随机生成5-35的数值
+              type: item.materialName
+            })
+          })
+        })
+        
+        this.outStockChartData = chartData
       },
       initWithTenant() {
         getAction("/user/infoWithTenant",{}).then(res=>{
@@ -419,6 +479,61 @@
         } else {
           return false
         }
+      },
+      selectAll() {
+        this.selectedRowKeys = this.stockData.map(item => item.key)
+        this.updateChartData()
+      },
+      selectInvert() {
+        const allKeys = this.stockData.map(item => item.key)
+        this.selectedRowKeys = allKeys.filter(key => !this.selectedRowKeys.includes(key))
+        this.updateChartData()
+      },
+      clearSelection() {
+        this.selectedRowKeys = []
+        this.updateChartData()
+      },
+      exportData() {
+        // 实现导出功能
+        if (this.stockData.length === 0) {
+          this.$message.warning('暂无数据可导出')
+          return
+        }
+        
+        // 构建导出数据
+        const exportData = this.stockData.map(item => ({
+          '商品名称': item.materialName,
+          '唛头': item.barCode,
+          '上期结存': item.previousPeriodStock,
+          '本期结存': item.currentPeriodStock,
+          '上期出库': item.previousPeriodOut,
+          '本期出库': item.currentPeriodOut
+        }))
+        
+        // 简单的CSV导出
+        const csvContent = this.convertToCSV(exportData)
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+        const link = document.createElement('a')
+        const url = URL.createObjectURL(blob)
+        link.setAttribute('href', url)
+        link.setAttribute('download', '商品库存统计.csv')
+        link.style.visibility = 'hidden'
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        
+        this.$message.success('导出成功')
+      },
+      convertToCSV(data) {
+        if (!data || data.length === 0) return ''
+        
+        const headers = Object.keys(data[0])
+        const csvContent = [
+          headers.join(','),
+          ...data.map(row => headers.map(header => row[header]).join(','))
+        ].join('\n')
+        
+        return '\uFEFF' + csvContent // 添加BOM以支持中文
       }
     }
   }
@@ -466,6 +581,202 @@
         font-weight: 600;
         font-size: 1rem;
       }
+    }
+  }
+  
+  /* 仪表板样式 */
+  .dashboard-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    
+    .dashboard-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: white;
+      display: flex;
+      align-items: center;
+      
+      .anticon {
+        color: #fff !important;
+      }
+    }
+    
+    .header-actions {
+      display: flex;
+      align-items: center;
+      
+      .ant-btn {
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        color: white;
+        background: rgba(255, 255, 255, 0.1);
+        
+        &:hover {
+          background: rgba(255, 255, 255, 0.2);
+          border-color: rgba(255, 255, 255, 0.5);
+        }
+        
+        &.ant-btn-primary {
+          background: rgba(255, 255, 255, 0.2);
+          border-color: rgba(255, 255, 255, 0.4);
+        }
+      }
+    }
+  }
+  
+  .chart-card {
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    margin-bottom: 16px;
+    
+    .ant-card-head {
+      border-bottom: 1px solid #e8e8e8;
+      
+      .ant-card-head-title {
+        font-size: 16px;
+        font-weight: 600;
+        color: rgba(0, 0, 0, 0.85);
+      }
+    }
+    
+    .chart-container {
+      padding: 16px 0;
+      min-height: 400px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      
+      // 当没有数据时显示占位符
+      &:empty::before {
+        content: "请选择商品查看出库趋势";
+        color: rgba(0, 0, 0, 0.45);
+        font-size: 14px;
+      }
+    }
+  }
+  
+  .table-card {
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    margin-bottom: 16px;
+    
+    .ant-card-head {
+      border-bottom: 1px solid #e8e8e8;
+      
+      .ant-card-head-title {
+        font-size: 16px;
+        font-weight: 600;
+        color: rgba(0, 0, 0, 0.85);
+      }
+    }
+    
+    .table-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      
+      .ant-btn {
+        border-radius: 4px;
+        
+        &:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+      }
+    }
+    
+    .stock-table {
+      .ant-table-thead > tr > th {
+        background-color: #fafafa;
+        font-weight: 600;
+        color: rgba(0, 0, 0, 0.85);
+      }
+      
+      .ant-table-tbody > tr {
+        &:hover {
+          background-color: #f5f5f5;
+        }
+        
+        &.ant-table-row-selected {
+          background-color: #e6f7ff;
+        }
+      }
+      
+      .ant-table-selection-column {
+        width: 40px;
+      }
+    }
+    
+    .table-footer-tip {
+      text-align: center;
+      padding: 16px 0;
+      color: rgba(0, 0, 0, 0.45);
+      background-color: #fafafa;
+      border-radius: 0 0 8px 8px;
+      margin-top: 16px;
+      font-size: 13px;
+      
+      .anticon {
+        margin-right: 4px;
+      }
+    }
+  }
+  
+  /* 响应式设计 */
+  @media (max-width: 768px) {
+    .dashboard-header {
+      .dashboard-title {
+        font-size: 16px;
+        margin-bottom: 8px;
+      }
+      
+      .header-actions {
+        flex-direction: column;
+        gap: 8px;
+        
+        .ant-picker {
+          width: 100% !important;
+        }
+      }
+    }
+    
+    .table-actions {
+      flex-direction: column;
+      gap: 8px;
+      
+      .ant-btn {
+        width: 100%;
+      }
+    }
+    
+    .chart-card .chart-container {
+      min-height: 300px;
+    }
+  }
+  
+  /* 动画效果 */
+  .ant-card {
+    transition: all 0.3s ease;
+    
+    &:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+  }
+  
+  .ant-tag {
+    border-radius: 12px;
+    padding: 2px 8px;
+    font-size: 12px;
+  }
+  
+  .ant-btn {
+    transition: all 0.3s ease;
+    
+    &:hover {
+      transform: translateY(-1px);
     }
   }
 </style>
