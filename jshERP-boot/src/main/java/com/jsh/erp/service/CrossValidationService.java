@@ -21,6 +21,8 @@ import java.util.List;
 import java.util.ArrayList;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.Set;
+import java.util.HashSet;
 import java.util.stream.Collectors;
 import java.math.BigDecimal;
 import java.text.SimpleDateFormat;
@@ -294,42 +296,66 @@ public class CrossValidationService {
                 logger.info("没有数据需要校验，返回空的差异列表");
                 return differences;
             }
-            // 按商品唛头分组统计各用户的出库数量
-            Map<String, Map<Long, BigDecimal>> barCodeUserQuantityMap = new HashMap<>();
-            Map<String, String> barCodeMaterialNameMap = new HashMap<>();
-            Map<Long, String> userIdToNameMap = new HashMap<>();
 
-            // 数据聚合
+            // 步骤1: 收集所有参与校验的用户ID
+            Set<Long> allUserIds = new HashSet<>();
+            for (BillMaterialSummary summary : materialSummaries) {
+                allUserIds.add(summary.getUserId());
+            }
+            logger.info("收集到所有参与校验的用户ID: {}", allUserIds);
+
+            // 步骤2: 收集所有参与校验用户当日未审核单据涉及的商品唛头（所有用户的商品并集）
+            Set<String> allBarCodes = new HashSet<>();
+            for (BillMaterialSummary summary : materialSummaries) {
+                allBarCodes.add(summary.getMaterialBarCode());
+            }
+            logger.info("收集到所有商品唛头: {}", allBarCodes);
+
+            // 步骤3: 构建用户ID到用户名的映射
+            Map<Long, String> userIdToNameMap = new HashMap<>();
+            for (BillMaterialSummary summary : materialSummaries) {
+                userIdToNameMap.put(summary.getUserId(), summary.getUserName());
+            }
+
+            // 步骤4: 构建商品唛头到商品名称的映射
+            Map<String, String> barCodeMaterialNameMap = new HashMap<>();
+            for (BillMaterialSummary summary : materialSummaries) {
+                barCodeMaterialNameMap.put(summary.getMaterialBarCode(), summary.getMaterialName());
+            }
+
+            // 步骤5: 构建完整的用户-商品-数量映射表，为缺失的用户-商品组合设置数量为0
+            Map<String, Map<Long, BigDecimal>> barCodeUserQuantityMap = new HashMap<>();
+            
+            // 首先初始化所有商品的所有用户数量为0
+            for (String barCode : allBarCodes) {
+                Map<Long, BigDecimal> userQuantityMap = new HashMap<>();
+                for (Long userId : allUserIds) {
+                    userQuantityMap.put(userId, BigDecimal.ZERO);
+                }
+                barCodeUserQuantityMap.put(barCode, userQuantityMap);
+            }
+
+            // 然后填入实际的数量数据
             for (BillMaterialSummary summary : materialSummaries) {
                 String barCode = summary.getMaterialBarCode();
                 Long userId = summary.getUserId();
                 BigDecimal quantity = summary.getTotalOutNumber();
-
-                // 存储商品名称映射
-                barCodeMaterialNameMap.put(barCode, summary.getMaterialName());
                 
-                // 存储用户ID到用户名的映射
-                userIdToNameMap.put(userId, summary.getUserName());
-
-                // 按唛头分组统计
-                barCodeUserQuantityMap.computeIfAbsent(barCode, k -> new HashMap<>())
-                        .put(userId, quantity);
+                barCodeUserQuantityMap.get(barCode).put(userId, quantity);
             }
 
-            // 检查每个唛头的数量一致性
-            for (Map.Entry<String, Map<Long, BigDecimal>> entry : barCodeUserQuantityMap.entrySet()) {
-                String barCode = entry.getKey();
-                Map<Long, BigDecimal> userQuantityMap = entry.getValue();
+            logger.info("构建完整的用户-商品-数量映射表完成，商品数量: {}, 用户数量: {}", allBarCodes.size(), allUserIds.size());
 
-                // 如果只有一个用户，跳过检查
-                if (userQuantityMap.size() <= 1) {
-                    continue;
-                }
-
+            // 步骤6: 严格校验每个商品在所有用户间的数量一致性
+            for (String barCode : allBarCodes) {
+                Map<Long, BigDecimal> userQuantityMap = barCodeUserQuantityMap.get(barCode);
+                
+                logger.info("开始校验商品 {} 的数量一致性", barCode);
+                
                 // 检查所有用户的数量是否一致
                 BigDecimal firstQuantity = null;
                 boolean isConsistent = true;
-
+                
                 for (BigDecimal quantity : userQuantityMap.values()) {
                     if (firstQuantity == null) {
                         firstQuantity = quantity;
@@ -342,6 +368,8 @@ public class CrossValidationService {
                 // 如果不一致，记录差异
                 if (!isConsistent) {
                     String materialName = barCodeMaterialNameMap.get(barCode);
+                    
+                    logger.info("发现数量不一致的商品: {}, 商品名称: {}", barCode, materialName);
                     
                     // 构建差异描述
                     StringBuilder description = new StringBuilder();
@@ -363,6 +391,8 @@ public class CrossValidationService {
                             usersInfo.append(", ");
                         }
                         usersInfo.append(userName);
+                        
+                        logger.info("用户 {} (ID: {}) 的商品 {} 数量: {}", userName, userId, barCode, quantity);
                     }
 
                     ValidationDifference difference = new ValidationDifference();
@@ -374,14 +404,13 @@ public class CrossValidationService {
                     difference.setUsers(usersInfo.toString());
                     difference.setAffectedBills(userQuantityMap.size());
                     differences.add(difference);
-                    logger.info("发现数量不一致的商品: {}, 涉及用户: {}", barCode, usersInfo.toString());
                 }
             }
 
             logger.info("校验完成，共发现 {} 个差异", differences.size());
 
         } catch (Exception e) {
-            logger.debug("校验商品唛头数量一致性失败，异常信息: {}", e.getMessage());
+            logger.error("校验商品唛头数量一致性失败，异常信息: {}", e.getMessage(), e);
             throw e;
         }
 
