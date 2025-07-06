@@ -96,10 +96,10 @@ public class CrossValidationService {
 
         } catch (BusinessRunTimeException e) {
             // 如果是业务异常，直接重新抛出，保留原始错误信息
-            logger.debug("checkTodayUsers方法执行异常，校验日期: {}, 异常信息: {}", validationDate, e.getMessage());
+            logger.info("checkTodayUsers方法执行异常，校验日期: {}, 异常信息: {}", validationDate, e.getMessage());
             throw e;
         } catch (Exception e) {
-            logger.debug("checkTodayUsers方法执行异常，校验日期: {}, 异常信息: {}", validationDate, e.getMessage(), e);
+            logger.info("checkTodayUsers方法执行异常，校验日期: {}, 异常信息: {}", validationDate, e.getMessage(), e);
             throw new BusinessRunTimeException(ExceptionConstants.CROSS_VALIDATION_QUERY_FAILED_CODE,
                     ExceptionConstants.CROSS_VALIDATION_QUERY_FAILED_MSG + ": " + e.getMessage());
         }
@@ -270,9 +270,16 @@ public class CrossValidationService {
         List<ValidationDifference> differences = new ArrayList<>();
 
         try {
+            logger.info("开始校验数量一致性，输入数据条数: {}", materialSummaries == null ? 0 : materialSummaries.size());
+            
+            if (materialSummaries == null || materialSummaries.isEmpty()) {
+                logger.info("没有数据需要校验，返回空的差异列表");
+                return differences;
+            }
             // 按商品唛头分组统计各用户的出库数量
             Map<String, Map<Long, BigDecimal>> barCodeUserQuantityMap = new HashMap<>();
             Map<String, String> barCodeMaterialNameMap = new HashMap<>();
+            Map<Long, String> userIdToNameMap = new HashMap<>();
 
             // 数据聚合
             for (BillMaterialSummary summary : materialSummaries) {
@@ -282,6 +289,9 @@ public class CrossValidationService {
 
                 // 存储商品名称映射
                 barCodeMaterialNameMap.put(barCode, summary.getMaterialName());
+                
+                // 存储用户ID到用户名的映射
+                userIdToNameMap.put(userId, summary.getUserName());
 
                 // 按唛头分组统计
                 barCodeUserQuantityMap.computeIfAbsent(barCode, k -> new HashMap<>())
@@ -314,23 +324,43 @@ public class CrossValidationService {
                 // 如果不一致，记录差异
                 if (!isConsistent) {
                     String materialName = barCodeMaterialNameMap.get(barCode);
+                    
+                    // 构建差异描述
                     StringBuilder description = new StringBuilder();
                     description.append("商品唛头: ").append(barCode)
                             .append(", 名称: ").append(materialName)
                             .append(", 各用户出库数量不一致: ");
 
+                    StringBuilder usersInfo = new StringBuilder();
+                    
                     for (Map.Entry<Long, BigDecimal> userEntry : userQuantityMap.entrySet()) {
-                        description.append("用户ID ").append(userEntry.getKey())
-                                .append(": ").append(userEntry.getValue()).append("; ");
+                        Long userId = userEntry.getKey();
+                        String userName = userIdToNameMap.get(userId);
+                        BigDecimal quantity = userEntry.getValue();
+                        
+                        description.append(userName).append("(ID:").append(userId).append(")")
+                                .append(": ").append(quantity).append("; ");
+                        
+                        if (usersInfo.length() > 0) {
+                            usersInfo.append(", ");
+                        }
+                        usersInfo.append(userName);
                     }
 
                     ValidationDifference difference = new ValidationDifference();
                     difference.setMaterialBarCode(barCode);
                     difference.setMaterialName(materialName);
+                    difference.setDiffType("QUANTITY_INCONSISTENT");
+                    difference.setDiffTypeName("数量不一致");
                     difference.setDescription(description.toString());
+                    difference.setUsers(usersInfo.toString());
+                    difference.setAffectedBills(userQuantityMap.size());
                     differences.add(difference);
+                    logger.info("发现数量不一致的商品: {}, 涉及用户: {}", barCode, usersInfo.toString());
                 }
             }
+
+            logger.info("校验完成，共发现 {} 个差异", differences.size());
 
         } catch (Exception e) {
             logger.debug("校验商品唛头数量一致性失败，异常信息: {}", e.getMessage());

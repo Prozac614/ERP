@@ -873,8 +873,8 @@ public class DepotHeadController extends BaseController {
     @ApiOperation(value = "检查指定日期其他用户的单据情况")
     public Object checkTodayUsers(@RequestBody JSONObject jsonObject,
             HttpServletRequest request) throws Exception {
-        logger.debug("=== checkTodayUsers方法被调用了！===");
-        logger.debug("请求参数: {}", jsonObject.toString());
+        logger.info("=== checkTodayUsers方法被调用了！===");
+        logger.info("请求参数: {}", jsonObject.toString());
         logger.info("开始执行checkTodayUsers方法");
 
         JSONObject result = null;
@@ -882,7 +882,7 @@ public class DepotHeadController extends BaseController {
             logger.info("执行指定日期用户单据校验");
 
             String validationDate = jsonObject.getString("validationDate");
-            logger.debug("获取到的校验日期: {}", validationDate);
+            logger.info("获取到的校验日期: {}", validationDate);
             logger.info("获取到校验日期: {}", validationDate);
 
             logger.info("准备调用crossValidationService.checkTodayUsers方法");
