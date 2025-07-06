@@ -62,7 +62,7 @@ public class CrossValidationService {
             
             // 验证日期格式
             if (!isValidDateFormat(validationDate)) {
-                logger.error("日期格式错误: {}", validationDate);
+                logger.debug("日期格式错误: {}", validationDate);
                 throw new BusinessRunTimeException(ExceptionConstants.CROSS_VALIDATION_DATE_FORMAT_ERROR_CODE,
                         "日期格式错误，请使用YYYY-MM-DD格式");
             }
@@ -94,11 +94,14 @@ public class CrossValidationService {
             logger.info("checkTodayUsers方法执行完成，校验日期: {}, 返回结果: hasOtherUsers={}, otherUsers.size()={}, totalBills={}",
                     validationDate, result.isHasOtherUsers(), otherUsers.size(), totalBills);
 
+        } catch (BusinessRunTimeException e) {
+            // 如果是业务异常，直接重新抛出，保留原始错误信息
+            logger.debug("checkTodayUsers方法执行异常，校验日期: {}, 异常信息: {}", validationDate, e.getMessage());
+            throw e;
         } catch (Exception e) {
-            logger.error("checkTodayUsers方法执行异常，校验日期: {}, 异常信息: {}", validationDate, e.getMessage());
-            JshException.readFail(logger, e);
+            logger.debug("checkTodayUsers方法执行异常，校验日期: {}, 异常信息: {}", validationDate, e.getMessage(), e);
             throw new BusinessRunTimeException(ExceptionConstants.CROSS_VALIDATION_QUERY_FAILED_CODE,
-                    ExceptionConstants.CROSS_VALIDATION_QUERY_FAILED_MSG);
+                    ExceptionConstants.CROSS_VALIDATION_QUERY_FAILED_MSG + ": " + e.getMessage());
         }
 
         return result;
@@ -126,7 +129,7 @@ public class CrossValidationService {
             
             // 验证日期格式
             if (!isValidDateFormat(request.getValidationDate())) {
-                logger.error("日期格式错误: {}", request.getValidationDate());
+                logger.debug("日期格式错误: {}", request.getValidationDate());
                 throw new BusinessRunTimeException(ExceptionConstants.CROSS_VALIDATION_DATE_FORMAT_ERROR_CODE,
                         "日期格式错误，请使用YYYY-MM-DD格式");
             }
@@ -176,11 +179,14 @@ public class CrossValidationService {
             logger.info("performCrossValidation方法执行完成，校验日期: {}, 返回结果: consistent={}, differences.size()={}, totalBills={}",
                     request.getValidationDate(), result.isConsistent(), differences.size(), totalBills);
 
+        } catch (BusinessRunTimeException e) {
+            // 如果是业务异常，直接重新抛出，保留原始错误信息
+            logger.debug("performCrossValidation方法执行异常，校验日期: {}, 异常信息: {}", request.getValidationDate(), e.getMessage());
+            throw e;
         } catch (Exception e) {
-            logger.error("performCrossValidation方法执行异常，校验日期: {}, 异常信息: {}", request.getValidationDate(), e.getMessage());
-            JshException.readFail(logger, e);
+            logger.debug("performCrossValidation方法执行异常，校验日期: {}, 异常信息: {}", request.getValidationDate(), e.getMessage(), e);
             throw new BusinessRunTimeException(ExceptionConstants.CROSS_VALIDATION_EXECUTE_FAILED_CODE,
-                    ExceptionConstants.CROSS_VALIDATION_EXECUTE_FAILED_MSG);
+                    ExceptionConstants.CROSS_VALIDATION_EXECUTE_FAILED_MSG + ": " + e.getMessage());
         }
 
         return result;
@@ -199,8 +205,21 @@ public class CrossValidationService {
             logger.info("查询指定日期用户单据汇总，参数: validationDate={}, tenantId={}, currentUserId={}", 
                     validationDate, tenantId, currentUserId);
             
+            // 先进行简单的测试：检查当前用户是否有效
+            if (currentUserId == null) {
+                throw new RuntimeException("当前用户ID为空");
+            }
+            
             // 调用指定日期的用户单据汇总查询方法
-            List<TodayUserBillSummary> result = depotHeadMapper.getUserBillSummaryByDate(validationDate, tenantId, currentUserId);
+            List<TodayUserBillSummary> result;
+            try {
+                logger.info("准备调用 depotHeadMapper.getUserBillSummaryByDate 方法");
+                result = depotHeadMapper.getUserBillSummaryByDate(validationDate, tenantId, currentUserId);
+                logger.info("depotHeadMapper.getUserBillSummaryByDate 方法调用成功");
+            } catch (Exception e) {
+                logger.debug("调用 depotHeadMapper.getUserBillSummaryByDate 失败: {}", e.getMessage(), e);
+                throw new RuntimeException("数据库查询失败: " + e.getMessage(), e);
+            }
             
             logger.info("查询指定日期用户单据汇总完成，返回结果数量: {}", result == null ? 0 : result.size());
             if (result != null && !result.isEmpty()) {
@@ -212,7 +231,7 @@ public class CrossValidationService {
             
             return result;
         } catch (Exception e) {
-            logger.error("获取指定日期用户单据汇总失败，日期: {}, 租户ID: {}, 当前用户ID: {}, 异常信息: {}", 
+                        logger.debug("获取指定日期用户单据汇总失败，日期: {}, 租户ID: {}, 当前用户ID: {}, 异常信息: {}",
                     validationDate, tenantId, currentUserId, e.getMessage(), e);
             throw e;
         }
@@ -236,7 +255,7 @@ public class CrossValidationService {
                     .mapToInt(TodayUserBillSummary::getBillCount)
                     .sum();
         } catch (Exception e) {
-            logger.error("统计指定日期单据总数失败，日期: {}, 租户ID: {}", validationDate, tenantId);
+            logger.debug("统计指定日期单据总数失败，日期: {}, 租户ID: {}", validationDate, tenantId);
             throw e;
         }
     }
@@ -314,7 +333,7 @@ public class CrossValidationService {
             }
 
         } catch (Exception e) {
-            logger.error("校验商品唛头数量一致性失败，异常信息: {}", e.getMessage());
+            logger.debug("校验商品唛头数量一致性失败，异常信息: {}", e.getMessage());
             throw e;
         }
 

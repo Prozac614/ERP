@@ -873,6 +873,8 @@ public class DepotHeadController extends BaseController {
     @ApiOperation(value = "检查指定日期其他用户的单据情况")
     public Object checkTodayUsers(@RequestBody JSONObject jsonObject,
             HttpServletRequest request) throws Exception {
+        logger.debug("=== checkTodayUsers方法被调用了！===");
+        logger.debug("请求参数: {}", jsonObject.toString());
         logger.info("开始执行checkTodayUsers方法");
 
         JSONObject result = null;
@@ -880,6 +882,7 @@ public class DepotHeadController extends BaseController {
             logger.info("执行指定日期用户单据校验");
 
             String validationDate = jsonObject.getString("validationDate");
+            logger.debug("获取到的校验日期: {}", validationDate);
             logger.info("获取到校验日期: {}", validationDate);
 
             logger.info("准备调用crossValidationService.checkTodayUsers方法");
@@ -891,11 +894,17 @@ public class DepotHeadController extends BaseController {
             logger.info("成功构建返回结果: {}", result.toString());
 
         } catch (Exception e) {
-            logger.error("checkTodayUsers方法执行出现异常: {}", e.getMessage(), e);
+            logger.debug("checkTodayUsers方法执行出现异常: {}", e.getMessage(), e);
             result = new JSONObject();
             result.put("code", ExceptionConstants.SERVICE_SYSTEM_ERROR_CODE);
-            result.put("msg", ExceptionConstants.SERVICE_SYSTEM_ERROR_MSG);
-            logger.error("构建错误返回结果: {}", result.toString());
+            
+            // 返回具体的错误信息而不是通用的"未知异常"
+            String errorMsg = e.getMessage();
+            if (errorMsg == null || errorMsg.trim().isEmpty()) {
+                errorMsg = ExceptionConstants.SERVICE_SYSTEM_ERROR_MSG;
+            }
+            result.put("msg", errorMsg);
+            logger.debug("构建错误返回结果: {}", result.toString());
         }
 
         logger.info("checkTodayUsers方法执行完成，最终返回结果: {}", result.toString());
@@ -921,7 +930,13 @@ public class DepotHeadController extends BaseController {
             logger.error(e.getMessage(), e);
             result = new JSONObject();
             result.put("code", ExceptionConstants.SERVICE_SYSTEM_ERROR_CODE);
-            result.put("msg", ExceptionConstants.SERVICE_SYSTEM_ERROR_MSG);
+            
+            // 返回具体的错误信息而不是通用的"未知异常"
+            String errorMsg = e.getMessage();
+            if (errorMsg == null || errorMsg.trim().isEmpty()) {
+                errorMsg = ExceptionConstants.SERVICE_SYSTEM_ERROR_MSG;
+            }
+            result.put("msg", errorMsg);
         }
         return result;
     }

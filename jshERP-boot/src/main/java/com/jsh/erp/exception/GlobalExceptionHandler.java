@@ -21,19 +21,28 @@ public class GlobalExceptionHandler {
         // 针对业务参数异常的处理
         if (e instanceof BusinessParamCheckingException) {
             status.put(ExceptionConstants.GLOBAL_RETURNS_CODE, ((BusinessParamCheckingException) e).getCode());
-            status.put(ExceptionConstants.GLOBAL_RETURNS_DATA, ((BusinessParamCheckingException) e).getData());
+            status.put(ExceptionConstants.GLOBAL_RETURNS_MESSAGE, ((BusinessParamCheckingException) e).getData());
             return status;
         }
 
         //针对业务运行时异常的处理
         if (e instanceof BusinessRunTimeException) {
             status.put(ExceptionConstants.GLOBAL_RETURNS_CODE, ((BusinessRunTimeException) e).getCode());
-            status.put(ExceptionConstants.GLOBAL_RETURNS_DATA, ((BusinessRunTimeException) e).getData());
+            status.put(ExceptionConstants.GLOBAL_RETURNS_MESSAGE, ((BusinessRunTimeException) e).getData());
             return status;
         }
 
         status.put(ExceptionConstants.GLOBAL_RETURNS_CODE, ExceptionConstants.SERVICE_SYSTEM_ERROR_CODE);
-        status.put(ExceptionConstants.GLOBAL_RETURNS_DATA, ExceptionConstants.SERVICE_SYSTEM_ERROR_MSG);
+        status.put(ExceptionConstants.GLOBAL_RETURNS_MESSAGE, ExceptionConstants.SERVICE_SYSTEM_ERROR_MSG);
+        
+        // 特殊标记checkTodayUsers的异常
+        if (request.getRequestURL().toString().contains("checkTodayUsers")) {
+            log.debug("=== checkTodayUsers 发生异常！===");
+            log.debug("异常信息: {}", e.getMessage());
+            log.debug("异常类型: {}", e.getClass().getName());
+            log.debug("完整异常堆栈:", e);
+        }
+        
         log.error("Global Exception Occured => url : {}, msg : {}", request.getRequestURL(), e.getMessage());
         /**
          * 这里输出完整的堆栈信息，否则有些异常完全不知道哪里出错了。
