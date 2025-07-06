@@ -175,8 +175,8 @@ main() {
         sudo sed -i 's/grep \$APP_MAIN_CLASS | grep -v/grep \$APP_MAIN_CLASS | grep "\$APP_HOME" | grep -v/' "$run_script"
         
         # 使用 BACKEND_TARGET_DIR 和 BACKEND_NAME 构建日志路径
-        LOG_PATH="$BACKEND_TARGET_DIR/$BACKEND_NAME/logs/console.log"
-        sudo sed -i "s|> /dev/null 2>&1|> $LOG_PATH 2>&1|" "$run_script"
+        LOG_PATH="/home/jshERP-test/jshERP-boot/logs/console.log"
+        sudo sed -i "s|> /dev/null 2>&1 &|> $LOG_PATH 2>&1 \&|" "$run_script"
         print_info "日志输出位置修改完成"
         
         print_info "启动脚本修改完成"
