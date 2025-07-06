@@ -8,6 +8,7 @@ import com.jsh.erp.datasource.entities.*;
 import com.jsh.erp.datasource.vo.DepotItemStockWarningCount;
 import com.jsh.erp.datasource.vo.DepotItemVoBatchNumberList;
 import com.jsh.erp.datasource.vo.InOutPriceVo;
+import com.jsh.erp.datasource.vo.MaterialStockPeriodVo;
 import com.jsh.erp.exception.BusinessRunTimeException;
 import com.jsh.erp.service.DepotService;
 import com.jsh.erp.service.DepotHeadService;
@@ -1002,6 +1003,33 @@ public class DepotItemController {
             logger.error(e.getMessage(), e);
             res.code = 500;
             res.data = "统计失败";
+        }
+        return res;
+    }
+
+    /**
+     * 获取商品期间库存统计
+     * 
+     * @param materialParam
+     * @param request
+     * @return
+     * @throws Exception
+     */
+    @GetMapping(value = "/getMaterialPeriodStock")
+    @ApiOperation(value = "获取商品期间库存统计")
+    public BaseResponseInfo getMaterialPeriodStock(
+            @RequestParam(value = "materialParam", required = false) String materialParam,
+            HttpServletRequest request) throws Exception {
+        
+        BaseResponseInfo res = new BaseResponseInfo();
+        try {
+            List<MaterialStockPeriodVo> list = depotItemService.getMaterialPeriodStock(materialParam);
+            res.code = 200;
+            res.data = list;
+        } catch (Exception e) {
+            logger.error(e.getMessage(), e);
+            res.code = 500;
+            res.data = "获取数据失败";
         }
         return res;
     }

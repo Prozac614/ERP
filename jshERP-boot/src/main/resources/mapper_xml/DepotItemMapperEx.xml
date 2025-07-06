@@ -1133,4 +1133,77 @@
         limit 0,1
     </select>
 
+    <select id="getMaterialPeriodStock" resultType="com.jsh.erp.datasource.vo.MaterialStockPeriodVo">
+        select
+            m.id as materialId,
+            m.name as materialName,
+            me.bar_code as barCode,
+            -- 上期结存（上一期结束时的库存）
+            ifnull((
+                select sum(ifnull(current_number,0))
+                from jsh_material_current_stock mcs
+                where mcs.material_id = m.id
+                and ifnull(mcs.delete_flag,'0') !='1'
+            ), 0) as previousPeriodStock,
+            -- 本期结存（当前库存）
+            ifnull((
+                select sum(ifnull(current_number,0))
+                from jsh_material_current_stock mcs
+                where mcs.material_id = m.id
+                and ifnull(mcs.delete_flag,'0') !='1'
+            ), 0) as currentPeriodStock,
+            -- 上期出库（上一期的出库数量）
+            ifnull((
+                select sum(ifnull(di.basic_number,0))
+                from jsh_depot_item di
+                left join jsh_depot_head dh on dh.id = di.header_id
+                where di.material_id = m.id
+                and dh.type = '出库'
+                and ifnull(di.delete_flag,'0') !='1'
+                and ifnull(dh.delete_flag,'0') !='1'
+                and (case 
+                    when MONTH(NOW()) >= 1 and MONTH(NOW()) <= 6 then
+                        -- 当前是上半年，上期是去年下半年
+                        dh.oper_time >= CONCAT(YEAR(NOW())-1, '-07-01 00:00:00')
+                        and dh.oper_time <= CONCAT(YEAR(NOW())-1, '-12-31 23:59:59')
+                    else
+                        -- 当前是下半年，上期是今年上半年
+                        dh.oper_time >= CONCAT(YEAR(NOW()), '-01-01 00:00:00')
+                        and dh.oper_time <= CONCAT(YEAR(NOW()), '-06-30 23:59:59')
+                    end)
+            ), 0) as previousPeriodOut,
+            -- 本期出库（当前期的出库数量）
+            ifnull((
+                select sum(ifnull(di.basic_number,0))
+                from jsh_depot_item di
+                left join jsh_depot_head dh on dh.id = di.header_id
+                where di.material_id = m.id
+                and dh.type = '出库'
+                and ifnull(di.delete_flag,'0') !='1'
+                and ifnull(dh.delete_flag,'0') !='1'
+                and (case 
+                    when MONTH(NOW()) >= 1 and MONTH(NOW()) <= 6 then
+                        -- 当前是上半年
+                        dh.oper_time >= CONCAT(YEAR(NOW()), '-01-01 00:00:00')
+                        and dh.oper_time <= CONCAT(YEAR(NOW()), '-06-30 23:59:59')
+                    else
+                        -- 当前是下半年
+                        dh.oper_time >= CONCAT(YEAR(NOW()), '-07-01 00:00:00')
+                        and dh.oper_time <= CONCAT(YEAR(NOW()), '-12-31 23:59:59')
+                    end)
+            ), 0) as currentPeriodOut
+        from jsh_material m
+        left join jsh_material_extend me on me.material_id = m.id and ifnull(me.delete_flag,'0') !='1'
+        where 1=1
+        and ifnull(m.delete_flag,'0') !='1'
+        and me.default_flag = 1
+        <if test="materialParam != null and materialParam !=''">
+            <bind name="bindKey" value="'%'+materialParam+'%'"/>
+            and (me.bar_code like #{bindKey} or m.name like #{bindKey} or m.mnemonic like #{bindKey} or m.standard like #{bindKey} or m.model like #{bindKey}
+            or m.color like #{bindKey} or m.mfrs like #{bindKey} or m.brand like #{bindKey} or m.other_field1 like #{bindKey}
+            or m.other_field2 like #{bindKey} or m.other_field3 like #{bindKey})
+        </if>
+        order by m.id desc
+    </select>
+
 </mapper>

@@ -98,6 +98,7 @@
         </chart-card>
       </a-col>
     </a-row>
+    <!--
     <a-row :gutter="24">
       <a-col :sm="24" :md="12" :xl="8" :style="{ paddingRight: '0px',marginBottom: '12px' }">
         <a-card :loading="loading" :bordered="false" :body-style="{paddingRight: '5'}" data-step="4" data-title="销售统计"
@@ -115,6 +116,47 @@
         <a-card :loading="loading" :bordered="false" :body-style="{paddingRight: '5'}" data-step="6" data-title="采购统计"
                 data-intro="统计往前6个月每月采购的总金额">
           <bar title="采购统计" :height="barHeight" :yaxisText="yaxisText" :dataSource="buyPriceData"/>
+        </a-card>
+      </a-col>
+    </a-row>
+    -->
+    <a-row :gutter="24">
+      <a-col :sm="24" :md="24" :xl="24" :style="{ paddingRight: '0px',marginBottom: '12px' }">
+        <a-card :loading="loading" :bordered="false" title="出库统计分析">
+          <div slot="extra">
+            <a-range-picker
+              v-model="dateRange"
+              @change="onDateRangeChange"
+              format="YYYY-MM-DD"
+              placeholder="选择时间范围"
+              style="width: 240px"
+            />
+          </div>
+        </a-card>
+      </a-col>
+    </a-row>
+    <a-row :gutter="24">
+      <a-col :sm="24" :md="12" :xl="12" :style="{ paddingRight: '0px',marginBottom: '12px' }">
+        <a-card :loading="loading" :bordered="false" title="商品库存统计">
+          <a-table
+            :columns="stockColumns"
+            :data-source="stockData"
+            :pagination="false"
+            size="small"
+            :row-selection="{ selectedRowKeys: selectedRowKeys, onChange: onSelectChange }"
+            :scroll="{ y: 300 }"
+          >
+          </a-table>
+        </a-card>
+      </a-col>
+      <a-col :sm="24" :md="12" :xl="12" :style="{ paddingRight: '0px',marginBottom: '12px' }">
+        <a-card :loading="loading" :bordered="false" title="出库数量趋势">
+          <line-chart-multid
+            :height="300"
+            :data="outStockChartData"
+            :title="'出库数量趋势'"
+            :yaxisText="'数量'"
+          />
         </a-card>
       </a-col>
     </a-row>
@@ -156,7 +198,7 @@
   import LineChartMultid from '@/components/chart/LineChartMultid'
   import HeadInfo from '@/components/tools/HeadInfo.vue'
   import Trend from '@/components/Trend'
-  import { getBuyAndSaleStatistics, buyOrSalePrice, getPlatformConfigByKey } from '@/api/api'
+  import { getBuyAndSaleStatistics, buyOrSalePrice, getPlatformConfigByKey, getMaterialPeriodStock } from '@/api/api'
   import { handleIntroJs } from "@/utils/util"
   import { getAction,postAction } from '../../api/manage'
 
@@ -197,7 +239,54 @@
           userCurrentNum: '',
           userNumLimit: '',
           tenantId: ''
-        }
+        },
+        // 新增的数据字段
+        dateRange: [],
+        stockData: [],
+        selectedRowKeys: [],
+        outStockChartData: [],
+        stockColumns: [
+          {
+            title: '商品名称',
+            dataIndex: 'materialName',
+            key: 'materialName',
+            width: 150
+          },
+          {
+            title: '唛头',
+            dataIndex: 'barCode',
+            key: 'barCode',
+            width: 120
+          },
+          {
+            title: '上期结存',
+            dataIndex: 'previousPeriodStock',
+            key: 'previousPeriodStock',
+            width: 100,
+            align: 'right'
+          },
+          {
+            title: '本期结存',
+            dataIndex: 'currentPeriodStock',
+            key: 'currentPeriodStock',
+            width: 100,
+            align: 'right'
+          },
+          {
+            title: '上期出库',
+            dataIndex: 'previousPeriodOut',
+            key: 'previousPeriodOut',
+            width: 100,
+            align: 'right'
+          },
+          {
+            title: '本期出库',
+            dataIndex: 'currentPeriodOut',
+            key: 'currentPeriodOut',
+            width: 100,
+            align: 'right'
+          }
+        ]
       }
     },
     created() {
@@ -229,6 +318,56 @@
             this.payFeeUrl = res.data.platformValue
           }
         })
+        this.loadStockData()
+      },
+      loadStockData() {
+        getMaterialPeriodStock().then(res => {
+          if (res.code === 200 && res.data) {
+            this.stockData = res.data.map((item, index) => ({
+              key: item.materialId || index,
+              materialId: item.materialId,
+              materialName: item.materialName || '未知商品',
+              barCode: item.barCode || '无',
+              previousPeriodStock: Number(item.previousPeriodStock || 0).toFixed(2),
+              currentPeriodStock: Number(item.currentPeriodStock || 0).toFixed(2),
+              previousPeriodOut: Number(item.previousPeriodOut || 0).toFixed(2),
+              currentPeriodOut: Number(item.currentPeriodOut || 0).toFixed(2)
+            }))
+          }
+        }).catch(error => {
+          console.error('获取库存数据失败:', error)
+          this.stockData = []
+        })
+      },
+      onDateRangeChange(dates, dateStrings) {
+        this.dateRange = dates
+        // 根据日期范围更新图表数据
+        this.updateChartData()
+      },
+      onSelectChange(selectedRowKeys) {
+        this.selectedRowKeys = selectedRowKeys
+        this.updateChartData()
+      },
+      updateChartData() {
+        // 根据选中的商品和日期范围更新图表数据
+        // 这里暂时使用模拟数据
+        this.outStockChartData = [
+          {
+            date: '2024-01-01',
+            value: 100,
+            type: '商品A'
+          },
+          {
+            date: '2024-01-02',
+            value: 120,
+            type: '商品A'
+          },
+          {
+            date: '2024-01-03',
+            value: 90,
+            type: '商品A'
+          }
+        ]
       },
       initWithTenant() {
         getAction("/user/infoWithTenant",{}).then(res=>{

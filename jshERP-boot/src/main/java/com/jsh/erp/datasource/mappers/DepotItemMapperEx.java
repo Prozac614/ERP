@@ -5,6 +5,7 @@ import com.jsh.erp.datasource.vo.DepotItemStockWarningCount;
 import com.jsh.erp.datasource.vo.DepotItemVo4Stock;
 import com.jsh.erp.datasource.vo.DepotItemVoBatchNumberList;
 import com.jsh.erp.datasource.vo.InOutPriceVo;
+import com.jsh.erp.datasource.vo.MaterialStockPeriodVo;
 import org.apache.ibatis.annotations.Param;
 
 import java.math.BigDecimal;
@@ -260,4 +261,7 @@ public interface DepotItemMapperEx {
             @Param("meId") Long meId,
             @Param("type") String type,
             @Param("subType") String subType);
+
+    List<MaterialStockPeriodVo> getMaterialPeriodStock(
+            @Param("materialParam") String materialParam);
 }
