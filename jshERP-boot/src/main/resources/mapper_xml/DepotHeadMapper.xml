@@ -651,6 +651,7 @@
     WHERE dh.type = '出库' 
       AND dh.sub_type = '销售'
       AND dh.delete_flag = '0'
+      AND dh.status = '0'
       AND DATE(dh.create_time) = CURDATE()
       AND (dh.tenant_id = #{tenantId} OR (dh.tenant_id IS NULL AND #{tenantId} IS NULL))
       AND dh.creator != #{currentUserId}
@@ -672,6 +673,7 @@
     WHERE dh.type = '出库' 
       AND dh.sub_type = '销售'
       AND dh.delete_flag = '0'
+      AND dh.status = '0'
       AND DATE(dh.create_time) = DATE(#{validationDate})
       AND (dh.tenant_id = #{tenantId} OR (dh.tenant_id IS NULL AND #{tenantId} IS NULL))
       AND dh.creator != #{currentUserId}
@@ -686,6 +688,7 @@
     WHERE type = '出库' 
       AND sub_type = '销售'
       AND delete_flag = '0'
+      AND status = '0'
       AND DATE(create_time) = CURDATE()
       AND (tenant_id = #{tenantId} OR (tenant_id IS NULL AND #{tenantId} IS NULL))
       AND creator = #{userId}
@@ -710,6 +713,7 @@
     WHERE dh.type = '出库' 
       AND dh.sub_type = '销售'
       AND dh.delete_flag = '0'
+      AND dh.status = '0'
       AND di.delete_flag = '0'
       AND m.delete_flag = '0'
       AND DATE(dh.create_time) = DATE(#{validationDate})
