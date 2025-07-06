@@ -25,6 +25,7 @@ import java.util.stream.Collectors;
 import java.math.BigDecimal;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.regex.Pattern;
 
 /**
  * 交叉校验服务
@@ -58,11 +59,27 @@ public class CrossValidationService {
                 throw new BusinessRunTimeException(ExceptionConstants.CROSS_VALIDATION_DATE_FORMAT_ERROR_CODE,
                         ExceptionConstants.CROSS_VALIDATION_DATE_FORMAT_ERROR_MSG);
             }
+            
+            // 验证日期格式
+            if (!isValidDateFormat(validationDate)) {
+                logger.error("日期格式错误: {}", validationDate);
+                throw new BusinessRunTimeException(ExceptionConstants.CROSS_VALIDATION_DATE_FORMAT_ERROR_CODE,
+                        "日期格式错误，请使用YYYY-MM-DD格式");
+            }
 
             // 获取当前用户和租户信息
             User currentUser = userService.getCurrentUser();
             Long currentUserId = currentUser.getId();
             Long tenantId = currentUser.getTenantId();
+            
+            logger.info("当前用户信息: userId={}, tenantId={}", currentUserId, tenantId);
+            
+            // 检查租户ID是否为空
+            if (tenantId == null) {
+                logger.warn("当前用户租户ID为空，无法进行交叉校验");
+                throw new BusinessRunTimeException(ExceptionConstants.CROSS_VALIDATION_QUERY_FAILED_CODE,
+                        "当前用户租户信息异常，无法进行交叉校验");
+            }
 
             // 查询指定日期其他用户的单据汇总情况
             List<TodayUserBillSummary> otherUsers = getTodayUserBillSummaryByDate(validationDate, tenantId, currentUserId);
@@ -106,10 +123,26 @@ public class CrossValidationService {
                 throw new BusinessRunTimeException(ExceptionConstants.CROSS_VALIDATION_USER_PARAM_ERROR_CODE,
                         ExceptionConstants.CROSS_VALIDATION_USER_PARAM_ERROR_MSG);
             }
+            
+            // 验证日期格式
+            if (!isValidDateFormat(request.getValidationDate())) {
+                logger.error("日期格式错误: {}", request.getValidationDate());
+                throw new BusinessRunTimeException(ExceptionConstants.CROSS_VALIDATION_DATE_FORMAT_ERROR_CODE,
+                        "日期格式错误，请使用YYYY-MM-DD格式");
+            }
 
             // 获取当前用户和租户信息
             User currentUser = userService.getCurrentUser();
             Long tenantId = currentUser.getTenantId();
+            
+            logger.info("执行交叉校验 - 当前用户信息: userId={}, tenantId={}", currentUser.getId(), tenantId);
+            
+            // 检查租户ID是否为空
+            if (tenantId == null) {
+                logger.warn("当前用户租户ID为空，无法进行交叉校验");
+                throw new BusinessRunTimeException(ExceptionConstants.CROSS_VALIDATION_EXECUTE_FAILED_CODE,
+                        "当前用户租户信息异常，无法进行交叉校验");
+            }
 
             // 获取指定日期和用户的商品唛头汇总数据
             List<BillMaterialSummary> materialSummaries = depotHeadMapper.getBillMaterialSummaryByDateAndUsers(
@@ -286,5 +319,32 @@ public class CrossValidationService {
         }
 
         return differences;
+    }
+
+    /**
+     * 验证日期格式是否正确
+     * 
+     * @param dateString 日期字符串
+     * @return 是否为有效的日期格式
+     */
+    private boolean isValidDateFormat(String dateString) {
+        if (StringUtil.isEmpty(dateString)) {
+            return false;
+        }
+        
+        // 验证日期格式：YYYY-MM-DD
+        Pattern datePattern = Pattern.compile("^\\d{4}-\\d{2}-\\d{2}$");
+        if (!datePattern.matcher(dateString).matches()) {
+            return false;
+        }
+        
+        try {
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+            sdf.setLenient(false);
+            sdf.parse(dateString);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
     }
 }

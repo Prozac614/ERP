@@ -651,7 +651,7 @@
       AND dh.sub_type = '销售'
       AND dh.delete_flag = '0'
       AND DATE(dh.create_time) = CURDATE()
-      AND dh.tenant_id = #{tenantId}
+      AND (dh.tenant_id = #{tenantId} OR (dh.tenant_id IS NULL AND #{tenantId} IS NULL))
       AND dh.creator != #{currentUserId}
     GROUP BY dh.creator, u.user_name, u.name
     ORDER BY dh.creator
@@ -664,17 +664,14 @@
       u.name as realName,
       COUNT(dh.id) as billCount,
       MIN(dh.create_time) as firstBillTime,
-      MAX(dh.create_time) as lastBillTime,
-      '${validationDate}' as debugDate,
-      #{tenantId} as debugTenantId,
-      #{currentUserId} as debugCurrentUserId
+      MAX(dh.create_time) as lastBillTime
     FROM jsh_depot_head dh
     LEFT JOIN jsh_user u ON dh.creator = u.id
     WHERE dh.type = '出库' 
       AND dh.sub_type = '销售'
       AND dh.delete_flag = '0'
       AND DATE(dh.create_time) = DATE(#{validationDate})
-      AND dh.tenant_id = #{tenantId}
+      AND (dh.tenant_id = #{tenantId} OR (dh.tenant_id IS NULL AND #{tenantId} IS NULL))
       AND dh.creator != #{currentUserId}
     GROUP BY dh.creator, u.user_name, u.name
     ORDER BY dh.creator
@@ -688,7 +685,7 @@
       AND sub_type = '销售'
       AND delete_flag = '0'
       AND DATE(create_time) = CURDATE()
-      AND tenant_id = #{tenantId}
+      AND (tenant_id = #{tenantId} OR (tenant_id IS NULL AND #{tenantId} IS NULL))
       AND creator = #{userId}
     ORDER BY create_time
   </select>
@@ -711,7 +708,7 @@
       AND di.delete_flag = '0'
       AND m.delete_flag = '0'
       AND DATE(dh.create_time) = DATE(#{validationDate})
-      AND dh.tenant_id = #{tenantId}
+      AND (dh.tenant_id = #{tenantId} OR (dh.tenant_id IS NULL AND #{tenantId} IS NULL))
       AND dh.creator IN 
       <foreach collection="userIds" item="userId" open="(" close=")" separator=",">
         #{userId}
