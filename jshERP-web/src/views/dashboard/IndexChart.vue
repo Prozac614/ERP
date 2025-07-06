@@ -124,33 +124,22 @@
     -->
     <a-row :gutter="24">
       <a-col :sm="24" :md="24" :xl="24" :style="{ paddingRight: '0px',marginBottom: '12px' }">
-        <a-card :loading="loading" :bordered="false" class="dashboard-header">
-          <div class="dashboard-title">
-            <a-icon type="dashboard" style="margin-right: 8px; color: #1890ff;" />
-            📊 库存出库分析仪表板
-          </div>
-          <div slot="extra" class="header-actions">
+        <a-card :loading="loading" :bordered="false" title="📈 出库数量趋势图表" class="chart-card">
+          <div slot="extra" class="chart-extra">
+            <span style="margin-right: 8px;">日期：</span>
             <a-range-picker
               v-model="dateRange"
               @change="onDateRangeChange"
               format="YYYY-MM-DD"
               placeholder="选择时间范围"
-              style="width: 240px; margin-right: 8px;"
+              style="width: 240px; margin-right: 12px;"
             />
-            <a-button type="primary" icon="reload" @click="loadStockData" style="margin-right: 8px;">
+            <a-button type="primary" icon="reload" @click="loadStockData" size="small" style="margin-right: 8px;">
               刷新
             </a-button>
-            <a-button icon="download" @click="exportData">
+            <a-button icon="download" @click="exportData" size="small" style="margin-right: 12px;">
               导出
             </a-button>
-          </div>
-        </a-card>
-      </a-col>
-    </a-row>
-    <a-row :gutter="24">
-      <a-col :sm="24" :md="24" :xl="24" :style="{ paddingRight: '0px',marginBottom: '12px' }">
-        <a-card :loading="loading" :bordered="false" title="📈 出库数量趋势图表" class="chart-card">
-          <div slot="extra">
             <a-tag color="blue" v-if="selectedRowKeys.length > 0">
               已选择 {{ selectedRowKeys.length }} 个商品
             </a-tag>
@@ -585,47 +574,6 @@
   }
   
   /* 仪表板样式 */
-  .dashboard-header {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    border-radius: 8px;
-    margin-bottom: 16px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-    
-    .dashboard-title {
-      font-size: 18px;
-      font-weight: 600;
-      color: white;
-      display: flex;
-      align-items: center;
-      
-      .anticon {
-        color: #fff !important;
-      }
-    }
-    
-    .header-actions {
-      display: flex;
-      align-items: center;
-      
-      .ant-btn {
-        border: 1px solid rgba(255, 255, 255, 0.3);
-        color: white;
-        background: rgba(255, 255, 255, 0.1);
-        
-        &:hover {
-          background: rgba(255, 255, 255, 0.2);
-          border-color: rgba(255, 255, 255, 0.5);
-        }
-        
-        &.ant-btn-primary {
-          background: rgba(255, 255, 255, 0.2);
-          border-color: rgba(255, 255, 255, 0.4);
-        }
-      }
-    }
-  }
-  
   .chart-card {
     border-radius: 8px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
@@ -638,6 +586,27 @@
         font-size: 16px;
         font-weight: 600;
         color: rgba(0, 0, 0, 0.85);
+      }
+    }
+    
+    .chart-extra {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      
+      span {
+        color: rgba(0, 0, 0, 0.65);
+        font-size: 14px;
+        font-weight: 500;
+      }
+      
+      .ant-btn {
+        border-radius: 4px;
+        
+        &:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
       }
     }
     
@@ -682,7 +651,6 @@
         
         &:hover {
           transform: translateY(-1px);
-          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
       }
     }
@@ -726,18 +694,23 @@
   
   /* 响应式设计 */
   @media (max-width: 768px) {
-    .dashboard-header {
-      .dashboard-title {
-        font-size: 16px;
-        margin-bottom: 8px;
-      }
-      
-      .header-actions {
+    .chart-card {
+      .chart-extra {
         flex-direction: column;
+        align-items: flex-start;
         gap: 8px;
         
         .ant-picker {
           width: 100% !important;
+        }
+        
+        .ant-tag {
+          margin-top: 4px;
+        }
+        
+        .ant-btn {
+          width: auto;
+          margin-right: 4px;
         }
       }
     }
