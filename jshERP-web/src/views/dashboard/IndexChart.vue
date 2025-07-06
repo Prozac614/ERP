@@ -1,5 +1,6 @@
 <template>
   <div class="page-header-index-wide">
+    <!--
     <a-row :gutter="24">
       <a-col :sm="24" :md="12" :xl="4" :style="{ paddingRight: '0px',marginBottom: '12px' }">
         <chart-card :loading="loading" title="今日销售" data-step="1" data-title="今日销售" data-intro="统计今日销售单据的总金额">
@@ -98,6 +99,7 @@
         </chart-card>
       </a-col>
     </a-row>
+    -->
     <!--
     <a-row :gutter="24">
       <a-col :sm="24" :md="12" :xl="8" :style="{ paddingRight: '0px',marginBottom: '12px' }">
@@ -198,7 +200,7 @@
   import LineChartMultid from '@/components/chart/LineChartMultid'
   import HeadInfo from '@/components/tools/HeadInfo.vue'
   import Trend from '@/components/Trend'
-  import { getBuyAndSaleStatistics, buyOrSalePrice, getPlatformConfigByKey, getMaterialPeriodStock } from '@/api/api'
+  import { getPlatformConfigByKey, getMaterialPeriodStock } from '@/api/api'
   import { handleIntroJs } from "@/utils/util"
   import { getAction,postAction } from '../../api/manage'
 
@@ -223,14 +225,15 @@
         systemUrl: window.SYS_URL,
         loading: true,
         center: null,
-        statistics: {},
-        barHeight: document.documentElement.clientHeight-585,
-        yaxisText: '金额',
-        buyPriceData: [],
-        salePriceData: [],
-        retailPriceData: [],
-        visitFields:['ip','visit'],
-        visitInfo:[],
+        // 移除不需要的统计数据字段
+        // statistics: {},
+        // barHeight: document.documentElement.clientHeight-585,
+        // yaxisText: '金额',
+        // buyPriceData: [],
+        // salePriceData: [],
+        // retailPriceData: [],
+        // visitFields:['ip','visit'],
+        // visitInfo:[],
         hasExpire: false,
         payFeeUrl: '',
         tenant: {
@@ -301,18 +304,19 @@
     },
     methods: {
       initInfo () {
-        getBuyAndSaleStatistics().then((res)=>{
-          if(res.code === 200){
-            this.statistics = res.data;
-          }
-        })
-        buyOrSalePrice().then(res=>{
-          if(res.code === 200){
-            this.buyPriceData = res.data.buyPriceList
-            this.salePriceData = res.data.salePriceList
-            this.retailPriceData = res.data.retailPriceList
-          }
-        })
+        // 移除不需要的统计数据获取
+        // getBuyAndSaleStatistics().then((res)=>{
+        //   if(res.code === 200){
+        //     this.statistics = res.data;
+        //   }
+        // })
+        // buyOrSalePrice().then(res=>{
+        //   if(res.code === 200){
+        //     this.buyPriceData = res.data.buyPriceList
+        //     this.salePriceData = res.data.salePriceList
+        //     this.retailPriceData = res.data.retailPriceList
+        //   }
+        // })
         getPlatformConfigByKey({"platformKey": "pay_fee_url"}).then((res)=> {
           if (res && res.code === 200) {
             this.payFeeUrl = res.data.platformValue
