@@ -1138,21 +1138,21 @@
             m.id as materialId,
             m.name as materialName,
             me.bar_code as barCode,
-            -- 上期结存（上一期结束时的库存）
-            ifnull((
-                select sum(ifnull(current_number,0))
-                from jsh_material_current_stock mcs
-                where mcs.material_id = m.id
-                and ifnull(mcs.delete_flag,'0') !='1'
-            ), 0) as previousPeriodStock,
-            -- 本期结存（当前库存）
+            -- 当前库存作为本期结存
             ifnull((
                 select sum(ifnull(current_number,0))
                 from jsh_material_current_stock mcs
                 where mcs.material_id = m.id
                 and ifnull(mcs.delete_flag,'0') !='1'
             ), 0) as currentPeriodStock,
-            -- 上期出库（上一期的出库数量）
+            -- 暂时用当前库存作为上期结存（后续优化）
+            ifnull((
+                select sum(ifnull(current_number,0))
+                from jsh_material_current_stock mcs
+                where mcs.material_id = m.id
+                and ifnull(mcs.delete_flag,'0') !='1'
+            ), 0) as previousPeriodStock,
+            -- 总出库数量（简化版本，不按期间计算）
             ifnull((
                 select sum(ifnull(di.basic_number,0))
                 from jsh_depot_item di
@@ -1161,18 +1161,8 @@
                 and dh.type = '出库'
                 and ifnull(di.delete_flag,'0') !='1'
                 and ifnull(dh.delete_flag,'0') !='1'
-                and (case 
-                    when MONTH(NOW()) >= 1 and MONTH(NOW()) <= 6 then
-                        -- 当前是上半年，上期是去年下半年
-                        dh.oper_time >= CONCAT(YEAR(NOW())-1, '-07-01 00:00:00')
-                        and dh.oper_time <= CONCAT(YEAR(NOW())-1, '-12-31 23:59:59')
-                    else
-                        -- 当前是下半年，上期是今年上半年
-                        dh.oper_time >= CONCAT(YEAR(NOW()), '-01-01 00:00:00')
-                        and dh.oper_time <= CONCAT(YEAR(NOW()), '-06-30 23:59:59')
-                    end)
-            ), 0) as previousPeriodOut,
-            -- 本期出库（当前期的出库数量）
+            ), 0) as currentPeriodOut,
+            -- 暂时用总出库数量作为上期出库（后续优化）
             ifnull((
                 select sum(ifnull(di.basic_number,0))
                 from jsh_depot_item di
@@ -1181,17 +1171,7 @@
                 and dh.type = '出库'
                 and ifnull(di.delete_flag,'0') !='1'
                 and ifnull(dh.delete_flag,'0') !='1'
-                and (case 
-                    when MONTH(NOW()) >= 1 and MONTH(NOW()) <= 6 then
-                        -- 当前是上半年
-                        dh.oper_time >= CONCAT(YEAR(NOW()), '-01-01 00:00:00')
-                        and dh.oper_time <= CONCAT(YEAR(NOW()), '-06-30 23:59:59')
-                    else
-                        -- 当前是下半年
-                        dh.oper_time >= CONCAT(YEAR(NOW()), '-07-01 00:00:00')
-                        and dh.oper_time <= CONCAT(YEAR(NOW()), '-12-31 23:59:59')
-                    end)
-            ), 0) as currentPeriodOut
+            ), 0) as previousPeriodOut
         from jsh_material m
         left join jsh_material_extend me on me.material_id = m.id and ifnull(me.delete_flag,'0') !='1'
         where 1=1
@@ -1204,6 +1184,7 @@
             or m.other_field2 like #{bindKey} or m.other_field3 like #{bindKey})
         </if>
         order by m.id desc
+        limit 100
     </select>
 
 </mapper>
