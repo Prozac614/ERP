@@ -705,6 +705,7 @@ public class DepotHeadService {
     public int batchSetStatus(String status, String depotHeadIDs) throws Exception {
         int result = 0;
         List<Long> dhIds = new ArrayList<>();
+        List<Long> dhIdsNeedStockUpdate = new ArrayList<>(); // 需要更新库存的单据ID
         List<Long> ids = StringUtil.strToLongList(depotHeadIDs);
         for (Long id : ids) {
             DepotHead depotHead = getDepotHead(id);
@@ -712,6 +713,11 @@ public class DepotHeadService {
                 // 进行反审核操作
                 if ("1".equals(depotHead.getStatus()) && "0".equals(depotHead.getPurchaseStatus())) {
                     dhIds.add(id);
+                    dhIdsNeedStockUpdate.add(id); // 从已审核状态反审核需要更新库存
+                } else if ("2".equals(depotHead.getStatus()) && "0".equals(depotHead.getPurchaseStatus())) {
+                    // 允许从完成出库状态反审核到未审核状态（支持校验后的状态回退）
+                    dhIds.add(id);
+                    // 从完成出库状态反审核不需要更新库存，所以不加入dhIdsNeedStockUpdate
                 } else if ("2".equals(depotHead.getPurchaseStatus())) {
                     throw new BusinessRunTimeException(ExceptionConstants.DEPOT_HEAD_PURCHASE_STATUS_TWO_CODE,
                             String.format(ExceptionConstants.DEPOT_HEAD_PURCHASE_STATUS_TWO_MSG));
@@ -726,6 +732,7 @@ public class DepotHeadService {
                 // 进行审核操作
                 if ("0".equals(depotHead.getStatus())) {
                     dhIds.add(id);
+                    dhIdsNeedStockUpdate.add(id); // 审核操作需要更新库存
                 } else {
                     throw new BusinessRunTimeException(ExceptionConstants.DEPOT_HEAD_UN_AUDIT_TO_AUDIT_FAILED_CODE,
                             String.format(ExceptionConstants.DEPOT_HEAD_UN_AUDIT_TO_AUDIT_FAILED_MSG));
@@ -738,9 +745,9 @@ public class DepotHeadService {
             DepotHeadExample example = new DepotHeadExample();
             example.createCriteria().andIdIn(dhIds);
             result = depotHeadMapper.updateByExampleSelective(depotHead, example);
-            // 更新当前库存
-            if (systemConfigService.getForceApprovalFlag()) {
-                for (Long dhId : dhIds) {
+            // 只对需要更新库存的单据进行库存更新
+            if (systemConfigService.getForceApprovalFlag() && dhIdsNeedStockUpdate.size() > 0) {
+                for (Long dhId : dhIdsNeedStockUpdate) {
                     List<DepotItem> list = depotItemService.getListByHeaderId(dhId);
                     for (DepotItem depotItem : list) {
                         depotItemService.updateCurrentStock(depotItem);
