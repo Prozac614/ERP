@@ -138,15 +138,15 @@
               刷新
             </a-button>
             <a-tag color="blue" v-if="selectedRowKeys.length > 0">
-              已选择 {{ selectedRowKeys.length }} 个商品
+              已选择 {{ selectedRowKeys.length }}/10 个商品
             </a-tag>
             <a-tag color="default" v-else>
-              请选择商品查看趋势
+              请选择商品查看趋势（最多10个）
             </a-tag>
           </div>
           <div class="chart-container">
             <line-chart-multid
-              :height="400"
+              :height="450"
               :dataSource="outStockChartData"
               :title="'出库数量趋势'"
               :yaxisText="'数量'"
@@ -170,18 +170,23 @@
               清空选择
             </a-button>
             <a-tag color="processing" v-if="selectedRowKeys.length > 0">
-              已选择 {{ selectedRowKeys.length }} 个商品
+              已选择 {{ selectedRowKeys.length }}/10 个商品
+            </a-tag>
+            <a-tag color="default" v-if="selectedRowKeys.length === 0">
+              最多可选择10个商品
             </a-tag>
           </div>
           
           <a-table
             :columns="stockColumns"
             :data-source="stockData"
-            :pagination="false"
+            :pagination="ipagination"
             size="small"
             :row-selection="{ selectedRowKeys: selectedRowKeys, onChange: onSelectChange }"
             :scroll="{ y: 350 }"
             class="stock-table"
+            :loading="loading"
+            @change="handleTableChange"
           >
           </a-table>
           
@@ -280,6 +285,18 @@
         selectedRowKeys: [],
         outStockChartData: [],
         outStockChartFields: [],
+        // 分页配置
+        ipagination: {
+          current: 1,
+          pageSize: 10,
+          pageSizeOptions: ['10', '20', '50', '100'],
+          showTotal: (total, range) => {
+            return range[0] + "-" + range[1] + " 共" + total + "条"
+          },
+          showQuickJumper: true,
+          showSizeChanger: true,
+          total: 0
+        },
         stockColumns: [
           {
             title: '商品名称',
@@ -356,23 +373,38 @@
         })
         this.loadStockData()
       },
-      loadStockData() {
+      loadStockData(page) {
+        // 如果传入页码参数，则更新当前页码
+        if (page) {
+          this.ipagination.current = page
+        }
+        
         this.loading = true
-        getMaterialPeriodStock().then(res => {
+        const params = {
+          currentPage: this.ipagination.current,
+          pageSize: this.ipagination.pageSize,
+          materialParam: '' // 可以添加搜索参数
+        }
+        
+        getMaterialPeriodStock(params).then(res => {
           if (res.code === 200 && res.data) {
-            this.stockData = res.data.map((item, index) => ({
+            this.stockData = res.data.rows.map((item, index) => ({
               key: item.materialId || index,
               materialId: item.materialId,
               materialName: item.materialName || '未知商品',
               barCode: item.barCode || '无',
-              previousPeriodStock: Number(item.previousPeriodStock || 0).toFixed(2),
-              currentPeriodStock: Number(item.currentPeriodStock || 0).toFixed(2),
-              previousPeriodOut: Number(item.previousPeriodOut || 0).toFixed(2),
-              currentPeriodOut: Number(item.currentPeriodOut || 0).toFixed(2)
+              previousPeriodStock: parseInt(item.previousPeriodStock || 0),
+              currentPeriodStock: parseInt(item.currentPeriodStock || 0),
+              previousPeriodOut: parseInt(item.previousPeriodOut || 0),
+              currentPeriodOut: parseInt(item.currentPeriodOut || 0)
             }))
-            // 默认选中前3个商品
-            if (this.stockData.length > 0) {
-              this.selectedRowKeys = this.stockData.slice(0, Math.min(3, this.stockData.length)).map(item => item.key)
+            
+            // 更新分页信息
+            this.ipagination.total = res.data.total
+            
+            // 默认选中前5个商品（仅在首次加载时）
+            if (this.ipagination.current === 1 && this.stockData.length > 0) {
+              this.selectedRowKeys = this.stockData.slice(0, Math.min(5, this.stockData.length)).map(item => item.key)
               this.updateChartData()
             }
           }
@@ -391,7 +423,14 @@
         this.updateChartData()
       },
       onSelectChange(selectedRowKeys) {
-        this.selectedRowKeys = selectedRowKeys
+        // 限制最多选择10个商品
+        if (selectedRowKeys.length > 10) {
+          this.$message.warning('最多只能选择10个商品进行对比，当前已自动限制为前10个')
+          // 保留前10个选择
+          this.selectedRowKeys = selectedRowKeys.slice(0, 10)
+        } else {
+          this.selectedRowKeys = selectedRowKeys
+        }
         this.updateChartData()
       },
       updateChartData() {
@@ -529,7 +568,13 @@
         }
       },
       selectAll() {
-        this.selectedRowKeys = this.stockData.map(item => item.key)
+        const allKeys = this.stockData.map(item => item.key)
+        if (allKeys.length > 10) {
+          this.$message.warning('当前页商品数量超过10个，将只选择前10个商品')
+          this.selectedRowKeys = allKeys.slice(0, 10)
+        } else {
+          this.selectedRowKeys = allKeys
+        }
         this.updateChartData()
       },
       selectInvert() {
@@ -540,6 +585,11 @@
       clearSelection() {
         this.selectedRowKeys = []
         this.updateChartData()
+      },
+      handleTableChange(pagination, filters, sorter) {
+        // 处理分页变化
+        this.ipagination = pagination
+        this.loadStockData()
       }
     }
   }

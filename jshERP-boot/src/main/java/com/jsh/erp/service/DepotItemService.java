@@ -1431,6 +1431,30 @@ public class DepotItemService {
     }
 
     /**
+     * 获取商品期间库存统计（分页）
+     * @param materialParam
+     * @param offset
+     * @param rows
+     * @return
+     * @throws Exception
+     */
+    public List<MaterialStockPeriodVo> getMaterialPeriodStock(String materialParam, int offset, int rows) throws Exception {
+        List<MaterialStockPeriodVo> list = depotItemMapperEx.getMaterialPeriodStock(materialParam, offset, rows);
+        return list;
+    }
+
+    /**
+     * 获取商品期间库存统计总数
+     * @param materialParam
+     * @return
+     * @throws Exception
+     */
+    public int getMaterialPeriodStockCount(String materialParam) throws Exception {
+        int count = depotItemMapperEx.getMaterialPeriodStockCount(materialParam);
+        return count;
+    }
+
+    /**
      * 获取商品每日出库数据
      * @param materialIds 商品ID列表，逗号分隔
      * @param beginTime 开始时间

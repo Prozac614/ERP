@@ -1,5 +1,5 @@
 <template>
-  <div :style="{ padding: '0 20px 40px 32px' }">
+  <div :style="{ padding: '0 20px 80px 32px' }">
     <h4 :style="{ marginBottom: '20px' }">{{ title }}</h4>
     <v-chart :force-fit="true" :height="height" :data="data" :scale="scale" :onClick="handleClick">
       <v-tooltip/>
@@ -19,7 +19,18 @@
         :tick-line="false"
       />
       <v-axis data-key="y"/>
-      <v-legend/>
+      <v-legend 
+        :position="'bottom'"
+        :offsetY="10"
+        :itemWidth="80"
+        :itemStyle="{
+          fontSize: '11px',
+          fill: '#666'
+        }"
+        :layout="'horizontal'"
+        :flipPage="true"
+        :maxRow="3"
+      />
       <v-line position="type*y" color="x"/>
       <!-- <v-point position="type*y" color="x" :size="4" :v-style="style" :shape="'circle'"/> -->
     </v-chart>

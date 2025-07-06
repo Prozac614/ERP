@@ -1017,13 +1017,29 @@ public class DepotItemController {
     @GetMapping(value = "/getMaterialPeriodStock")
     @ApiOperation(value = "获取商品期间库存统计")
     public BaseResponseInfo getMaterialPeriodStock(
+            @RequestParam(value = "currentPage", required = false) Integer currentPage,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize,
             @RequestParam(value = "materialParam", required = false) String materialParam,
             HttpServletRequest request) throws Exception {
         BaseResponseInfo res = new BaseResponseInfo();
+        Map<String, Object> objectMap = new HashMap<>();
         try {
-            List<MaterialStockPeriodVo> list = depotItemService.getMaterialPeriodStock(materialParam);
+            // 设置默认分页参数
+            if (currentPage == null) {
+                currentPage = 1;
+            }
+            if (pageSize == null) {
+                pageSize = 10;
+            }
+            
+            List<MaterialStockPeriodVo> list = depotItemService.getMaterialPeriodStock(materialParam, 
+                    (currentPage - 1) * pageSize, pageSize);
+            int total = depotItemService.getMaterialPeriodStockCount(materialParam);
+            
+            objectMap.put("rows", list);
+            objectMap.put("total", total);
             res.code = 200;
-            res.data = list;
+            res.data = objectMap;
         } catch (Exception e) {
             logger.error(e.getMessage(), e);
             res.code = 500;
