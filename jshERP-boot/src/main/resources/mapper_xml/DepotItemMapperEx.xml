@@ -1147,14 +1147,50 @@
                 where mcs.material_id = m.id
                 and ifnull(mcs.delete_flag,'0') !='1'
             ), 0) as currentPeriodStock,
-            -- 暂时用当前库存作为上期结存（后续优化）
+            
+            -- 计算上期结存：当前库存 + 本期出库 - 本期入库
             ifnull((
                 select sum(ifnull(current_number,0))
                 from jsh_material_current_stock mcs
                 where mcs.material_id = m.id
                 and ifnull(mcs.delete_flag,'0') !='1'
+            ), 0) + 
+            ifnull((
+                select sum(ifnull(di.basic_number,0))
+                from jsh_depot_item di
+                left join jsh_depot_head dh on dh.id = di.header_id
+                where di.material_id = m.id
+                and dh.type = '出库'
+                and ifnull(di.delete_flag,'0') !='1'
+                and ifnull(dh.delete_flag,'0') !='1'
+                and (
+                    -- 当前期间：根据月份判断
+                    (month(now()) >= 2 and month(now()) &lt;= 7 and dh.oper_time >= concat(year(now()), '-02-01 00:00:00') and dh.oper_time &lt;= concat(year(now()), '-07-31 23:59:59'))
+                    or
+                    (month(now()) >= 8 and dh.oper_time >= concat(year(now()), '-08-01 00:00:00') and dh.oper_time &lt;= concat(year(now()) + 1, '-01-31 23:59:59'))
+                    or  
+                    (month(now()) = 1 and dh.oper_time >= concat(year(now()) - 1, '-08-01 00:00:00') and dh.oper_time &lt;= concat(year(now()), '-01-31 23:59:59'))
+                )
+            ), 0) -
+            ifnull((
+                select sum(ifnull(di.basic_number,0))
+                from jsh_depot_item di
+                left join jsh_depot_head dh on dh.id = di.header_id
+                where di.material_id = m.id
+                and dh.type = '入库'
+                and ifnull(di.delete_flag,'0') !='1'
+                and ifnull(dh.delete_flag,'0') !='1'
+                and (
+                    -- 当前期间：根据月份判断
+                    (month(now()) >= 2 and month(now()) &lt;= 7 and dh.oper_time >= concat(year(now()), '-02-01 00:00:00') and dh.oper_time &lt;= concat(year(now()), '-07-31 23:59:59'))
+                    or
+                    (month(now()) >= 8 and dh.oper_time >= concat(year(now()), '-08-01 00:00:00') and dh.oper_time &lt;= concat(year(now()) + 1, '-01-31 23:59:59'))
+                    or  
+                    (month(now()) = 1 and dh.oper_time >= concat(year(now()) - 1, '-08-01 00:00:00') and dh.oper_time &lt;= concat(year(now()), '-01-31 23:59:59'))
+                )
             ), 0) as previousPeriodStock,
-            -- 总出库数量（简化版本，不按期间计算）
+            
+            -- 本期出库：根据当前月份判断本期时间范围
             ifnull((
                 select sum(ifnull(di.basic_number,0))
                 from jsh_depot_item di
@@ -1163,8 +1199,17 @@
                 and dh.type = '出库'
                 and ifnull(di.delete_flag,'0') !='1'
                 and ifnull(dh.delete_flag,'0') !='1'
+                and (
+                    -- 当前期间：根据月份判断
+                    (month(now()) >= 2 and month(now()) &lt;= 7 and dh.oper_time >= concat(year(now()), '-02-01 00:00:00') and dh.oper_time &lt;= concat(year(now()), '-07-31 23:59:59'))
+                    or
+                    (month(now()) >= 8 and dh.oper_time >= concat(year(now()), '-08-01 00:00:00') and dh.oper_time &lt;= concat(year(now()) + 1, '-01-31 23:59:59'))
+                    or  
+                    (month(now()) = 1 and dh.oper_time >= concat(year(now()) - 1, '-08-01 00:00:00') and dh.oper_time &lt;= concat(year(now()), '-01-31 23:59:59'))
+                )
             ), 0) as currentPeriodOut,
-            -- 暂时用总出库数量作为上期出库（后续优化）
+            
+            -- 上期出库：根据当前月份判断上期时间范围  
             ifnull((
                 select sum(ifnull(di.basic_number,0))
                 from jsh_depot_item di
@@ -1173,7 +1218,16 @@
                 and dh.type = '出库'
                 and ifnull(di.delete_flag,'0') !='1'
                 and ifnull(dh.delete_flag,'0') !='1'
+                and (
+                    -- 上期时间范围：根据当前月份判断
+                    (month(now()) >= 2 and month(now()) &lt;= 7 and dh.oper_time >= concat(year(now()) - 1, '-08-01 00:00:00') and dh.oper_time &lt;= concat(year(now()), '-01-31 23:59:59'))
+                    or
+                    (month(now()) >= 8 and dh.oper_time >= concat(year(now()), '-02-01 00:00:00') and dh.oper_time &lt;= concat(year(now()), '-07-31 23:59:59'))
+                    or
+                    (month(now()) = 1 and dh.oper_time >= concat(year(now()) - 1, '-02-01 00:00:00') and dh.oper_time &lt;= concat(year(now()) - 1, '-07-31 23:59:59'))
+                )
             ), 0) as previousPeriodOut
+            
         from jsh_material m
         left join jsh_material_extend me on me.material_id = m.id and ifnull(me.delete_flag,'0') !='1'
         where 1=1
