@@ -1,12 +1,27 @@
 <template>
-  <div :style="{ padding: '0 0 32px 32px' }">
+  <div :style="{ padding: '0 20px 40px 32px' }">
     <h4 :style="{ marginBottom: '20px' }">{{ title }}</h4>
     <v-chart :force-fit="true" :height="height" :data="data" :scale="scale" :onClick="handleClick">
       <v-tooltip/>
-      <v-axis/>
+      <v-axis 
+        data-key="type" 
+        :label="{
+          autoRotate: true,
+          autoHide: true,
+          formatter: (text) => {
+            // 如果标签太长，只显示月-日
+            if (text && text.length > 7) {
+              return text.slice(5); // 从YYYY-MM-DD变为MM-DD
+            }
+            return text;
+          }
+        }"
+        :tick-line="false"
+      />
+      <v-axis data-key="y"/>
       <v-legend/>
       <v-line position="type*y" color="x"/>
-      <v-point position="type*y" color="x" :size="4" :v-style="style" :shape="'circle'"/>
+      <!-- <v-point position="type*y" color="x" :size="4" :v-style="style" :shape="'circle'"/> -->
     </v-chart>
   </div>
 </template>

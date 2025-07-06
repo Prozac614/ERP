@@ -233,6 +233,7 @@
   import { getPlatformConfigByKey, getMaterialPeriodStock, getDailyOutStock } from '@/api/api'
   import { handleIntroJs } from "@/utils/util"
   import { getAction,postAction } from '../../api/manage'
+  import moment from 'moment'
 
   export default {
     name: "IndexChart",
@@ -274,7 +275,7 @@
           tenantId: ''
         },
         // 新增的数据字段
-        dateRange: [],
+        dateRange: [moment().subtract(6, 'months'), moment()],
         stockData: [],
         selectedRowKeys: [],
         outStockChartData: [],
