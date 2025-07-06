@@ -148,8 +148,21 @@ public class CrossValidationService {
             }
 
             // 获取指定日期和用户的商品唛头汇总数据
+            logger.info("准备查询商品唛头汇总数据，日期: {}, 租户ID: {}, 用户列表: {}", 
+                    request.getValidationDate(), tenantId, request.getSelectedUserIds());
+            
             List<BillMaterialSummary> materialSummaries = depotHeadMapper.getBillMaterialSummaryByDateAndUsers(
                     request.getValidationDate(), tenantId, request.getSelectedUserIds());
+
+            logger.info("查询到商品唛头汇总数据条数: {}", materialSummaries == null ? 0 : materialSummaries.size());
+            
+            if (materialSummaries != null && !materialSummaries.isEmpty()) {
+                for (BillMaterialSummary summary : materialSummaries) {
+                    logger.info("商品数据详情: 用户ID={}, 用户名={}, 条形码={}, 商品名={}, 数量={}", 
+                            summary.getUserId(), summary.getUserName(), summary.getMaterialBarCode(), 
+                            summary.getMaterialName(), summary.getTotalOutNumber());
+                }
+            }
 
             if (materialSummaries == null || materialSummaries.isEmpty()) {
                 // 无数据情况
