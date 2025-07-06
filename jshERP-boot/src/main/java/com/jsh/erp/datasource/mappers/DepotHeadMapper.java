@@ -72,4 +72,17 @@ public interface DepotHeadMapper {
             @Param("validationDate") String validationDate, 
             @Param("tenantId") Long tenantId,
             @Param("userIds") List<Long> userIds);
+
+    /**
+     * 获取指定日期和用户的销售出库单据列表
+     * 
+     * @param validationDate 校验日期
+     * @param tenantId       租户ID
+     * @param userIds        用户ID列表
+     * @return 销售出库单据列表
+     */
+    List<DepotHead> getBillsByDateAndUsers(
+            @Param("validationDate") String validationDate, 
+            @Param("tenantId") Long tenantId,
+            @Param("userIds") List<Long> userIds);
 }

@@ -123,7 +123,7 @@ export default {
       // 兼容处理字段名（可能是 consistent 或 isConsistent）
       const isConsistent = result.isConsistent !== undefined ? result.isConsistent : result.consistent;
       if (isConsistent) {
-        this.$message.success(`校验通过！共有 ${result.totalBills} 张单据数据一致。`)
+        this.$message.success(`校验通过！共有 ${result.totalBills} 种商品数据一致，相关单据状态已自动更新。`)
         this.visible = false
         this.$emit('validation-success', result)
       } else {

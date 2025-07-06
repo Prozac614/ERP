@@ -452,7 +452,7 @@
       handleValidationSuccess(result) {
         // 处理校验成功
         console.log('校验成功:', result);
-        this.$message.success(`校验通过！共有 ${result.totalBills} 张单据数据一致。`);
+        this.$message.success(`校验通过！共有 ${result.totalBills} 种商品数据一致，相关单据状态已自动更新。`);
         this.loadData(); // 刷新列表
       },
       

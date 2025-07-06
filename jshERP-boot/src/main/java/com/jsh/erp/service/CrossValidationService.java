@@ -1,6 +1,8 @@
 package com.jsh.erp.service;
 
 import com.jsh.erp.datasource.entities.User;
+import com.jsh.erp.datasource.entities.DepotHead;
+import com.jsh.erp.datasource.entities.DepotHeadExample;
 import com.jsh.erp.datasource.mappers.DepotHeadMapper;
 import com.jsh.erp.datasource.vo.BillMaterialSummary;
 import com.jsh.erp.datasource.vo.CrossValidationCheckResult;
@@ -8,6 +10,7 @@ import com.jsh.erp.datasource.vo.CrossValidationRequest;
 import com.jsh.erp.datasource.vo.CrossValidationResult;
 import com.jsh.erp.datasource.vo.TodayUserBillSummary;
 import com.jsh.erp.datasource.vo.ValidationDifference;
+import com.jsh.erp.constants.BusinessConstants;
 import com.jsh.erp.constants.ExceptionConstants;
 import com.jsh.erp.exception.BusinessRunTimeException;
 import com.jsh.erp.exception.JshException;
@@ -15,6 +18,7 @@ import com.jsh.erp.utils.StringUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
 import java.util.List;
@@ -183,21 +187,24 @@ public class CrossValidationService {
             // 执行数量一致性校验
             List<ValidationDifference> differences = validateQuantityConsistency(materialSummaries);
 
-            // 统计单据总数
-            int totalBills = countBillsByDateAndUsers(request.getValidationDate(), tenantId, 
-                    materialSummaries.stream().map(summary -> {
-                        TodayUserBillSummary userSummary = new TodayUserBillSummary();
-                        userSummary.setUserId(summary.getUserId());
-                        userSummary.setBillCount(1); // 简化统计
-                        return userSummary;
-                    }).collect(Collectors.toList()));
+            // 统计校验的商品种类数量
+            Set<String> uniqueBarCodes = new HashSet<>();
+            for (BillMaterialSummary summary : materialSummaries) {
+                uniqueBarCodes.add(summary.getMaterialBarCode());
+            }
+            int totalMaterials = uniqueBarCodes.size();
 
             result.setConsistent(differences.isEmpty());
             result.setDifferences(differences);
-            result.setTotalBills(totalBills);
+            result.setTotalBills(totalMaterials);
 
-            logger.info("performCrossValidation方法执行完成，校验日期: {}, 返回结果: consistent={}, differences.size()={}, totalBills={}",
-                    request.getValidationDate(), result.isConsistent(), differences.size(), totalBills);
+            // 如果校验通过，自动更新单据状态
+            if (differences.isEmpty()) {
+                updateBillStatusAfterValidation(request.getValidationDate(), tenantId, allUserIds, currentUser.getId());
+            }
+
+            logger.info("performCrossValidation方法执行完成，校验日期: {}, 返回结果: consistent={}, differences.size()={}, totalMaterials={}",
+                    request.getValidationDate(), result.isConsistent(), differences.size(), totalMaterials);
 
         } catch (BusinessRunTimeException e) {
             // 如果是业务异常，直接重新抛出，保留原始错误信息
@@ -415,6 +422,97 @@ public class CrossValidationService {
         }
 
         return differences;
+    }
+
+    /**
+     * 校验通过后更新单据状态
+     * 当前用户的单据设置为已审核，其他用户的单据设置为完成出库（表示数据已录入库存）
+     * 
+     * @param validationDate 校验日期
+     * @param tenantId       租户ID
+     * @param allUserIds     所有参与校验的用户ID
+     * @param currentUserId  当前用户ID
+     */
+    @Transactional(value = "transactionManager", rollbackFor = Exception.class)
+    private void updateBillStatusAfterValidation(String validationDate, Long tenantId, List<Long> allUserIds, Long currentUserId) {
+        try {
+            logger.info("开始更新校验通过后的单据状态，日期: {}, 租户ID: {}, 用户列表: {}, 当前用户: {}", 
+                    validationDate, tenantId, allUserIds, currentUserId);
+
+            // 查询所有参与校验的用户的销售出库单据
+            List<DepotHead> bills = depotHeadMapper.getBillsByDateAndUsers(validationDate, tenantId, allUserIds);
+            
+            if (bills == null || bills.isEmpty()) {
+                logger.info("未找到需要更新状态的单据");
+                return;
+            }
+
+            logger.info("查询到需要更新状态的单据数量: {}", bills.size());
+
+            // 分别处理当前用户和其他用户的单据
+            List<Long> currentUserBillIds = new ArrayList<>();
+            List<Long> otherUserBillIds = new ArrayList<>();
+            
+            for (DepotHead bill : bills) {
+                if (currentUserId.equals(bill.getCreator())) {
+                    currentUserBillIds.add(bill.getId());
+                } else {
+                    otherUserBillIds.add(bill.getId());
+                }
+            }
+
+            logger.info("当前用户单据数量: {}, 其他用户单据数量: {}", currentUserBillIds.size(), otherUserBillIds.size());
+
+            // 更新当前用户的单据为已审核状态
+            if (!currentUserBillIds.isEmpty()) {
+                updateBillStatusByIds(currentUserBillIds, BusinessConstants.BILLS_STATUS_AUDIT);
+                logger.info("已将当前用户的 {} 张单据设置为已审核状态", currentUserBillIds.size());
+            }
+
+            // 更新其他用户的单据为完成出库状态
+            if (!otherUserBillIds.isEmpty()) {
+                updateBillStatusByIds(otherUserBillIds, BusinessConstants.BILLS_STATUS_SKIPED); // "2"完成出库状态
+                logger.info("已将其他用户的 {} 张单据设置为完成出库状态", otherUserBillIds.size());
+            }
+
+            logger.info("校验通过后单据状态更新完成");
+
+        } catch (Exception e) {
+            logger.error("更新校验通过后的单据状态失败，异常信息: {}", e.getMessage(), e);
+            throw new BusinessRunTimeException(ExceptionConstants.CROSS_VALIDATION_EXECUTE_FAILED_CODE,
+                    "更新单据状态失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 根据单据ID列表批量更新单据状态
+     * 
+     * @param billIds 单据ID列表
+     * @param status  目标状态
+     */
+    private void updateBillStatusByIds(List<Long> billIds, String status) {
+        if (billIds == null || billIds.isEmpty()) {
+            return;
+        }
+
+        try {
+            // 构建更新对象
+            DepotHead updateBill = new DepotHead();
+            updateBill.setStatus(status);
+
+            // 构建更新条件
+            DepotHeadExample example = new DepotHeadExample();
+            example.createCriteria().andIdIn(billIds);
+
+            // 执行批量更新
+            int updateCount = depotHeadMapper.updateByExampleSelective(updateBill, example);
+            logger.info("批量更新单据状态完成，更新状态: {}, 影响行数: {}", status, updateCount);
+
+        } catch (Exception e) {
+            logger.error("批量更新单据状态失败，单据ID列表: {}, 目标状态: {}, 异常信息: {}", 
+                    billIds, status, e.getMessage(), e);
+            throw e;
+        }
     }
 
     /**

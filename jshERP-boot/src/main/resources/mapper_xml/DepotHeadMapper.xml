@@ -723,4 +723,21 @@
     GROUP BY dh.creator, u.username, me.bar_code, m.name
     ORDER BY me.bar_code, dh.creator
   </select>
+
+  <select id="getBillsByDateAndUsers" resultType="com.jsh.erp.datasource.entities.DepotHead">
+    SELECT 
+      <include refid="Base_Column_List" />
+    FROM jsh_depot_head
+    WHERE type = '出库' 
+      AND sub_type = '销售'
+      AND delete_flag = '0'
+      AND status = '0'
+      AND DATE(create_time) = DATE(#{validationDate})
+      AND (tenant_id = #{tenantId} OR (tenant_id IS NULL AND #{tenantId} IS NULL))
+      AND creator IN 
+      <foreach collection="userIds" item="userId" open="(" close=")" separator=",">
+        #{userId}
+      </foreach>
+    ORDER BY create_time
+  </select>
 </mapper>
