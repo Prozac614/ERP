@@ -1419,16 +1419,7 @@ public class DepotItemService {
         return stock!=null? stock: BigDecimal.ZERO;
     }
 
-    /**
-     * 获取商品期间库存统计
-     * @param materialParam
-     * @return
-     * @throws Exception
-     */
-    public List<MaterialStockPeriodVo> getMaterialPeriodStock(String materialParam) throws Exception {
-        List<MaterialStockPeriodVo> list = depotItemMapperEx.getMaterialPeriodStock(materialParam);
-        return list;
-    }
+
 
     /**
      * 获取商品期间库存统计（分页）

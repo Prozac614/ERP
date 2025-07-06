@@ -263,9 +263,6 @@ public interface DepotItemMapperEx {
             @Param("subType") String subType);
 
     List<MaterialStockPeriodVo> getMaterialPeriodStock(
-            @Param("materialParam") String materialParam);
-
-    List<MaterialStockPeriodVo> getMaterialPeriodStock(
             @Param("materialParam") String materialParam,
             @Param("offset") Integer offset,
             @Param("rows") Integer rows);
