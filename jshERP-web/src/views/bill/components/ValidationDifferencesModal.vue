@@ -80,11 +80,14 @@ export default {
       this.differences.forEach(diff => {
         const materialKey = diff.materialName || diff.materialBarCode
         
+        // 从users字段获取用户列表
+        const userList = diff.users ? diff.users.split(',').map(u => u.trim()) : []
+        
         // 解析description中的用户和数量信息
         const userQuantities = this.parseUserQuantities(diff.description)
         
         // 收集用户信息
-        Object.keys(userQuantities).forEach(user => {
+        userList.forEach(user => {
           userSet.add(user)
         })
         
@@ -124,11 +127,17 @@ export default {
     parseUserQuantities(description) {
       const userQuantities = {}
       
-      // 解析类似 "用户A(ID:1): 10; 用户B(ID:2): 5;" 的格式
-      const regex = /([^(]+)\([^)]+\):\s*([^;]+);/g
+      // 先找到"各用户出库数量不一致:"之后的部分
+      const startIndex = description.indexOf('各用户出库数量不一致:')
+      if (startIndex === -1) return userQuantities
+      
+      const userPart = description.substring(startIndex + '各用户出库数量不一致:'.length)
+      
+      // 解析类似 " 用户A(ID:1): 10; 用户B(ID:2): 5;" 的格式
+      const regex = /\s*([^(]+)\(ID:[^)]+\):\s*([^;]+);/g
       let match
       
-      while ((match = regex.exec(description)) !== null) {
+      while ((match = regex.exec(userPart)) !== null) {
         const userName = match[1].trim()
         const quantity = match[2].trim()
         // 确保数量显示为整数，不带小数点
