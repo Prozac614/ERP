@@ -1,7 +1,6 @@
 <template>
   <a-modal
     title="校验差异详情"
-    :width="1000"
     :visible="visible"
     :footer="null"
     @cancel="handleCancel"
@@ -22,6 +21,7 @@
         row-key="materialKey"
         size="small"
         bordered
+        style="width: auto; min-width: 400px; max-width: 90vw; margin: 0 auto;"
       >
         <template slot="materialInfo" slot-scope="text, record">
           <div>
