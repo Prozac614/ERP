@@ -1,5 +1,8 @@
 package com.jsh.erp.datasource.vo;
 
+import java.math.BigDecimal;
+import java.util.Map;
+
 /**
  * 校验差异信息
  * 用于描述单据对比中发现的差异
@@ -40,6 +43,12 @@ public class ValidationDifference {
      * 商品名称
      */
     private String materialName;
+
+    /**
+     * 用户数量映射表 - 结构化数据
+     * key: 用户名, value: 该用户的数量
+     */
+    private Map<String, BigDecimal> userQuantities;
 
     public ValidationDifference() {
     }
@@ -104,5 +113,13 @@ public class ValidationDifference {
 
     public void setMaterialName(String materialName) {
         this.materialName = materialName;
+    }
+
+    public Map<String, BigDecimal> getUserQuantities() {
+        return userQuantities;
+    }
+
+    public void setUserQuantities(Map<String, BigDecimal> userQuantities) {
+        this.userQuantities = userQuantities;
     }
 }

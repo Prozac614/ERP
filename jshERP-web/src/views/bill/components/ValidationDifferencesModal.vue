@@ -83,8 +83,15 @@ export default {
         
         const materialKey = diff.materialBarCode || diff.materialName || `material_${index}`
         
-        // 从description提取用户数量信息
-        const userQuantities = this.extractUserQuantities(diff.description)
+        // 优先使用结构化的用户数量数据，如果没有则fallback到解析description
+        let userQuantities = diff.userQuantities || {}
+        
+        // 如果结构化数据为空，则fallback到解析description（兼容旧版本）
+        if (Object.keys(userQuantities).length === 0) {
+          console.log('userQuantities为空，fallback到解析description')
+          userQuantities = this.extractUserQuantities(diff.description)
+        }
+        
         console.log(`商品 ${materialKey} 的用户数量:`, userQuantities)
         
         // 收集用户信息

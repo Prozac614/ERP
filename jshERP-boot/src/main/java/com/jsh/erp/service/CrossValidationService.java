@@ -18,6 +18,9 @@ import com.jsh.erp.utils.StringUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+
+import java.util.HashMap;
+import java.util.Map;
 import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
@@ -389,10 +392,16 @@ public class CrossValidationService {
 
                     StringBuilder usersInfo = new StringBuilder();
                     
+                    // 构建结构化的用户数量映射（key为用户名）
+                    Map<String, BigDecimal> userQuantitiesMap = new HashMap<>();
+                    
                     for (Map.Entry<Long, BigDecimal> userEntry : userQuantityMap.entrySet()) {
                         Long userId = userEntry.getKey();
                         String userName = userIdToNameMap.get(userId);
                         BigDecimal quantity = userEntry.getValue();
+                        
+                        // 设置结构化数据
+                        userQuantitiesMap.put(userName, quantity);
                         
                         description.append(userName).append("(ID:").append(userId).append(")")
                                 .append(": ").append(quantity).append("; ");
@@ -413,6 +422,8 @@ public class CrossValidationService {
                     difference.setDescription(description.toString());
                     difference.setUsers(usersInfo.toString());
                     difference.setAffectedBills(userQuantityMap.size());
+                    // 设置结构化的用户数量数据
+                    difference.setUserQuantities(userQuantitiesMap);
                     differences.add(difference);
                 }
             }
