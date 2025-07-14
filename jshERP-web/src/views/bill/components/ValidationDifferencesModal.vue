@@ -81,14 +81,16 @@ export default {
         const materialKey = diff.materialName || diff.materialBarCode
         
         // 从users字段获取用户列表
-        const userList = diff.users ? diff.users.split(',').map(u => u.trim()) : []
+        const userList = diff.users ? diff.users.split(',').map(u => u.trim()).filter(u => u.length > 0) : []
         
         // 解析description中的用户和数量信息
         const userQuantities = this.parseUserQuantities(diff.description)
         
         // 收集用户信息
         userList.forEach(user => {
-          userSet.add(user)
+          if (user && user.length > 0) {
+            userSet.add(user)
+          }
         })
         
         // 构建商品信息
@@ -99,8 +101,8 @@ export default {
         })
       })
       
-      // 转换为数组并排序
-      this.allUsers = Array.from(userSet).sort()
+      // 转换为数组并排序，过滤掉空值
+      this.allUsers = Array.from(userSet).filter(user => user && user.length > 0).sort()
       this.matrixData = Array.from(materialMap.values()).sort((a, b) => 
         a.materialName.localeCompare(b.materialName)
       )
