@@ -1,7 +1,7 @@
 <template>
   <a-modal
     title="校验差异详情"
-    :width="800"
+    :width="1000"
     :visible="visible"
     :footer="null"
     @cancel="handleCancel"
@@ -16,19 +16,23 @@
       />
       
       <a-table
-        :columns="columns"
-        :data-source="differences"
+        :columns="matrixColumns"
+        :data-source="matrixData"
         :pagination="false"
-        row-key="diffType"
+        row-key="materialName"
         size="small"
+        bordered
       >
-        <template slot="diffTypeName" slot-scope="text">
-          <a-tag color="red">{{ text }}</a-tag>
+        <template slot="materialName" slot-scope="text, record">
+          <div>
+            <div style="font-weight: bold;">{{ text }}</div>
+            <div style="font-size: 12px; color: #666;">{{ record.materialBarCode }}</div>
+          </div>
         </template>
-        <template slot="users" slot-scope="text">
-          <a-tag v-for="user in text.split(',')" :key="user" color="blue">
-            {{ user.trim() }}
-          </a-tag>
+        <template v-for="user in allUsers" :slot="user" slot-scope="text, record">
+          <span :key="user" :style="getDifferenceStyle(record, user)">
+            {{ record.userQuantities[user] !== undefined ? Math.floor(record.userQuantities[user]) : '-' }}
+          </span>
         </template>
       </a-table>
       
@@ -48,42 +52,128 @@ export default {
     return {
       visible: false,
       differences: [],
-      columns: [
-        {
-          title: '差异类型',
-          dataIndex: 'diffTypeName',
-          width: 120,
-          scopedSlots: { customRender: 'diffTypeName' }
-        },
-        {
-          title: '差异描述',
-          dataIndex: 'description',
-          width: 300
-        },
-        {
-          title: '涉及用户',
-          dataIndex: 'users',
-          width: 150,
-          scopedSlots: { customRender: 'users' }
-        },
-        {
-          title: '影响单据',
-          dataIndex: 'affectedBills',
-          width: 80
-        }
-      ]
+      matrixData: [],
+      matrixColumns: [],
+      allUsers: []
     }
   },
   methods: {
     show(differences) {
       this.visible = true
       this.differences = differences || []
+      this.processMatrixData()
     },
     
     handleCancel() {
       this.visible = false
       this.differences = []
+      this.matrixData = []
+      this.matrixColumns = []
+      this.allUsers = []
+    },
+    
+    processMatrixData() {
+      // 收集所有用户和商品信息
+      const userSet = new Set()
+      const materialMap = new Map()
+      
+      this.differences.forEach(diff => {
+        const materialKey = diff.materialName || diff.materialBarCode
+        
+        // 解析description中的用户和数量信息
+        const userQuantities = this.parseUserQuantities(diff.description)
+        
+        // 收集用户信息
+        Object.keys(userQuantities).forEach(user => {
+          userSet.add(user)
+        })
+        
+        // 构建商品信息
+        materialMap.set(materialKey, {
+          materialName: diff.materialName || materialKey,
+          materialBarCode: diff.materialBarCode || '',
+          userQuantities: userQuantities
+        })
+      })
+      
+      // 转换为数组并排序
+      this.allUsers = Array.from(userSet).sort()
+      this.matrixData = Array.from(materialMap.values()).sort((a, b) => 
+        a.materialName.localeCompare(b.materialName)
+      )
+      
+      // 构建动态列
+      this.matrixColumns = [
+        {
+          title: '商品信息',
+          dataIndex: 'materialName',
+          width: 200,
+          fixed: 'left',
+          scopedSlots: { customRender: 'materialName' }
+        },
+        ...this.allUsers.map(user => ({
+          title: user,
+          dataIndex: user,
+          width: 100,
+          align: 'center',
+          scopedSlots: { customRender: user }
+        }))
+      ]
+    },
+    
+    parseUserQuantities(description) {
+      const userQuantities = {}
+      
+      // 解析类似 "用户A(ID:1): 10; 用户B(ID:2): 5;" 的格式
+      const regex = /([^(]+)\([^)]+\):\s*([^;]+);/g
+      let match
+      
+      while ((match = regex.exec(description)) !== null) {
+        const userName = match[1].trim()
+        const quantity = match[2].trim()
+        // 确保数量显示为整数，不带小数点
+        const intQuantity = parseInt(parseFloat(quantity))
+        userQuantities[userName] = intQuantity
+      }
+      
+      return userQuantities
+    },
+    
+    getDifferenceStyle(record, user) {
+      const quantities = Object.values(record.userQuantities)
+      const currentQuantity = record.userQuantities[user]
+      
+      if (!currentQuantity || quantities.length <= 1) {
+        return {}
+      }
+      
+      // 如果数量不一致，用颜色标记
+      const hasInconsistency = quantities.some(q => q !== currentQuantity)
+      
+      if (hasInconsistency) {
+        return {
+          'background-color': '#ffebee',
+          'color': '#c62828',
+          'font-weight': 'bold',
+          'padding': '4px 8px',
+          'border-radius': '4px'
+        }
+      }
+      
+      return {}
     }
   }
 }
-</script> 
+</script>
+
+<style scoped>
+.ant-table-tbody > tr > td {
+  padding: 8px 16px;
+}
+
+.ant-table-thead > tr > th {
+  background-color: #fafafa;
+  font-weight: 600;
+  text-align: center;
+}
+</style> 
