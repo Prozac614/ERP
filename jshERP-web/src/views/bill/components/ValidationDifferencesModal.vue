@@ -158,7 +158,7 @@ export default {
           title: '商品信息',
           dataIndex: 'materialInfo',
           width: 200,
-          fixed: 'left',
+          // fixed: 'left', // ← 已移除，防止空白辅助列
           scopedSlots: { customRender: 'materialInfo' }
         }
       ]
