@@ -48,7 +48,8 @@ export default {
       visible: false,
       differences: [],
       matrixData: [],
-      matrixColumns: []
+      matrixColumns: [],
+      allUsers: []
     }
   },
   methods: {
@@ -63,6 +64,7 @@ export default {
       this.differences = []
       this.matrixData = []
       this.matrixColumns = []
+      this.allUsers = []
     },
     
     processMatrixData() {
@@ -73,7 +75,7 @@ export default {
       }
       
       // 收集所有用户和商品信息
-      const allUsers = new Set()
+      const allUsersSet = new Set()
       const materialsData = new Map()
       
       this.differences.forEach((diff, index) => {
@@ -81,14 +83,14 @@ export default {
         
         const materialKey = diff.materialBarCode || diff.materialName || `material_${index}`
         
-        // 从description提取用户数量信息 - 使用更简单的解析方法
+        // 从description提取用户数量信息
         const userQuantities = this.extractUserQuantities(diff.description)
         console.log(`商品 ${materialKey} 的用户数量:`, userQuantities)
         
         // 收集用户信息
         Object.keys(userQuantities).forEach(user => {
           if (user && user.trim()) {
-            allUsers.add(user.trim())
+            allUsersSet.add(user.trim())
           }
         })
         
@@ -101,7 +103,9 @@ export default {
         })
       })
       
-      console.log('所有用户:', Array.from(allUsers))
+      // 转换为数组并排序
+      this.allUsers = Array.from(allUsersSet).sort()
+      console.log('所有用户:', this.allUsers)
       console.log('商品数据:', Array.from(materialsData.values()))
       
       // 构建表格列
@@ -115,56 +119,46 @@ export default {
         }
       ]
       
-      // 为每个用户添加列
-      const sortedUsers = Array.from(allUsers).sort()
-      console.log('排序后的用户列表:', sortedUsers)
-      
-      sortedUsers.forEach((user, index) => {
-        console.log(`添加用户列 ${index}:`, user)
-        
-        // 使用安全的dataIndex，避免特殊字符问题
-        const safeDataIndex = `user_${index}`
+      // 为每个用户添加列 - 使用简单的数据结构
+      this.allUsers.forEach((user, index) => {
+        const userColumnKey = `user_${index}`
         
         this.matrixColumns.push({
           title: user,
-          dataIndex: safeDataIndex,
+          dataIndex: userColumnKey,
           width: 100,
           align: 'center',
           customRender: (text, record) => {
-            console.log(`渲染列 ${user}:`, {
-              text: text,
-              userQuantities: record.userQuantities,
-              userValue: record.userQuantities[user]
-            })
-            
-            const quantity = record.userQuantities[user]
-            if (quantity !== undefined && quantity !== null) {
-              const intQuantity = parseInt(quantity)
-              const style = this.getDifferenceStyle(record, user)
-              
-              // 检查是否需要高亮
-              if (style && Object.keys(style).length > 0) {
-                return `<span style="background-color: ${style.backgroundColor}; color: ${style.color}; font-weight: ${style.fontWeight}; padding: ${style.padding}; border-radius: ${style.borderRadius};">${intQuantity}</span>`
-              }
-              return intQuantity.toString()
+            // 直接返回数字，不做复杂处理
+            if (text !== undefined && text !== null && text !== '') {
+              return Math.floor(parseFloat(text)).toString()
             }
             return '-'
           }
         })
       })
-             
-       // 同时修改表格数据，为每行添加对应的用户数据
-       this.matrixData = Array.from(materialsData.values()).map(item => {
-         const newItem = { ...item }
-         sortedUsers.forEach((user, index) => {
-           const safeDataIndex = `user_${index}`
-           newItem[safeDataIndex] = item.userQuantities[user]
-         })
-         return newItem
-       })
-       
-       console.log('最终表格列:', this.matrixColumns)
-       console.log('最终表格数据:', this.matrixData)
+      
+      // 构建表格数据 - 为每个用户创建单独的列数据
+      this.matrixData = Array.from(materialsData.values()).map(item => {
+        const rowData = {
+          materialKey: item.materialKey,
+          materialName: item.materialName,
+          materialBarCode: item.materialBarCode,
+          userQuantities: item.userQuantities
+        }
+        
+        // 为每个用户添加单独的数据字段
+        this.allUsers.forEach((user, index) => {
+          const userColumnKey = `user_${index}`
+          rowData[userColumnKey] = item.userQuantities[user] || ''
+        })
+        
+        return rowData
+      })
+      
+      console.log('最终表格列:', this.matrixColumns)
+      console.log('最终表格数据:', this.matrixData)
+      console.log('所有用户列表:', this.allUsers)
     },
     
     extractUserQuantities(description) {
@@ -218,7 +212,7 @@ export default {
       
       // 检查是否有不一致的数量
       const hasInconsistency = quantities.some(q => 
-        parseInt(q) !== parseInt(currentQuantity)
+        Math.floor(parseFloat(q)) !== Math.floor(parseFloat(currentQuantity))
       )
       
       if (hasInconsistency) {
