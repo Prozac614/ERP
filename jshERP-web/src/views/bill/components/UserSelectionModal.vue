@@ -119,14 +119,22 @@ export default {
     },
     
     handleValidationResult(result) {
-      console.log('处理校验结果:', result);
+      console.log('===== UserSelectionModal.handleValidationResult 被调用 =====');
+      console.log('校验结果 result:', result);
+      console.log('result类型:', typeof result);
+      
       // 兼容处理字段名（可能是 consistent 或 isConsistent）
       const isConsistent = result.isConsistent !== undefined ? result.isConsistent : result.consistent;
+      console.log('是否一致 isConsistent:', isConsistent);
+      console.log('差异数据 result.differences:', result.differences);
+      
       if (isConsistent) {
+        console.log('校验通过，发送validation-success事件');
         this.$message.success(`校验通过！共有 ${result.totalBills} 种商品数据一致，相关单据状态已自动更新。`)
         this.visible = false
         this.$emit('validation-success', result)
       } else {
+        console.log('校验失败，即将显示差异');
         // 显示校验差异
         this.showValidationDifferences(result.differences)
       }
@@ -134,8 +142,12 @@ export default {
     
     showValidationDifferences(differences) {
       // TODO: 显示校验差异界面，后续在阶段二完善
-       console.log('显示校验差异:', differences);
+      console.log('===== UserSelectionModal.showValidationDifferences 被调用 =====');
+      console.log('传入的differences:', differences);
+      console.log('differences类型:', typeof differences);
+      console.log('differences长度:', differences ? differences.length : 'undefined');
       
+      console.log('发送validation-failed事件到父组件');
       // 发送校验失败事件，让父组件处理差异显示
       this.$emit('validation-failed', differences)
       this.visible = false

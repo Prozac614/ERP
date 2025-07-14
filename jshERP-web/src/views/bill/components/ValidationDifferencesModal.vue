@@ -52,11 +52,47 @@ export default {
       allUsers: []
     }
   },
+  created() {
+    console.log('===== ValidationDifferencesModal 组件已创建 =====');
+  },
+  mounted() {
+    console.log('===== ValidationDifferencesModal 组件已挂载 =====');
+    
+    // 基础测试
+    console.log('基础console.log测试');
+    console.info('console.info测试');
+    console.warn('console.warn测试');
+    console.error('console.error测试');
+    
+    // 尝试不同的输出方式
+    alert('ValidationDifferencesModal 组件已挂载（alert测试）');
+    
+    // 写入DOM测试
+    const testDiv = document.createElement('div');
+    testDiv.style.cssText = 'position:fixed;top:10px;right:10px;background:red;color:white;padding:10px;z-index:9999;';
+    testDiv.textContent = 'ValidationDifferencesModal已加载';
+    document.body.appendChild(testDiv);
+    
+    setTimeout(() => {
+      document.body.removeChild(testDiv);
+    }, 3000);
+  },
   methods: {
     show(differences) {
+      console.log('===== ValidationDifferencesModal.show() 被调用 =====')
+      console.log('传入的differences参数:', differences)
+      console.log('differences类型:', typeof differences)
+      console.log('differences长度:', differences ? differences.length : 'undefined')
+      
       this.visible = true
       this.differences = differences || []
+      
+      console.log('设置后的this.differences:', this.differences)
+      console.log('即将调用processMatrixData()')
+      
       this.processMatrixData()
+      
+      console.log('processMatrixData() 调用完成')
     },
     
     handleCancel() {
@@ -68,6 +104,7 @@ export default {
     },
     
     processMatrixData() {
+      console.log('===== processMatrixData() 开始执行 =====')
       console.log('原始差异数据:', this.differences)
       
       if (!this.differences || this.differences.length === 0) {
@@ -135,13 +172,26 @@ export default {
           dataIndex: userColumnKey,
           width: 100,
           align: 'center',
-          customRender: (text, record) => {
-            // 直接返回数字，不做复杂处理
-            if (text !== undefined && text !== null && text !== '') {
-              return Math.floor(parseFloat(text)).toString()
+          customRender: ((columnKey) => {
+            // 使用闭包确保columnKey在customRender中可用
+            return (text, record) => {
+              console.log(`customRender ${columnKey}: text=`, text, '类型=', typeof text)
+              // 处理各种数据类型
+              if (text !== undefined && text !== null && text !== '') {
+                try {
+                  const numValue = parseFloat(String(text))
+                  if (!isNaN(numValue)) {
+                    return Math.floor(numValue).toString()
+                  }
+                } catch (e) {
+                  console.warn('数值转换失败:', text, e)
+                }
+                // 如果转换失败，直接返回文本
+                return String(text)
+              }
+              return '-'
             }
-            return '-'
-          }
+          })(userColumnKey)
         })
       })
       
@@ -157,7 +207,23 @@ export default {
         // 为每个用户添加单独的数据字段
         this.allUsers.forEach((user, index) => {
           const userColumnKey = `user_${index}`
-          rowData[userColumnKey] = item.userQuantities[user] || ''
+          const rawValue = item.userQuantities[user]
+          console.log(`映射用户 ${user} (${userColumnKey}): 原始值=`, rawValue, '类型=', typeof rawValue)
+          
+          // 处理BigDecimal对象或其他数据类型
+          let processedValue = ''
+          if (rawValue !== undefined && rawValue !== null) {
+            if (typeof rawValue === 'object' && rawValue.toString) {
+              // 如果是BigDecimal对象，调用toString方法
+              processedValue = rawValue.toString()
+            } else {
+              // 如果是基本类型，直接转换
+              processedValue = String(rawValue)
+            }
+          }
+          
+          rowData[userColumnKey] = processedValue
+          console.log(`${userColumnKey} 最终值: "${processedValue}"`)
         })
         
         return rowData

@@ -376,11 +376,13 @@
     },
     methods: {
       batchValidation() {
+        console.log('===== batchValidation 被调用 =====');
         let that = this;
         this.$confirm({
           title: "交叉验证确认",
           content: "校验将会自动校验指定日期所有用户的未审核单据数据，只有在每个用户提交的销售单据统计数据一致时，会自动通过审核。是否继续？",
           onOk: function () {
+            console.log('===== 用户确认交叉验证 =====');
             console.log('确认对话框 onOk 被调用');
             console.log('that 指向:', that);
             console.log('that.showDateSelector 类型:', typeof that.showDateSelector);
@@ -445,8 +447,17 @@
       
       showValidationDifferences(differences) {
         // 显示校验差异界面
-        console.log('显示校验差异:', differences);
-        this.$refs.validationDifferencesModal.show(differences);
+        console.log('===== SaleOutList.showValidationDifferences 被调用 =====');
+        console.log('传入的differences:', differences);
+        console.log('differences类型:', typeof differences);
+        console.log('ValidationDifferencesModal组件ref:', this.$refs.validationDifferencesModal);
+        
+        if (this.$refs.validationDifferencesModal) {
+          console.log('调用ValidationDifferencesModal.show()');
+          this.$refs.validationDifferencesModal.show(differences);
+        } else {
+          console.error('ValidationDifferencesModal组件引用未找到！');
+        }
       },
       
       handleValidationSuccess(result) {
@@ -458,7 +469,8 @@
       
       handleValidationFailed(differences) {
         // 处理校验失败，显示差异
-        console.log('校验失败:', differences);
+        console.log('===== SaleOutList.handleValidationFailed 被调用 =====');
+        console.log('校验失败 differences:', differences);
         this.showValidationDifferences(differences);
       }
     }
