@@ -19,20 +19,15 @@
         :columns="matrixColumns"
         :data-source="matrixData"
         :pagination="false"
-        row-key="materialName"
+        row-key="materialKey"
         size="small"
         bordered
       >
-        <template slot="materialName" slot-scope="text, record">
+        <template slot="materialInfo" slot-scope="text, record">
           <div>
-            <div style="font-weight: bold;">{{ text }}</div>
+            <div style="font-weight: bold;">{{ record.materialName }}</div>
             <div style="font-size: 12px; color: #666;">{{ record.materialBarCode }}</div>
           </div>
-        </template>
-        <template v-for="user in allUsers" :slot="user.trim()" slot-scope="text, record">
-          <span :key="user" :style="getDifferenceStyle(record, user)">
-            {{ record.userQuantities[user] !== undefined ? Math.floor(record.userQuantities[user]) : '-' }}
-          </span>
         </template>
       </a-table>
       
@@ -53,8 +48,7 @@ export default {
       visible: false,
       differences: [],
       matrixData: [],
-      matrixColumns: [],
-      allUsers: []
+      matrixColumns: []
     }
   },
   methods: {
@@ -69,91 +63,125 @@ export default {
       this.differences = []
       this.matrixData = []
       this.matrixColumns = []
-      this.allUsers = []
     },
     
     processMatrixData() {
-      // 收集所有用户和商品信息
-      const userSet = new Set()
-      const materialMap = new Map()
+      console.log('原始差异数据:', this.differences)
       
-      this.differences.forEach(diff => {
-        const materialKey = diff.materialName || diff.materialBarCode
+      if (!this.differences || this.differences.length === 0) {
+        return
+      }
+      
+      // 收集所有用户和商品信息
+      const allUsers = new Set()
+      const materialsData = new Map()
+      
+      this.differences.forEach((diff, index) => {
+        console.log(`处理差异 ${index}:`, diff)
         
-        // 从users字段获取用户列表
-        const userList = diff.users ? diff.users.split(',').map(u => u.trim()).filter(u => u.length > 0) : []
+        const materialKey = diff.materialBarCode || diff.materialName || `material_${index}`
         
-        // 解析description中的用户和数量信息
-        const userQuantities = this.parseUserQuantities(diff.description)
+        // 从description提取用户数量信息 - 使用更简单的解析方法
+        const userQuantities = this.extractUserQuantities(diff.description)
+        console.log(`商品 ${materialKey} 的用户数量:`, userQuantities)
         
         // 收集用户信息
-        userList.forEach(user => {
-          if (user && user.length > 0) {
-            userSet.add(user)
+        Object.keys(userQuantities).forEach(user => {
+          if (user && user.trim()) {
+            allUsers.add(user.trim())
           }
         })
         
-        // 构建商品信息
-        materialMap.set(materialKey, {
-          materialName: diff.materialName || materialKey,
+        // 存储商品信息
+        materialsData.set(materialKey, {
+          materialKey: materialKey,
+          materialName: diff.materialName || '未知商品',
           materialBarCode: diff.materialBarCode || '',
           userQuantities: userQuantities
         })
       })
       
-      // 转换为数组并排序，过滤掉空值
-      this.allUsers = Array.from(userSet).filter(user => user && user.trim().length > 0).sort()
+      console.log('所有用户:', Array.from(allUsers))
+      console.log('商品数据:', Array.from(materialsData.values()))
       
-      // 调试：打印用户列表
-      console.log('All users:', this.allUsers)
-      console.log('User set:', Array.from(userSet))
-      
-      this.matrixData = Array.from(materialMap.values()).sort((a, b) => 
-        a.materialName.localeCompare(b.materialName)
-      )
-      
-      // 构建动态列，确保用户名不为空
+      // 构建表格列
       this.matrixColumns = [
         {
           title: '商品信息',
-          dataIndex: 'materialName',
+          dataIndex: 'materialInfo',
           width: 200,
           fixed: 'left',
-          scopedSlots: { customRender: 'materialName' }
-        },
-        ...this.allUsers.filter(user => user && user.trim().length > 0).map(user => ({
-          title: user.trim(),
-          dataIndex: user.trim(),
+          scopedSlots: { customRender: 'materialInfo' }
+        }
+      ]
+      
+      // 为每个用户添加列
+      Array.from(allUsers).sort().forEach(user => {
+        this.matrixColumns.push({
+          title: user,
+          dataIndex: user,
           width: 100,
           align: 'center',
-          scopedSlots: { customRender: user.trim() }
-        }))
-      ]
+          customRender: (text, record) => {
+            const quantity = record.userQuantities[user]
+            if (quantity !== undefined && quantity !== null) {
+              const intQuantity = parseInt(quantity)
+              return (
+                <span style={this.getDifferenceStyle(record, user)}>
+                  {intQuantity}
+                </span>
+              )
+            }
+            return '-'
+          }
+        })
+      })
+      
+      // 构建表格数据
+      this.matrixData = Array.from(materialsData.values())
+      
+      console.log('最终表格列:', this.matrixColumns)
+      console.log('最终表格数据:', this.matrixData)
     },
     
-    parseUserQuantities(description) {
+    extractUserQuantities(description) {
       const userQuantities = {}
       
-      // 先找到"各用户出库数量不一致:"之后的部分
-      const startIndex = description.indexOf('各用户出库数量不一致:')
-      if (startIndex === -1) return userQuantities
+      if (!description) return userQuantities
       
-      const userPart = description.substring(startIndex + '各用户出库数量不一致:'.length)
+      console.log('解析描述:', description)
       
-      // 解析类似 " 用户A(ID:1): 10; 用户B(ID:2): 5;" 的格式
-      const regex = /\s*([^(]+)\(ID:[^)]+\):\s*([^;]+);/g
-      let match
-      
-      while ((match = regex.exec(userPart)) !== null) {
-        const userName = match[1].trim()
-        const quantity = match[2].trim()
-        if (userName && userName.length > 0) {
-          // 确保数量显示为整数，不带小数点
-          const intQuantity = parseInt(parseFloat(quantity))
-          userQuantities[userName] = intQuantity
-        }
+      // 查找"各用户出库数量不一致:"后的内容
+      const marker = '各用户出库数量不一致:'
+      const startIndex = description.indexOf(marker)
+      if (startIndex === -1) {
+        console.log('未找到标记:', marker)
+        return userQuantities
       }
       
+      const userPart = description.substring(startIndex + marker.length).trim()
+      console.log('用户部分:', userPart)
+      
+      // 分割每个用户的信息 "用户名(ID:xxx): 数量; "
+      const userEntries = userPart.split(';')
+      
+      userEntries.forEach(entry => {
+        const trimmedEntry = entry.trim()
+        if (!trimmedEntry) return
+        
+        console.log('处理条目:', trimmedEntry)
+        
+        // 匹配格式: "用户名(ID:xxx): 数量"
+        const match = trimmedEntry.match(/^(.+?)\(ID:\d+\):\s*(.+)$/)
+        if (match) {
+          const userName = match[1].trim()
+          const quantity = match[2].trim()
+          console.log(`提取: 用户=${userName}, 数量=${quantity}`)
+          userQuantities[userName] = quantity
+        }
+      })
+      
+      console.log('提取结果:', userQuantities)
       return userQuantities
     },
     
@@ -161,20 +189,22 @@ export default {
       const quantities = Object.values(record.userQuantities)
       const currentQuantity = record.userQuantities[user]
       
-      if (!currentQuantity || quantities.length <= 1) {
+      if (currentQuantity === undefined || quantities.length <= 1) {
         return {}
       }
       
-      // 如果数量不一致，用颜色标记
-      const hasInconsistency = quantities.some(q => q !== currentQuantity)
+      // 检查是否有不一致的数量
+      const hasInconsistency = quantities.some(q => 
+        parseInt(q) !== parseInt(currentQuantity)
+      )
       
       if (hasInconsistency) {
         return {
-          'background-color': '#ffebee',
-          'color': '#c62828',
-          'font-weight': 'bold',
-          'padding': '4px 8px',
-          'border-radius': '4px'
+          backgroundColor: '#ffebee',
+          color: '#c62828',
+          fontWeight: 'bold',
+          padding: '4px 8px',
+          borderRadius: '4px'
         }
       }
       
