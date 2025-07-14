@@ -29,7 +29,7 @@
             <div style="font-size: 12px; color: #666;">{{ record.materialBarCode }}</div>
           </div>
         </template>
-        <template v-for="user in allUsers" :slot="user" slot-scope="text, record">
+        <template v-for="user in allUsers" :slot="user.trim()" slot-scope="text, record">
           <span :key="user" :style="getDifferenceStyle(record, user)">
             {{ record.userQuantities[user] !== undefined ? Math.floor(record.userQuantities[user]) : '-' }}
           </span>
@@ -102,12 +102,17 @@ export default {
       })
       
       // 转换为数组并排序，过滤掉空值
-      this.allUsers = Array.from(userSet).filter(user => user && user.length > 0).sort()
+      this.allUsers = Array.from(userSet).filter(user => user && user.trim().length > 0).sort()
+      
+      // 调试：打印用户列表
+      console.log('All users:', this.allUsers)
+      console.log('User set:', Array.from(userSet))
+      
       this.matrixData = Array.from(materialMap.values()).sort((a, b) => 
         a.materialName.localeCompare(b.materialName)
       )
       
-      // 构建动态列
+      // 构建动态列，确保用户名不为空
       this.matrixColumns = [
         {
           title: '商品信息',
@@ -116,12 +121,12 @@ export default {
           fixed: 'left',
           scopedSlots: { customRender: 'materialName' }
         },
-        ...this.allUsers.map(user => ({
-          title: user,
-          dataIndex: user,
+        ...this.allUsers.filter(user => user && user.trim().length > 0).map(user => ({
+          title: user.trim(),
+          dataIndex: user.trim(),
           width: 100,
           align: 'center',
-          scopedSlots: { customRender: user }
+          scopedSlots: { customRender: user.trim() }
         }))
       ]
     },
@@ -142,9 +147,11 @@ export default {
       while ((match = regex.exec(userPart)) !== null) {
         const userName = match[1].trim()
         const quantity = match[2].trim()
-        // 确保数量显示为整数，不带小数点
-        const intQuantity = parseInt(parseFloat(quantity))
-        userQuantities[userName] = intQuantity
+        if (userName && userName.length > 0) {
+          // 确保数量显示为整数，不带小数点
+          const intQuantity = parseInt(parseFloat(quantity))
+          userQuantities[userName] = intQuantity
+        }
       }
       
       return userQuantities
