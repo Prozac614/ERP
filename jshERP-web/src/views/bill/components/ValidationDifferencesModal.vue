@@ -116,32 +116,55 @@ export default {
       ]
       
       // 为每个用户添加列
-      Array.from(allUsers).sort().forEach(user => {
+      const sortedUsers = Array.from(allUsers).sort()
+      console.log('排序后的用户列表:', sortedUsers)
+      
+      sortedUsers.forEach((user, index) => {
+        console.log(`添加用户列 ${index}:`, user)
+        
+        // 使用安全的dataIndex，避免特殊字符问题
+        const safeDataIndex = `user_${index}`
+        
         this.matrixColumns.push({
           title: user,
-          dataIndex: user,
+          dataIndex: safeDataIndex,
           width: 100,
           align: 'center',
           customRender: (text, record) => {
+            console.log(`渲染列 ${user}:`, {
+              text: text,
+              userQuantities: record.userQuantities,
+              userValue: record.userQuantities[user]
+            })
+            
             const quantity = record.userQuantities[user]
             if (quantity !== undefined && quantity !== null) {
               const intQuantity = parseInt(quantity)
-              return (
-                <span style={this.getDifferenceStyle(record, user)}>
-                  {intQuantity}
-                </span>
-              )
+              const style = this.getDifferenceStyle(record, user)
+              
+              // 检查是否需要高亮
+              if (style && Object.keys(style).length > 0) {
+                return `<span style="background-color: ${style.backgroundColor}; color: ${style.color}; font-weight: ${style.fontWeight}; padding: ${style.padding}; border-radius: ${style.borderRadius};">${intQuantity}</span>`
+              }
+              return intQuantity.toString()
             }
             return '-'
           }
         })
       })
-      
-      // 构建表格数据
-      this.matrixData = Array.from(materialsData.values())
-      
-      console.log('最终表格列:', this.matrixColumns)
-      console.log('最终表格数据:', this.matrixData)
+             
+       // 同时修改表格数据，为每行添加对应的用户数据
+       this.matrixData = Array.from(materialsData.values()).map(item => {
+         const newItem = { ...item }
+         sortedUsers.forEach((user, index) => {
+           const safeDataIndex = `user_${index}`
+           newItem[safeDataIndex] = item.userQuantities[user]
+         })
+         return newItem
+       })
+       
+       console.log('最终表格列:', this.matrixColumns)
+       console.log('最终表格数据:', this.matrixData)
     },
     
     extractUserQuantities(description) {
