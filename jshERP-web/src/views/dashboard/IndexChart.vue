@@ -122,44 +122,14 @@
       </a-col>
     </a-row>
     -->
-    <a-row :gutter="24">
-      <a-col :sm="24" :md="24" :xl="24" :style="{ paddingRight: '0px',marginBottom: '12px' }">
-        <a-card :loading="loading" :bordered="false" title="📈 出库数量趋势图表" class="chart-card">
-          <div slot="extra" class="chart-extra">
-            <span style="margin-right: 8px;">日期：</span>
-            <a-range-picker
-              v-model="dateRange"
-              @change="onDateRangeChange"
-              format="YYYY-MM-DD"
-              placeholder="选择时间范围"
-              style="width: 240px; margin-right: 12px;"
-            />
-            <a-button type="primary" icon="reload" @click="loadStockData" size="small" style="margin-right: 8px;">
-              刷新
-            </a-button>
-            <a-tag color="blue" v-if="selectedRowKeys.length > 0">
-              已选择 {{ selectedRowKeys.length }}/10 个商品
-            </a-tag>
-            <a-tag color="default" v-else>
-              请选择商品查看趋势（最多10个）
-            </a-tag>
-          </div>
-          <div class="chart-container">
-            <line-chart-multid
-              :height="450"
-              :dataSource="outStockChartData"
-              :title="'出库数量趋势'"
-              :yaxisText="'数量'"
-              :fields="outStockChartFields"
-            />
-          </div>
-        </a-card>
-      </a-col>
-    </a-row>
+
     <a-row :gutter="24">
       <a-col :sm="24" :md="24" :xl="24" :style="{ paddingRight: '0px',marginBottom: '12px' }">
         <a-card :loading="loading" :bordered="false" title="📋 商品库存明细表" class="table-card">
           <div slot="extra" class="table-actions">
+            <a-button type="primary" icon="line-chart" size="small" @click="toggleChart" style="margin-right: 8px;">
+              {{ showChart ? '隐藏图表' : '显示图表' }}
+            </a-button>
             <a-button size="small" @click="selectAll" style="margin-right: 8px;">
               全选
             </a-button>
@@ -192,33 +162,42 @@
           
           <div class="table-footer-tip">
             <a-icon type="bulb" style="color: #faad14; margin-right: 4px;" />
-            💡 选择商品行可在上方图表中查看趋势
+            💡 选择商品行，点击显示图表按钮查看趋势
           </div>
         </a-card>
       </a-col>
     </a-row>
-    <a-row :gutter="24">
-      <a-col :sm="24" :md="24" :xl="24" :style="{ paddingRight: '0px',marginBottom: '6px' }">
-        <a-card :bordered="false" :body-style="{padding: '5'}" data-step="7" data-title="服务和版权"
-                data-intro="展示服务到期时间（快到期时会出现续费链接，请注意及时续费）、
-          用户数量（是指最多可以录入的用户数量）、版权信息">
-          <div class="hidden-xs" style="float:right;">
-            <a-popover
-              trigger="hover"
-              :visible="hovered"
-              @visibleChange="handleHoverChange">
-              <div slot="content">
-                <img src="/static/weixin.jpg" style="width:258px" />
-              </div>
-              <a-button type="link" v-if="showWeixinSpan()">管伊佳ERP微信小程序</a-button>
-            </a-popover>
-            &copy; 2015-2030 {{systemTitle}} V3.5
+    <a-row :gutter="24" v-if="showChart">
+      <a-col :sm="24" :md="24" :xl="24" :style="{ paddingRight: '0px',marginBottom: '12px' }">
+        <a-card :loading="loading" :bordered="false" title="📈 出库数量趋势图表" class="chart-card">
+          <div slot="extra" class="chart-extra">
+            <span style="margin-right: 8px;">日期：</span>
+            <a-range-picker
+              v-model="dateRange"
+              @change="onDateRangeChange"
+              format="YYYY-MM-DD"
+              placeholder="选择时间范围"
+              style="width: 240px; margin-right: 12px;"
+            />
+            <a-button type="primary" icon="reload" @click="loadStockData" size="small" style="margin-right: 8px;">
+              刷新
+            </a-button>
+            <a-tag color="blue" v-if="selectedRowKeys.length > 0">
+              已选择 {{ selectedRowKeys.length }}/10 个商品
+            </a-tag>
+            <a-tag color="default" v-else>
+              请选择商品查看趋势（最多10个）
+            </a-tag>
           </div>
-          <a-tag v-if="tenant.type==0" color="blue">试用到期：{{tenant.expireTime}}</a-tag>
-          <a-tag v-if="tenant.type==0" color="blue">试用用户：{{tenant.userCurrentNum}}/{{tenant.userNumLimit}}</a-tag>
-          <a-tag v-if="tenant.type==1" color="blue">服务到期：{{tenant.expireTime}}</a-tag>
-          <a-tag v-if="tenant.type==1" color="blue">授权用户：{{tenant.userCurrentNum}}/{{tenant.userNumLimit}}</a-tag>
-          <a v-if="hasExpire" style="color: red;" :href="payFeeUrl" target="_blank">立即续费</a>
+          <div class="chart-container">
+            <line-chart-multid
+              :height="450"
+              :dataSource="outStockChartData"
+              :title="'出库数量趋势'"
+              :yaxisText="'数量'"
+              :fields="outStockChartFields"
+            />
+          </div>
         </a-card>
       </a-col>
     </a-row>
@@ -280,6 +259,7 @@
           tenantId: ''
         },
         // 新增的数据字段
+        showChart: false, // 控制图表显示状态
         dateRange: [moment().subtract(6, 'months'), moment()],
         stockData: [],
         selectedRowKeys: [],
@@ -590,6 +570,13 @@
         // 处理分页变化
         this.ipagination = pagination
         this.loadStockData()
+      },
+      toggleChart() {
+        this.showChart = !this.showChart
+        // 显示图表时自动渲染数据
+        if (this.showChart) {
+          this.updateChartData()
+        }
       }
     }
   }
