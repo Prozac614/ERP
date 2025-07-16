@@ -379,7 +379,7 @@
         group by m.id, me.bar_code, m.name, m.mfrs, m.model, m.standard, m.brand,
         m.other_field1,m.other_field2,m.other_field3,m.unit, u.basic_unit, m.color, m.unit_id, u.name,
         me.purchase_decimal, mcs.current_unit_price
-        order by CASE WHEN me.bar_code LIKE 'W%' THEN 1 WHEN me.bar_code LIKE 'B%' THEN 2 ELSE 3 END, me.bar_code ASC
+        order by CASE WHEN me.bar_code LIKE 'W%' THEN 1 WHEN me.bar_code LIKE 'B%' THEN 2 ELSE 3 END, m.id ASC
         <if test="offset != null and rows != null">
             limit #{offset},#{rows}
         </if>
@@ -477,7 +477,7 @@
         and ifnull(m.delete_flag,'0') !='1'
         group by m.id, di.material_extend_id, me.bar_code, m.name, m.mfrs, m.model, m.standard,
         m.other_field1,m.other_field2,m.other_field3, m.unit, u.basic_unit, m.color, m.brand, u.name
-        order by CASE WHEN me.bar_code LIKE 'W%' THEN 1 WHEN me.bar_code LIKE 'B%' THEN 2 ELSE 3 END, me.bar_code ASC
+        order by CASE WHEN me.bar_code LIKE 'W%' THEN 1 WHEN me.bar_code LIKE 'B%' THEN 2 ELSE 3 END, m.id ASC
         <if test="offset != null and rows != null">
             limit #{offset},#{rows}
         </if>
@@ -1106,7 +1106,7 @@
             and me.bar_code in (${barCodes})
         </if>
         and ifnull(m.delete_flag,'0') !='1'
-        order by CASE WHEN me.bar_code LIKE 'W%' THEN 1 WHEN me.bar_code LIKE 'B%' THEN 2 ELSE 3 END, me.bar_code ASC
+        order by CASE WHEN me.bar_code LIKE 'W%' THEN 1 WHEN me.bar_code LIKE 'B%' THEN 2 ELSE 3 END, m.id ASC
     </select>
 
     <select id="getCurrentStockByParam" resultType="java.math.BigDecimal">
@@ -1239,7 +1239,7 @@
             or m.color like #{bindKey} or m.mfrs like #{bindKey} or m.brand like #{bindKey} or m.other_field1 like #{bindKey}
             or m.other_field2 like #{bindKey} or m.other_field3 like #{bindKey})
         </if>
-        order by CASE WHEN me.bar_code LIKE 'W%' THEN 1 WHEN me.bar_code LIKE 'B%' THEN 2 ELSE 3 END, me.bar_code ASC
+        order by CASE WHEN me.bar_code LIKE 'W%' THEN 1 WHEN me.bar_code LIKE 'B%' THEN 2 ELSE 3 END, m.id ASC
         limit #{offset}, #{rows}
     </select>
 

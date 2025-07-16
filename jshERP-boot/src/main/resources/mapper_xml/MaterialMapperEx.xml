@@ -113,12 +113,12 @@
         </if>
         and ifnull(m.delete_flag,'0') !='1'
         group by m.id
-        order by CASE WHEN me.bar_code LIKE 'W%' THEN 1 WHEN me.bar_code LIKE 'B%' THEN 2 ELSE 3 END, me.bar_code ASC) tb
+        order by CASE WHEN me.bar_code LIKE 'W%' THEN 1 WHEN me.bar_code LIKE 'B%' THEN 2 ELSE 3 END, m.id ASC) tb
         left join jsh_material jm on tb.id = jm.id and ifnull(jm.delete_Flag,'0') !='1'
         left join jsh_material_extend jme on tb.meId = jme.id and ifnull(jme.delete_Flag,'0') !='1'
         left join jsh_unit u on jm.unit_id = u.id and ifnull(u.delete_Flag,'0') !='1'
         left join jsh_material_category mc on jm.category_id = mc.id and ifnull(mc.delete_Flag,'0') !='1'
-        order by CASE WHEN jme.bar_code LIKE 'W%' THEN 1 WHEN jme.bar_code LIKE 'B%' THEN 2 ELSE 3 END, jme.bar_code ASC
+        order by CASE WHEN jme.bar_code LIKE 'W%' THEN 1 WHEN jme.bar_code LIKE 'B%' THEN 2 ELSE 3 END, jm.id ASC
     </select>
 
     <insert id="insertSelectiveEx" parameterType="com.jsh.erp.datasource.entities.Material" useGeneratedKeys="true" keyProperty="id">
@@ -313,7 +313,7 @@
             and (me.bar_code like #{bindKey} or m.name like #{bindKey} or m.standard like #{bindKey} or m.model like #{bindKey} or m.mnemonic like #{bindKey})
         </if>
         and ifnull(m.delete_flag,'0') !='1'
-        order by CASE WHEN me.bar_code LIKE 'W%' THEN 1 WHEN me.bar_code LIKE 'B%' THEN 2 ELSE 3 END, me.bar_code ASC, me.default_flag desc, me.id asc
+        order by CASE WHEN me.bar_code LIKE 'W%' THEN 1 WHEN me.bar_code LIKE 'B%' THEN 2 ELSE 3 END, m.id ASC, me.default_flag desc, me.id asc
         limit 0,20
     </select>
 
@@ -369,7 +369,7 @@
             and m.enable_batch_number = #{enableBatchNumber}
         </if>
         and ifnull(m.delete_flag,'0') !='1'
-        ORDER BY CASE WHEN me.bar_code LIKE 'W%' THEN 1 WHEN me.bar_code LIKE 'B%' THEN 2 ELSE 3 END, me.bar_code ASC, me.default_flag desc, me.id asc
+        ORDER BY CASE WHEN me.bar_code LIKE 'W%' THEN 1 WHEN me.bar_code LIKE 'B%' THEN 2 ELSE 3 END, m.id ASC, me.default_flag desc, me.id asc
         <if test="offset != null and rows != null">
             limit #{offset},#{rows}
         </if>
@@ -476,7 +476,7 @@
             </foreach>
         </if>
         and ifnull(m.delete_flag,'0') !='1'
-        order by CASE WHEN me.bar_code LIKE 'W%' THEN 1 WHEN me.bar_code LIKE 'B%' THEN 2 ELSE 3 END, me.bar_code ASC, me.default_flag desc, me.id asc
+        order by CASE WHEN me.bar_code LIKE 'W%' THEN 1 WHEN me.bar_code LIKE 'B%' THEN 2 ELSE 3 END, m.id ASC, me.default_flag desc, me.id asc
     </select>
 
     <select id="getOtherMaterialList" resultType="com.jsh.erp.datasource.entities.MaterialExtend">
@@ -507,7 +507,7 @@
             and (me.bar_code like #{bindKey} or m.name like #{bindKey} or m.standard like #{bindKey} or m.model like #{bindKey})
         </if>
         and ifnull(m.delete_flag,'0') !='1'
-        order by CASE WHEN me.bar_code LIKE 'W%' THEN 1 WHEN me.bar_code LIKE 'B%' THEN 2 ELSE 3 END, me.bar_code ASC
+        order by CASE WHEN me.bar_code LIKE 'W%' THEN 1 WHEN me.bar_code LIKE 'B%' THEN 2 ELSE 3 END, m.id ASC
         <if test="offset != null and rows != null">
             limit #{offset},#{rows}
         </if>
@@ -600,7 +600,7 @@
         </foreach>
         )
         and ifnull(m.delete_flag,'0') !='1'
-        order by CASE WHEN me.bar_code LIKE 'W%' THEN 1 WHEN me.bar_code LIKE 'B%' THEN 2 ELSE 3 END, me.bar_code ASC, me.default_flag desc, me.id asc
+        order by CASE WHEN me.bar_code LIKE 'W%' THEN 1 WHEN me.bar_code LIKE 'B%' THEN 2 ELSE 3 END, m.id ASC, me.default_flag desc, me.id asc
     </select>
 
     <select id="getMaterialByBarCodeAndWithOutMId" parameterType="com.jsh.erp.datasource.entities.MaterialExample" resultMap="ResultAndUnitMap">
@@ -617,7 +617,7 @@
         )
         and me.material_id!=#{mId}
         and ifnull(m.delete_flag,'0') !='1'
-        order by CASE WHEN me.bar_code LIKE 'W%' THEN 1 WHEN me.bar_code LIKE 'B%' THEN 2 ELSE 3 END, me.bar_code ASC
+        order by CASE WHEN me.bar_code LIKE 'W%' THEN 1 WHEN me.bar_code LIKE 'B%' THEN 2 ELSE 3 END, m.id ASC
     </select>
 
     <update id="setUnitIdToNull">
@@ -694,7 +694,7 @@
             having ifnull(sum(mcs.current_number),0)!=0
         </if>
         <if test="column == 'createTime'">
-            order by CASE WHEN me.bar_code LIKE 'W%' THEN 1 WHEN me.bar_code LIKE 'B%' THEN 2 ELSE 3 END, me.bar_code ASC
+            order by CASE WHEN me.bar_code LIKE 'W%' THEN 1 WHEN me.bar_code LIKE 'B%' THEN 2 ELSE 3 END, m.id ASC
         </if>
         <if test="column != 'createTime'">
             order by ${column} ${order}
