@@ -111,8 +111,8 @@
             </template>
             <a-button icon="setting">列设置</a-button>
           </a-popover>
-          <a-tooltip placement="left" title="商品库存明细表显示各商品在不同仓库的当前库存情况。
-          支持按商品信息、仓库、分类等条件进行筛选。
+          <a-tooltip placement="left" title="商品库存期间统计表显示各商品的期间库存变动情况。
+          支持按商品信息、分类、供应商等条件进行筛选。
           可以导出数据进行进一步分析。" slot="action">
             <a-icon type="question-circle" style="font-size:20px;float:right;" />
           </a-tooltip>
@@ -140,8 +140,9 @@
               <a @click="adjustStock(record)">库存调整</a>
             </span>
             <template slot="customRenderStock" slot-scope="value, record">
-              <span style="color:green" v-if="value > 0">{{value}}</span>
-              <span style="color:red" v-if="value <= 0">{{value}}</span>
+              <span style="color:green" v-if="value > 0">{{value || 0}}</span>
+              <span style="color:red" v-if="value < 0">{{value || 0}}</span>
+              <span style="color:#666" v-if="value === 0 || value === null || value === undefined">0</span>
             </template>
           </a-table>
         </div>
@@ -200,10 +201,10 @@
           total: 0
         },
         // 表格滚动
-        scroll: { x: 1200 },
+        scroll: { x: 800 },
         // 默认索引
-        defDataIndex: ['action', 'mBarCode', 'mname', 'depotName', 'currentStock', 'beginStock', 'inStock', 'outStock', 'lowSafeStock', 'highSafeStock'],
-        settingDataIndex: ['action', 'mBarCode', 'mname', 'depotName', 'currentStock', 'beginStock', 'inStock', 'outStock', 'lowSafeStock', 'highSafeStock'],
+        defDataIndex: ['action', 'barCode', 'materialName', 'currentPeriodStock', 'previousPeriodStock', 'currentPeriodOut', 'previousPeriodOut'],
+        settingDataIndex: ['action', 'barCode', 'materialName', 'currentPeriodStock', 'previousPeriodStock', 'currentPeriodOut', 'previousPeriodOut'],
         // 默认列
         defColumns: [
           {
@@ -213,21 +214,12 @@
             width: 150,
             scopedSlots: { customRender: 'action' },
           },
-          { title: '商品编码', dataIndex: 'mBarCode', width: 120 },
-          { title: '商品名称', dataIndex: 'mname', width: 150, ellipsis: true },
-          { title: '唛头', dataIndex: 'sku', width: 100 },
-          { title: '规格', dataIndex: 'mstandard', width: 100 },
-          { title: '型号', dataIndex: 'mmodel', width: 100 },
-          { title: '颜色', dataIndex: 'mcolor', width: 80 },
-          { title: '仓库', dataIndex: 'depotName', width: 100 },
-          { title: '当前库存', dataIndex: 'currentStock', width: 100, scopedSlots: { customRender: 'customRenderStock' } },
-          { title: '期初库存', dataIndex: 'beginStock', width: 100 },
-          { title: '入库数量', dataIndex: 'inStock', width: 100 },
-          { title: '出库数量', dataIndex: 'outStock', width: 100 },
-          { title: '最低库存', dataIndex: 'lowSafeStock', width: 100 },
-          { title: '最高库存', dataIndex: 'highSafeStock', width: 100 },
-          { title: '单位', dataIndex: 'materialUnit', width: 60 },
-          { title: '备注', dataIndex: 'remark', width: 150, ellipsis: true }
+          { title: '商品编码', dataIndex: 'barCode', width: 120 },
+          { title: '商品名称', dataIndex: 'materialName', width: 200, ellipsis: true },
+          { title: '本期结存', dataIndex: 'currentPeriodStock', width: 120, scopedSlots: { customRender: 'customRenderStock' } },
+          { title: '上期结存', dataIndex: 'previousPeriodStock', width: 120, scopedSlots: { customRender: 'customRenderStock' } },
+          { title: '本期出库', dataIndex: 'currentPeriodOut', width: 120, scopedSlots: { customRender: 'customRenderStock' } },
+          { title: '上期出库', dataIndex: 'previousPeriodOut', width: 120, scopedSlots: { customRender: 'customRenderStock' } }
         ],
         // 下拉选项数据
         depotList: [],
@@ -300,12 +292,12 @@
           params.endTime = this.queryParam.createTimeRange[1].format('YYYY-MM-DD')
         }
 
-        getAction('/material/getMaterialPeriodStock', params).then((res) => {
-          if (res.success) {
-            this.dataSource = res.result.records || []
-            this.ipagination.total = res.result.total || 0
+        getAction('/depotItem/getMaterialPeriodStock', params).then((res) => {
+          if (res.code === 200) {
+            this.dataSource = res.data.rows || []
+            this.ipagination.total = res.data.total || 0
           } else {
-            this.$message.error(res.message || '数据加载失败')
+            this.$message.error(res.data || '数据加载失败')
           }
         }).catch((error) => {
           console.error('获取库存数据失败:', error)
@@ -322,28 +314,24 @@
           }
         })
       },
-      // 获取分类数据
-      getCategoryData() {
-        getAction('/materialCategory/list', { pageSize: 100 }).then((res) => {
-          if (res.success) {
-            this.categoryList = res.result.records || []
-          }
-        })
-      },
-      // 获取供应商数据
-      getSupplierData() {
-        getAction('/supplier/list', { pageSize: 100 }).then((res) => {
-          if (res.success) {
-            this.supplierList = res.result.records || []
-          }
-        })
-      },
+              // 获取分类数据
+        getCategoryData() {
+          getAction('/materialCategory/list', { pageSize: 100 }).then((res) => {
+            if (res.code === 200) {
+              this.categoryList = res.data.rows || []
+            }
+          })
+        },
+              // 获取供应商数据
+        getSupplierData() {
+          getAction('/supplier/list', { pageSize: 100 }).then((res) => {
+            if (res.code === 200) {
+              this.supplierList = res.data.rows || []
+            }
+          })
+        },
       // 表格操作
       handleTableChange(pagination, filters, sorter) {
-        if (Object.keys(sorter).length > 0) {
-          this.isorter.column = sorter.field
-          this.isorter.order = "ascend" == sorter.order ? "asc" : "desc"
-        }
         this.ipagination = pagination
         this.loadStockData()
       },
@@ -363,13 +351,13 @@
       },
       // 操作方法
       viewStockDetail(record) {
-        this.$message.info('查看商品库存详情：' + record.mname)
+        this.$message.info('查看商品库存详情：' + record.materialName)
       },
       viewStockHistory(record) {
-        this.$message.info('查看库存历史：' + record.mname)
+        this.$message.info('查看库存历史：' + record.materialName)
       },
       adjustStock(record) {
-        this.$message.info('库存调整：' + record.mname)
+        this.$message.info('库存调整：' + record.materialName)
       },
       handleExport() {
         this.$message.info('导出库存数据功能')
