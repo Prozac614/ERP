@@ -37,49 +37,10 @@
                 <a-col :md="6" :sm="24">
                   <a-button type="primary" @click="searchQuery">查询</a-button>
                   <a-button style="margin-left: 8px" @click="searchReset">重置</a-button>
-                  <a @click="handleToggleSearch" style="margin-left: 8px">
-                    {{ toggleSearchStatus ? '收起' : '展开' }}
-                    <a-icon :type="toggleSearchStatus ? 'up' : 'down'"/>
-                  </a>
                 </a-col>
               </span>
             </a-row>
-            <template v-if="toggleSearchStatus">
-              <a-row :gutter="24">
-                <a-col :md="6" :sm="24">
-                  <a-form-item label="商品分类" :labelCol="labelCol" :wrapperCol="wrapperCol">
-                    <a-select placeholder="请选择商品分类" showSearch allow-clear optionFilterProp="children" v-model="queryParam.categoryId">
-                      <a-select-option v-for="(item,index) in categoryList" :key="index" :value="item.id">
-                        {{ item.name }}
-                      </a-select-option>
-                    </a-select>
-                  </a-form-item>
-                </a-col>
-                <a-col :md="6" :sm="24">
-                  <a-form-item label="供应商" :labelCol="labelCol" :wrapperCol="wrapperCol">
-                    <a-select placeholder="请选择供应商" showSearch allow-clear optionFilterProp="children" v-model="queryParam.supplierId">
-                      <a-select-option v-for="(item,index) in supplierList" :key="index" :value="item.id">
-                        {{ item.supplier }}
-                      </a-select-option>
-                    </a-select>
-                  </a-form-item>
-                </a-col>
-                <a-col :md="6" :sm="24">
-                  <a-form-item label="商品品牌" :labelCol="labelCol" :wrapperCol="wrapperCol">
-                    <a-input placeholder="请输入商品品牌" v-model="queryParam.brand"></a-input>
-                  </a-form-item>
-                </a-col>
-                <a-col :md="6" :sm="24">
-                  <a-form-item label="库存状态" :labelCol="labelCol" :wrapperCol="wrapperCol">
-                    <a-select placeholder="请选择库存状态" allow-clear v-model="queryParam.stockStatus">
-                      <a-select-option value="1">有库存</a-select-option>
-                      <a-select-option value="0">零库存</a-select-option>
-                      <a-select-option value="-1">负库存</a-select-option>
-                    </a-select>
-                  </a-form-item>
-                </a-col>
-              </a-row>
-            </template>
+
           </a-form>
         </div>
         <!-- 操作按钮区域 -->
@@ -167,17 +128,11 @@
         // 查询条件
         queryParam: {
           materialParam: "",
-          depotId: undefined,
-          categoryId: undefined,
-          supplierId: undefined,
-          brand: "",
-          stockStatus: undefined,
           createTimeRange: [moment().subtract(1, 'months'), moment()]
         },
         // 页面样式
         cardStyle: 'padding: 0',
         loading: true,
-        toggleSearchStatus: false,
         labelCol: {
           span: 5
         },
@@ -221,10 +176,7 @@
           { title: '本期出库', dataIndex: 'currentPeriodOut', width: 120, scopedSlots: { customRender: 'customRenderStock' } },
           { title: '上期出库', dataIndex: 'previousPeriodOut', width: 120, scopedSlots: { customRender: 'customRenderStock' } }
         ],
-        // 下拉选项数据
-        depotList: [],
-        categoryList: [],
-        supplierList: []
+
       }
     },
     computed: {
@@ -234,9 +186,6 @@
     },
     created() {
       this.loadStockData()
-      this.getDepotData()
-      this.getCategoryData()
-      this.getSupplierData()
     },
     methods: {
       // 查询方法
@@ -248,19 +197,11 @@
       searchReset() {
         this.queryParam = {
           materialParam: "",
-          depotId: undefined,
-          categoryId: undefined,
-          supplierId: undefined,
-          brand: "",
-          stockStatus: undefined,
           createTimeRange: [moment().subtract(1, 'months'), moment()]
         }
         this.searchQuery()
       },
-      // 展开/收起搜索
-      handleToggleSearch() {
-        this.toggleSearchStatus = !this.toggleSearchStatus
-      },
+
       // 日期变化处理
       onDateChange(dates, dateStrings) {
         this.queryParam.createTimeRange = dates
@@ -278,12 +219,7 @@
         const params = {
           currentPage: this.ipagination.current,
           pageSize: this.ipagination.pageSize,
-          materialParam: this.queryParam.materialParam || '',
-          depotId: this.queryParam.depotId,
-          categoryId: this.queryParam.categoryId,
-          supplierId: this.queryParam.supplierId,
-          brand: this.queryParam.brand,
-          stockStatus: this.queryParam.stockStatus
+          materialParam: this.queryParam.materialParam || ''
         }
         
         // 如果有日期范围参数，添加到请求中
@@ -314,22 +250,7 @@
           }
         })
       },
-              // 获取分类数据
-        getCategoryData() {
-          getAction('/materialCategory/list', { pageSize: 100 }).then((res) => {
-            if (res.code === 200) {
-              this.categoryList = res.data.rows || []
-            }
-          })
-        },
-              // 获取供应商数据
-        getSupplierData() {
-          getAction('/supplier/list', { pageSize: 100 }).then((res) => {
-            if (res.code === 200) {
-              this.supplierList = res.data.rows || []
-            }
-          })
-        },
+              
       // 表格操作
       handleTableChange(pagination, filters, sorter) {
         this.ipagination = pagination
