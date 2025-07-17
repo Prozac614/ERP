@@ -1,131 +1,42 @@
 <template>
-  <div class="page-header-index-wide">
-    <!--
-    <a-row :gutter="24">
-      <a-col :sm="24" :md="12" :xl="4" :style="{ paddingRight: '0px',marginBottom: '12px' }">
-        <chart-card :loading="loading" title="今日销售" data-step="1" data-title="今日销售" data-intro="统计今日销售单据的总金额">
-          <a-tooltip title="统计今日销售单据的总金额" slot="action">
-            <a-icon type="info-circle-o" />
-          </a-tooltip>
-          <head-info :content="statistics.todaySale"></head-info>
-        </chart-card>
-      </a-col>
-      <a-col :sm="24" :md="12" :xl="4" :style="{ paddingRight: '0px',marginBottom: '12px' }">
-        <chart-card :loading="loading" title="今日零售" data-step="2" data-title="今日零售" data-intro="统计今日零售单据的总金额">
-          <a-tooltip title="统计今日零售单据的总金额" slot="action">
-            <a-icon type="info-circle-o" />
-          </a-tooltip>
-          <head-info :content="statistics.todayRetailSale"></head-info>
-        </chart-card>
-      </a-col>
-      <a-col :sm="24" :md="12" :xl="4" :style="{ paddingRight: '0px',marginBottom: '12px' }">
-        <chart-card :loading="loading" title="今日采购" data-step="3" data-title="今日采购" data-intro="统计今日采购单据的总金额">
-          <a-tooltip title="统计今日采购单据的总金额" slot="action">
-            <a-icon type="info-circle-o" />
-          </a-tooltip>
-          <head-info :content="statistics.todayBuy"></head-info>
-        </chart-card>
-      </a-col>
-      <a-col :sm="24" :md="12" :xl="4" :style="{ paddingRight: '0px',marginBottom: '12px' }">
-        <chart-card :loading="loading" title="本月累计销售">
-          <a-tooltip title="统计本月销售单据的总金额" slot="action">
-            <a-icon type="info-circle-o" />
-          </a-tooltip>
-          <head-info :content="statistics.monthSale"></head-info>
-        </chart-card>
-      </a-col>
-      <a-col :sm="24" :md="12" :xl="4" :style="{ paddingRight: '0px',marginBottom: '12px' }">
-        <chart-card :loading="loading" title="本月累计零售">
-          <a-tooltip title="统计本月零售单据的总金额" slot="action">
-            <a-icon type="info-circle-o" />
-          </a-tooltip>
-          <head-info :content="statistics.monthRetailSale"></head-info>
-        </chart-card>
-      </a-col>
-      <a-col :sm="24" :md="12" :xl="4" :style="{ paddingRight: '0px',marginBottom: '12px' }">
-        <chart-card :loading="loading" title="本月累计采购">
-          <a-tooltip placement="left" title="统计本月采购单据的总金额" slot="action">
-            <a-icon type="info-circle-o" />
-          </a-tooltip>
-          <head-info :content="statistics.monthBuy"></head-info>
-        </chart-card>
-      </a-col>
-      <a-col :sm="24" :md="12" :xl="4" :style="{ paddingRight: '0px',marginBottom: '12px' }">
-        <chart-card :loading="loading" title="昨日销售">
-          <a-tooltip title="统计昨日销售单据的总金额" slot="action">
-            <a-icon type="info-circle-o" />
-          </a-tooltip>
-          <head-info :content="statistics.yesterdaySale"></head-info>
-        </chart-card>
-      </a-col>
-      <a-col :sm="24" :md="12" :xl="4" :style="{ paddingRight: '0px',marginBottom: '12px' }">
-        <chart-card :loading="loading" title="昨日零售">
-          <a-tooltip title="统计昨日零售单据的总金额" slot="action">
-            <a-icon type="info-circle-o" />
-          </a-tooltip>
-          <head-info :content="statistics.yesterdayRetailSale"></head-info>
-        </chart-card>
-      </a-col>
-      <a-col :sm="24" :md="12" :xl="4" :style="{ paddingRight: '0px',marginBottom: '12px' }">
-        <chart-card :loading="loading" title="昨日采购">
-          <a-tooltip title="统计昨日采购单据的总金额" slot="action">
-            <a-icon type="info-circle-o" />
-          </a-tooltip>
-          <head-info :content="statistics.yesterdayBuy"></head-info>
-        </chart-card>
-      </a-col>
-      <a-col :sm="24" :md="12" :xl="4" :style="{ paddingRight: '0px',marginBottom: '12px' }">
-        <chart-card :loading="loading" title="今年累计销售">
-          <a-tooltip title="统计今年销售单据的总金额" slot="action">
-            <a-icon type="info-circle-o" />
-          </a-tooltip>
-          <head-info :content="statistics.yearSale"></head-info>
-        </chart-card>
-      </a-col>
-      <a-col :sm="24" :md="12" :xl="4" :style="{ paddingRight: '0px',marginBottom: '12px' }">
-        <chart-card :loading="loading" title="今年累计零售">
-          <a-tooltip title="统计今年零售单据的总金额" slot="action">
-            <a-icon type="info-circle-o" />
-          </a-tooltip>
-          <head-info :content="statistics.yearRetailSale"></head-info>
-        </chart-card>
-      </a-col>
-      <a-col :sm="24" :md="12" :xl="4" :style="{ paddingRight: '0px',marginBottom: '12px' }">
-        <chart-card :loading="loading" title="今年累计采购">
-          <a-tooltip placement="left" title="统计今年采购单据的总金额" slot="action">
-            <a-icon type="info-circle-o" />
-          </a-tooltip>
-          <head-info :content="statistics.yearBuy"></head-info>
-        </chart-card>
-      </a-col>
-    </a-row>
-    -->
-    <!--
-    <a-row :gutter="24">
-      <a-col :sm="24" :md="12" :xl="8" :style="{ paddingRight: '0px',marginBottom: '12px' }">
-        <a-card :loading="loading" :bordered="false" :body-style="{paddingRight: '5'}" data-step="4" data-title="销售统计"
-                data-intro="统计往前6个月每月销售的总金额">
-          <bar title="销售统计" :height="barHeight" :yaxisText="yaxisText" :dataSource="salePriceData"/>
-        </a-card>
-      </a-col>
-      <a-col :sm="24" :md="12" :xl="8" :style="{ paddingRight: '0px',marginBottom: '12px' }">
-        <a-card :loading="loading" :bordered="false" :body-style="{paddingRight: '5'}" data-step="5" data-title="零售统计"
-                data-intro="统计往前6个月每月零售的总金额">
-          <bar title="零售统计" :height="barHeight" :yaxisText="yaxisText" :dataSource="retailPriceData"/>
-        </a-card>
-      </a-col>
-      <a-col :sm="24" :md="12" :xl="8" :style="{ paddingRight: '0px',marginBottom: '12px' }">
-        <a-card :loading="loading" :bordered="false" :body-style="{paddingRight: '5'}" data-step="6" data-title="采购统计"
-                data-intro="统计往前6个月每月采购的总金额">
-          <bar title="采购统计" :height="barHeight" :yaxisText="yaxisText" :dataSource="buyPriceData"/>
-        </a-card>
-      </a-col>
-    </a-row>
-    -->
-
-    <a-row :gutter="24">
-      <a-col :sm="24" :md="24" :xl="24" :style="{ paddingRight: '0px',marginBottom: '12px' }">
-        <a-card :loading="loading" :bordered="false" title="📋 商品库存明细表" class="table-card">
+  <a-row :gutter="24">
+    <a-col :md="24">
+      <a-card style="margin-bottom: 16px;" :bordered="false">
+        <!-- 查询区域 -->
+        <div class="table-page-search-wrapper">
+          <!-- 搜索区域 -->
+          <a-form layout="inline" @keyup.enter.native="searchQuery">
+            <a-row :gutter="24">
+              <a-col :md="8" :sm="24">
+                <a-form-item label="商品信息" :labelCol="labelCol" :wrapperCol="wrapperCol">
+                  <a-input placeholder="请输入唛头、名称、助记码、规格、型号等信息" v-model="queryParam.materialParam"></a-input>
+                </a-form-item>
+              </a-col>
+              <a-col :md="8" :sm="24">
+                <a-form-item label="单据日期" :labelCol="labelCol" :wrapperCol="wrapperCol">
+                  <a-range-picker
+                    style="width:100%"
+                    v-model="queryParam.createTimeRange"
+                    format="YYYY-MM-DD"
+                    :placeholder="['开始时间', '结束时间']"
+                    @change="onDateChange"
+                    @ok="onDateOk"
+                  />
+                </a-form-item>
+              </a-col>
+              <span style="float: left;overflow: hidden;" class="table-page-search-submitButtons">
+                <a-col :md="8" :sm="24">
+                  <a-button type="primary" @click="searchQuery">查询</a-button>
+                  <a-button style="margin-left: 8px" @click="searchReset">重置</a-button>
+                </a-col>
+              </span>
+            </a-row>
+          </a-form>
+        </div>
+        
+        <!-- table区域-begin -->
+        <div>
+          <a-card :loading="loading" :bordered="false" title="📋 商品库存明细表" class="table-card">
           <div slot="extra" class="table-actions">
             <a-button type="primary" icon="line-chart" size="small" @click="toggleChart" style="margin-right: 8px;">
               {{ showChart ? '隐藏图表' : '显示图表' }}
@@ -160,48 +71,53 @@
           >
           </a-table>
           
-          <div class="table-footer-tip">
-            <a-icon type="bulb" style="color: #faad14; margin-right: 4px;" />
-            💡 选择商品行，点击显示图表按钮查看趋势
-          </div>
-        </a-card>
-      </a-col>
-    </a-row>
-    <a-row :gutter="24" v-if="showChart">
-      <a-col :sm="24" :md="24" :xl="24" :style="{ paddingRight: '0px',marginBottom: '12px' }">
-        <a-card :loading="loading" :bordered="false" title="📈 出库数量趋势图表" class="chart-card">
-          <div slot="extra" class="chart-extra">
-            <span style="margin-right: 8px;">日期：</span>
-            <a-range-picker
-              v-model="dateRange"
-              @change="onDateRangeChange"
-              format="YYYY-MM-DD"
-              placeholder="选择时间范围"
-              style="width: 240px; margin-right: 12px;"
-            />
-            <a-button type="primary" icon="reload" @click="loadStockData" size="small" style="margin-right: 8px;">
-              刷新
-            </a-button>
-            <a-tag color="blue" v-if="selectedRowKeys.length > 0">
-              已选择 {{ selectedRowKeys.length }}/10 个商品
-            </a-tag>
-            <a-tag color="default" v-else>
-              请选择商品查看趋势（最多10个）
-            </a-tag>
-          </div>
-          <div class="chart-container">
-            <line-chart-multid
-              :height="450"
-              :dataSource="outStockChartData"
-              :title="'出库数量趋势'"
-              :yaxisText="'数量'"
-              :fields="outStockChartFields"
-            />
-          </div>
-        </a-card>
-      </a-col>
-    </a-row>
-  </div>
+            <div class="table-footer-tip">
+              <a-icon type="bulb" style="color: #faad14; margin-right: 4px;" />
+              💡 商品库存明细表
+            </div>
+          </a-card>
+        </div>
+        <!-- table区域-end -->
+        
+        <!-- 暂时隐藏趋势图表功能
+        <a-row :gutter="24" v-if="showChart">
+          <a-col :sm="24" :md="24" :xl="24" :style="{ paddingRight: '0px',marginBottom: '12px' }">
+            <a-card :loading="loading" :bordered="false" title="📈 出库数量趋势图表" class="chart-card">
+              <div slot="extra" class="chart-extra">
+                <span style="margin-right: 8px;">日期：</span>
+                <a-range-picker
+                  v-model="dateRange"
+                  @change="onDateRangeChange"
+                  format="YYYY-MM-DD"
+                  placeholder="选择时间范围"
+                  style="width: 240px; margin-right: 12px;"
+                />
+                <a-button type="primary" icon="reload" @click="loadStockData" size="small" style="margin-right: 8px;">
+                  刷新
+                </a-button>
+                <a-tag color="blue" v-if="selectedRowKeys.length > 0">
+                  已选择 {{ selectedRowKeys.length }}/10 个商品
+                </a-tag>
+                <a-tag color="default" v-else>
+                  请选择商品查看趋势（最多10个）
+                </a-tag>
+              </div>
+              <div class="chart-container">
+                <line-chart-multid
+                  :height="450"
+                  :dataSource="outStockChartData"
+                  :title="'出库数量趋势'"
+                  :yaxisText="'数量'"
+                  :fields="outStockChartFields"
+                />
+              </div>
+            </a-card>
+          </a-col>
+        </a-row>
+        -->
+      </a-card>
+    </a-col>
+  </a-row>
 </template>
 <script>
   import ChartCard from '@/components/ChartCard'
@@ -240,15 +156,6 @@
         systemUrl: window.SYS_URL,
         loading: true,
         center: null,
-        // 移除不需要的统计数据字段
-        // statistics: {},
-        // barHeight: document.documentElement.clientHeight-585,
-        // yaxisText: '金额',
-        // buyPriceData: [],
-        // salePriceData: [],
-        // retailPriceData: [],
-        // visitFields:['ip','visit'],
-        // visitInfo:[],
         hasExpire: false,
         payFeeUrl: '',
         tenant: {
@@ -257,6 +164,18 @@
           userCurrentNum: '',
           userNumLimit: '',
           tenantId: ''
+        },
+        // 查询条件
+        queryParam: {
+          materialParam: "",
+          createTimeRange: [moment().subtract(6, 'months'), moment()],
+        },
+        labelCol: {
+          span: 5
+        },
+        wrapperCol: {
+          span: 18,
+          offset: 1
         },
         // 新增的数据字段
         showChart: false, // 控制图表显示状态
@@ -332,6 +251,26 @@
       handleIntroJs('indexChart', 1)
     },
     methods: {
+      // 查询方法
+      searchQuery() {
+        this.ipagination.current = 1
+        this.loadStockData()
+      },
+      // 重置查询
+      searchReset() {
+        this.queryParam = {
+          materialParam: "",
+          createTimeRange: [moment().subtract(6, 'months'), moment()],
+        }
+        this.searchQuery()
+      },
+      // 日期变化处理
+      onDateChange(dates, dateStrings) {
+        this.queryParam.createTimeRange = dates
+      },
+      onDateOk(dates) {
+        console.log('选择的日期: ', dates)
+      },
       initInfo () {
         // 移除不需要的统计数据获取
         // getBuyAndSaleStatistics().then((res)=>{
@@ -363,7 +302,13 @@
         const params = {
           currentPage: this.ipagination.current,
           pageSize: this.ipagination.pageSize,
-          materialParam: '' // 可以添加搜索参数
+          materialParam: this.queryParam.materialParam || ''
+        }
+        
+        // 如果有日期范围参数，添加到请求中
+        if (this.queryParam.createTimeRange && this.queryParam.createTimeRange.length === 2) {
+          params.beginTime = this.queryParam.createTimeRange[0].format('YYYY-MM-DD')
+          params.endTime = this.queryParam.createTimeRange[1].format('YYYY-MM-DD')
         }
         
         getMaterialPeriodStock(params).then(res => {
@@ -582,6 +527,20 @@
   }
 </script>
 <style lang="less" scoped>
+  /* 查询表单样式 */
+  .table-page-search-wrapper {
+    margin-bottom: 24px;
+    padding: 24px;
+    background: #fafafa;
+    border-radius: 6px;
+    
+    .table-page-search-submitButtons {
+      .ant-btn {
+        margin-right: 8px;
+      }
+    }
+  }
+
   .circle-cust{
     position: relative;
     top: 28px;
