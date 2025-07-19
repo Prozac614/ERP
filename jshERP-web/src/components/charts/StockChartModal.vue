@@ -147,21 +147,36 @@ export default {
     },
     // 监听dateRange变化，确保数据及时更新
     dateRange: {
-      handler(newVal) {
-        if (this.visible && newVal && newVal.length === 2) {
-          this.loadChartData()
+      handler(newVal, oldVal) {
+        console.log('dateRange变化:', oldVal, '->', newVal)
+        if (this.canLoadData()) {
+          // 避免重复加载，只有当值真正改变时才重新加载
+          if (!oldVal || oldVal.length !== 2 ||
+              newVal[0] !== oldVal[0] || newVal[1] !== oldVal[1]) {
+            setTimeout(() => {
+              this.loadChartData()
+            }, 50)
+          }
         }
       },
-      deep: true
+      deep: true,
+      immediate: true
     },
     // 监听materialInfo变化
     materialInfo: {
-      handler(newVal) {
-        if (this.visible && newVal && newVal.materialId) {
-          this.loadChartData()
+      handler(newVal, oldVal) {
+        console.log('materialInfo变化:', oldVal, '->', newVal)
+        if (this.canLoadData()) {
+          // 避免重复加载，只有当materialId真正改变时才重新加载
+          if (!oldVal || oldVal.materialId !== newVal.materialId) {
+            setTimeout(() => {
+              this.loadChartData()
+            }, 50)
+          }
         }
       },
-      deep: true
+      deep: true,
+      immediate: true
     }
   },
   mounted() {
@@ -179,6 +194,23 @@ export default {
     this.destroyChart()
   },
   methods: {
+    // 验证是否可以加载数据
+    canLoadData() {
+      const hasValidMaterial = this.materialInfo && this.materialInfo.materialId
+      const hasValidDateRange = this.dateRange && this.dateRange.length === 2
+      const isVisible = this.visible
+
+      console.log('数据加载条件检查:', {
+        hasValidMaterial,
+        hasValidDateRange,
+        isVisible,
+        materialInfo: this.materialInfo,
+        dateRange: this.dateRange
+      })
+
+      return hasValidMaterial && hasValidDateRange && isVisible
+    },
+
     // 初始化图表
     initChart() {
       if (!this.$refs.chartContainer) return
@@ -227,25 +259,18 @@ export default {
     // 加载图表数据
     async loadChartData() {
       console.log('开始加载图表数据...')
-      console.log('materialInfo:', this.materialInfo)
-      console.log('dateRange:', this.dateRange)
+
+      // 使用统一的验证方法
+      if (!this.canLoadData()) {
+        console.log('数据加载条件不满足，跳过加载')
+        this.loading = false
+        return
+      }
 
       this.loading = true
       this.error = null
 
       try {
-        // 验证必要参数
-        if (!this.materialInfo || !this.materialInfo.materialId) {
-          console.error('商品信息验证失败:', this.materialInfo)
-          this.error = '商品信息不完整，无法加载图表数据'
-          return
-        }
-
-        if (!this.dateRange || this.dateRange.length !== 2) {
-          console.error('日期范围验证失败:', this.dateRange)
-          this.error = '请先设置统计日期范围'
-          return
-        }
 
         // 确保日期对象有format方法
         let beginDate, endDate
