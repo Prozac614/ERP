@@ -303,4 +303,26 @@ public interface DepotItemMapperEx {
     void refreshDailySummaryForRecentDays(
             @Param("days") Integer days,
             @Param("tenantId") Long tenantId);
+
+    // ========== 数据修复相关方法 ==========
+
+    /**
+     * 统计包含小数的库存记录数量
+     */
+    int countDecimalStockRecords();
+
+    /**
+     * 修复库存小数数据，将其四舍五入为整数
+     */
+    int fixDecimalStockData();
+
+    /**
+     * 使用修复后的逻辑刷新商品期间汇总
+     */
+    void refreshMaterialPeriodSummaryCorrect(@Param("tenantId") Long tenantId);
+
+    /**
+     * 验证期间库存计算结果
+     */
+    List<Map<String, Object>> validatePeriodStockBalance();
 }

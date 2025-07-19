@@ -1517,4 +1517,82 @@ public class DepotItemController {
         }
         return res;
     }
+
+    /**
+     * 修复库存小数点问题
+     * @param request
+     * @return
+     * @throws Exception
+     */
+    @PostMapping(value = "/fixDecimalStock")
+    @ApiOperation(value = "修复库存小数点问题")
+    public BaseResponseInfo fixDecimalStock(HttpServletRequest request) throws Exception {
+        BaseResponseInfo res = new BaseResponseInfo();
+        try {
+            depotItemOptimizedService.fixDecimalStockIssue();
+
+            res.code = 200;
+            res.data = "库存小数点问题修复完成";
+
+            logger.info("库存小数点问题修复成功");
+
+        } catch (Exception e) {
+            logger.error("修复库存小数点问题失败", e);
+            res.code = 500;
+            res.data = "修复失败: " + e.getMessage();
+        }
+        return res;
+    }
+
+    /**
+     * 修复期间库存计算逻辑
+     * @param request
+     * @return
+     * @throws Exception
+     */
+    @PostMapping(value = "/fixPeriodCalculation")
+    @ApiOperation(value = "修复期间库存计算逻辑")
+    public BaseResponseInfo fixPeriodCalculation(HttpServletRequest request) throws Exception {
+        BaseResponseInfo res = new BaseResponseInfo();
+        try {
+            depotItemOptimizedService.fixPeriodCalculationLogic();
+
+            res.code = 200;
+            res.data = "期间库存计算逻辑修复完成";
+
+            logger.info("期间库存计算逻辑修复成功");
+
+        } catch (Exception e) {
+            logger.error("修复期间库存计算逻辑失败", e);
+            res.code = 500;
+            res.data = "修复失败: " + e.getMessage();
+        }
+        return res;
+    }
+
+    /**
+     * 验证期间库存计算结果
+     * @param request
+     * @return
+     * @throws Exception
+     */
+    @GetMapping(value = "/validatePeriodCalculation")
+    @ApiOperation(value = "验证期间库存计算结果")
+    public BaseResponseInfo validatePeriodCalculation(HttpServletRequest request) throws Exception {
+        BaseResponseInfo res = new BaseResponseInfo();
+        try {
+            Map<String, Object> validationResult = depotItemOptimizedService.validatePeriodCalculation();
+
+            res.code = 200;
+            res.data = validationResult;
+
+            logger.info("期间库存计算结果验证完成");
+
+        } catch (Exception e) {
+            logger.error("验证期间库存计算结果失败", e);
+            res.code = 500;
+            res.data = "验证失败: " + e.getMessage();
+        }
+        return res;
+    }
 }

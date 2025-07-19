@@ -1407,4 +1407,69 @@
             last_update_time = CURRENT_TIMESTAMP
     </update>
 
+    <!-- ========== 数据修复相关查询 ========== -->
+
+    <!-- 统计包含小数的库存记录数量 -->
+    <select id="countDecimalStockRecords" resultType="int">
+        SELECT COUNT(*)
+        FROM jsh_material_period_summary
+        WHERE delete_flag = '0'
+        AND (
+            current_period_stock != ROUND(current_period_stock)
+            OR previous_period_stock != ROUND(previous_period_stock)
+            OR current_period_out != ROUND(current_period_out)
+            OR previous_period_out != ROUND(previous_period_out)
+            OR current_period_in != ROUND(current_period_in)
+            OR previous_period_in != ROUND(previous_period_in)
+        )
+    </select>
+
+    <!-- 修复库存小数数据 -->
+    <update id="fixDecimalStockData">
+        UPDATE jsh_material_period_summary
+        SET
+            current_period_stock = ROUND(current_period_stock),
+            previous_period_stock = ROUND(previous_period_stock),
+            current_period_out = ROUND(current_period_out),
+            previous_period_out = ROUND(previous_period_out),
+            current_period_in = ROUND(current_period_in),
+            previous_period_in = ROUND(previous_period_in),
+            last_calculation_time = NOW()
+        WHERE delete_flag = '0'
+        AND (
+            current_period_stock != ROUND(current_period_stock)
+            OR previous_period_stock != ROUND(previous_period_stock)
+            OR current_period_out != ROUND(current_period_out)
+            OR previous_period_out != ROUND(previous_period_out)
+            OR current_period_in != ROUND(current_period_in)
+            OR previous_period_in != ROUND(previous_period_in)
+        )
+    </update>
+
+    <!-- 调用修复后的存储过程刷新商品期间汇总 -->
+    <select id="refreshMaterialPeriodSummaryCorrect" statementType="CALLABLE">
+        {call refresh_material_period_summary_correct(#{tenantId})}
+    </select>
+
+    <!-- 验证期间库存计算结果 -->
+    <select id="validatePeriodStockBalance" resultType="java.util.Map">
+        SELECT
+            material_id,
+            bar_code,
+            material_name,
+            current_period_stock as currentPeriodStock,
+            previous_period_stock as previousPeriodStock,
+            current_period_out as currentPeriodOut,
+            previous_period_out as previousPeriodOut,
+            current_period_in as currentPeriodIn,
+            previous_period_in as previousPeriodIn,
+            -- 验证库存平衡：上期结存 + 本期入库 - 本期出库 应该等于本期结存
+            (previous_period_stock + current_period_in - current_period_out) as calculatedCurrentStock,
+            (current_period_stock - (previous_period_stock + current_period_in - current_period_out)) as difference
+        FROM jsh_material_period_summary
+        WHERE delete_flag = '0'
+        ORDER BY ABS(current_period_stock - (previous_period_stock + current_period_in - current_period_out)) DESC
+        LIMIT 100
+    </select>
+
 </mapper>

@@ -250,6 +250,102 @@ public class DepotItemOptimizedService {
     }
 
     /**
+     * 修复库存小数点问题
+     * 将所有库存数据四舍五入为整数
+     */
+    public void fixDecimalStockIssue() {
+        try {
+            logger.info("开始修复库存小数点问题...");
+
+            // 1. 检查当前有多少小数记录
+            int decimalRecords = depotItemMapperEx.countDecimalStockRecords();
+            logger.info("发现 {} 条包含小数的库存记录", decimalRecords);
+
+            if (decimalRecords > 0) {
+                // 2. 修复现有数据：将小数四舍五入为整数
+                int updatedRecords = depotItemMapperEx.fixDecimalStockData();
+                logger.info("已修复 {} 条库存记录的小数问题", updatedRecords);
+
+                // 3. 清除相关缓存
+                clearAllCache();
+
+                logger.info("库存小数点问题修复完成");
+            } else {
+                logger.info("没有发现小数库存记录，无需修复");
+            }
+
+        } catch (Exception e) {
+            logger.error("修复库存小数点问题失败", e);
+            throw new RuntimeException("修复库存小数点问题失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 修复期间库存计算逻辑
+     * 重新计算本期结存、上期结存、出库入库数据
+     */
+    public void fixPeriodCalculationLogic() {
+        try {
+            logger.info("开始修复期间库存计算逻辑...");
+
+            // 1. 获取当前用户租户ID
+            User user = userService.getCurrentUser();
+            Long tenantId = user != null ? user.getTenantId() : null;
+
+            // 2. 调用修复后的存储过程
+            depotItemMapperEx.refreshMaterialPeriodSummaryCorrect(tenantId);
+
+            // 3. 清除所有相关缓存
+            clearAllCache();
+
+            logger.info("期间库存计算逻辑修复完成，租户ID：{}", tenantId);
+
+        } catch (Exception e) {
+            logger.error("修复期间库存计算逻辑失败", e);
+            throw new RuntimeException("修复期间库存计算逻辑失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 验证期间库存计算结果
+     * 检查库存平衡关系是否正确
+     */
+    public Map<String, Object> validatePeriodCalculation() {
+        try {
+            logger.info("开始验证期间库存计算结果...");
+
+            // 获取验证结果
+            List<Map<String, Object>> validationResults = depotItemMapperEx.validatePeriodStockBalance();
+
+            // 统计验证结果
+            int totalRecords = validationResults.size();
+            int errorRecords = 0;
+
+            for (Map<String, Object> result : validationResults) {
+                Object difference = result.get("difference");
+                if (difference != null && Math.abs(((Number) difference).doubleValue()) > 0.01) {
+                    errorRecords++;
+                }
+            }
+
+            Map<String, Object> summary = new HashMap<>();
+            summary.put("totalRecords", totalRecords);
+            summary.put("errorRecords", errorRecords);
+            summary.put("successRate", totalRecords > 0 ? (double)(totalRecords - errorRecords) / totalRecords * 100 : 100);
+            summary.put("validationDetails", validationResults.size() > 10 ? validationResults.subList(0, 10) : validationResults);
+
+            logger.info("验证完成，总记录数：{}，错误记录数：{}，成功率：{}%",
+                       totalRecords, errorRecords, summary.get("successRate"));
+
+            return summary;
+
+        } catch (Exception e) {
+            logger.error("验证期间库存计算结果失败", e);
+            throw new RuntimeException("验证期间库存计算结果失败: " + e.getMessage());
+        }
+    }
+
+    /**
      * 获取缓存统计信息
      */
     public Map<String, Object> getCacheStats() {
