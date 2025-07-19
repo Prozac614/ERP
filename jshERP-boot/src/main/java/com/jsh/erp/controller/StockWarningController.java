@@ -86,7 +86,7 @@ public class StockWarningController {
     
     /**
      * 清理已完成的任务
-     * 
+     *
      * @param request
      * @return
      */
@@ -96,16 +96,44 @@ public class StockWarningController {
         BaseResponseInfo res = new BaseResponseInfo();
         try {
             stockWarningCalculationService.cleanupCompletedTasks();
-            
+
             res.code = 200;
             res.data = "任务清理完成";
-            
+
             logger.info("库存预警计算任务清理完成");
-            
+
         } catch (Exception e) {
             logger.error("清理任务失败", e);
             res.code = 500;
             res.data = "清理任务失败: " + e.getMessage();
+        }
+        return res;
+    }
+
+    /**
+     * 测试单个商品的安全库存计算
+     *
+     * @param materialId 商品ID
+     * @param request
+     * @return
+     */
+    @GetMapping(value = "/testCalculation")
+    @ApiOperation(value = "测试单个商品的安全库存计算")
+    public BaseResponseInfo testCalculation(@RequestParam("materialId") Long materialId,
+                                          HttpServletRequest request) {
+        BaseResponseInfo res = new BaseResponseInfo();
+        try {
+            Map<String, Object> result = stockWarningCalculationService.testSingleMaterialCalculation(materialId);
+
+            res.code = 200;
+            res.data = result;
+
+            logger.info("测试商品{}的安全库存计算完成", materialId);
+
+        } catch (Exception e) {
+            logger.error("测试商品{}的安全库存计算失败", materialId, e);
+            res.code = 500;
+            res.data = "测试计算失败: " + e.getMessage();
         }
         return res;
     }

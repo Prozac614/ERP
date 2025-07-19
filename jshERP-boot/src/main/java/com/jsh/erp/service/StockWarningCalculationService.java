@@ -220,24 +220,31 @@ public class StockWarningCalculationService {
      */
     @Transactional(value = "transactionManager", rollbackFor = Exception.class)
     private void calculateMaterialSafeStock(Material material) throws Exception {
+        logger.info("开始计算商品{}({})的安全库存", material.getName(), material.getId());
+
         // 计算平均日销量
         BigDecimal averageDailySales = materialService.calculateAverageDailySales(material.getId());
-        
+
         // 计算最低安全库存阈值（6个月的销量）
         BigDecimal lowSafeStock = materialService.calculateLowSafeStock(averageDailySales);
-        
+
         // 如果计算出的安全库存为0，则跳过更新
         if (lowSafeStock.compareTo(BigDecimal.ZERO) <= 0) {
+            logger.info("商品{}({})的安全库存为0，跳过更新", material.getName(), material.getId());
             return;
         }
-        
+
         // 获取所有仓库
         List<Depot> depots = getAllActiveDepots();
-        
+        logger.info("商品{}({})将更新{}个仓库的安全库存，安全库存值：{}",
+                material.getName(), material.getId(), depots.size(), lowSafeStock);
+
         // 为每个仓库更新该商品的最低安全库存
         for (Depot depot : depots) {
             updateMaterialSafeStock(material.getId(), depot.getId(), lowSafeStock);
         }
+
+        logger.info("商品{}({})安全库存更新完成", material.getName(), material.getId());
     }
     
     /**
@@ -255,20 +262,25 @@ public class StockWarningCalculationService {
      */
     private void updateMaterialSafeStock(Long materialId, Long depotId, BigDecimal lowSafeStock) {
         try {
+            logger.debug("更新商品{}在仓库{}的安全库存为{}", materialId, depotId, lowSafeStock);
+
             // 查找是否已存在记录
             MaterialInitialStockExample example = new MaterialInitialStockExample();
             example.createCriteria()
                     .andMaterialIdEqualTo(materialId)
                     .andDepotIdEqualTo(depotId)
                     .andDeleteFlagNotEqualTo(BusinessConstants.DELETE_FLAG_DELETED);
-            
+
             List<MaterialInitialStock> existingList = materialInitialStockMapper.selectByExample(example);
-            
+
             if (existingList != null && !existingList.isEmpty()) {
                 // 更新现有记录
                 MaterialInitialStock existing = existingList.get(0);
+                BigDecimal oldLowSafeStock = existing.getLowSafeStock();
                 existing.setLowSafeStock(lowSafeStock);
-                materialInitialStockMapper.updateByPrimaryKeySelective(existing);
+                int updateCount = materialInitialStockMapper.updateByPrimaryKeySelective(existing);
+                logger.info("更新商品{}在仓库{}的安全库存：{} -> {}，影响行数：{}",
+                        materialId, depotId, oldLowSafeStock, lowSafeStock, updateCount);
             } else {
                 // 创建新记录
                 MaterialInitialStock newRecord = new MaterialInitialStock();
@@ -277,9 +289,11 @@ public class StockWarningCalculationService {
                 newRecord.setNumber(BigDecimal.ZERO); // 初始库存设为0
                 newRecord.setLowSafeStock(lowSafeStock);
                 newRecord.setDeleteFlag(BusinessConstants.DELETE_FLAG_EXISTS);
-                materialInitialStockMapper.insertSelective(newRecord);
+                int insertCount = materialInitialStockMapper.insertSelective(newRecord);
+                logger.info("新增商品{}在仓库{}的安全库存记录：{}，影响行数：{}",
+                        materialId, depotId, lowSafeStock, insertCount);
             }
-            
+
         } catch (Exception e) {
             logger.error("更新商品{}在仓库{}的安全库存失败", materialId, depotId, e);
             throw e;
@@ -292,16 +306,67 @@ public class StockWarningCalculationService {
     public void cleanupCompletedTasks() {
         Iterator<Map.Entry<String, CalculationTask>> iterator = taskMap.entrySet().iterator();
         Date cutoffTime = new Date(System.currentTimeMillis() - 24 * 60 * 60 * 1000); // 24小时前
-        
+
         while (iterator.hasNext()) {
             Map.Entry<String, CalculationTask> entry = iterator.next();
             CalculationTask task = entry.getValue();
-            
-            if (("COMPLETED".equals(task.getStatus()) || "FAILED".equals(task.getStatus())) 
+
+            if (("COMPLETED".equals(task.getStatus()) || "FAILED".equals(task.getStatus()))
                     && task.getEndTime() != null && task.getEndTime().before(cutoffTime)) {
                 iterator.remove();
                 logger.info("清理已完成的任务: {}", task.getTaskId());
             }
         }
+    }
+
+    /**
+     * 测试单个商品的安全库存计算
+     *
+     * @param materialId 商品ID
+     * @return 计算结果详情
+     */
+    public Map<String, Object> testSingleMaterialCalculation(Long materialId) throws Exception {
+        Map<String, Object> result = new HashMap<>();
+
+        // 获取商品信息
+        Material material = materialMapper.selectByPrimaryKey(materialId);
+        if (material == null) {
+            throw new RuntimeException("商品不存在，ID: " + materialId);
+        }
+
+        result.put("materialId", materialId);
+        result.put("materialName", material.getName());
+        result.put("barCode", material.getBarCode());
+
+        // 计算平均日销量
+        BigDecimal averageDailySales = materialService.calculateAverageDailySales(materialId);
+        result.put("averageDailySales", averageDailySales);
+
+        // 计算最低安全库存
+        BigDecimal lowSafeStock = materialService.calculateLowSafeStock(averageDailySales);
+        result.put("calculatedLowSafeStock", lowSafeStock);
+
+        // 获取当前安全库存设置
+        List<Depot> depots = getAllActiveDepots();
+        List<Map<String, Object>> currentSettings = new ArrayList<>();
+
+        for (Depot depot : depots) {
+            MaterialInitialStock safeStock = materialService.getSafeStock(materialId, depot.getId());
+            Map<String, Object> setting = new HashMap<>();
+            setting.put("depotId", depot.getId());
+            setting.put("depotName", depot.getName());
+            setting.put("currentLowSafeStock", safeStock.getLowSafeStock());
+            setting.put("currentHighSafeStock", safeStock.getHighSafeStock());
+            currentSettings.add(setting);
+        }
+
+        result.put("currentSafeStockSettings", currentSettings);
+        result.put("depotCount", depots.size());
+        result.put("calculationTime", new Date());
+
+        logger.info("测试商品{}的安全库存计算完成，平均日销量：{}，建议安全库存：{}",
+                materialId, averageDailySales, lowSafeStock);
+
+        return result;
     }
 }

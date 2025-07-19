@@ -1366,11 +1366,16 @@ public class MaterialService {
             String beginTime = new SimpleDateFormat("yyyy-MM-dd").format(calendar.getTime()) + " 00:00:00";
             String endTime = new SimpleDateFormat("yyyy-MM-dd").format(new Date()) + " 23:59:59";
 
+            logger.info("开始计算商品{}的平均日销量，时间范围：{} - {}", materialId, beginTime, endTime);
+
             // 获取该商品的每日出库数据
             List<Map<String, Object>> dailyOutList = depotItemService.getDailyOutStock(
                     materialId.toString(), beginTime, endTime);
 
+            logger.info("商品{}获取到{}条每日出库记录", materialId, dailyOutList != null ? dailyOutList.size() : 0);
+
             if (dailyOutList == null || dailyOutList.isEmpty()) {
+                logger.info("商品{}没有出库记录，平均日销量设为0", materialId);
                 return BigDecimal.ZERO;
             }
 
@@ -1379,16 +1384,22 @@ public class MaterialService {
             for (Map<String, Object> dailyOut : dailyOutList) {
                 Object outQuantity = dailyOut.get("outQuantity");
                 if (outQuantity != null) {
-                    totalOutQuantity = totalOutQuantity.add(new BigDecimal(outQuantity.toString()));
+                    BigDecimal dayQuantity = new BigDecimal(outQuantity.toString());
+                    totalOutQuantity = totalOutQuantity.add(dayQuantity);
+                    logger.debug("商品{}日期{}出库量：{}", materialId, dailyOut.get("outDate"), dayQuantity);
                 }
             }
+
+            logger.info("商品{}总出库量：{}", materialId, totalOutQuantity);
 
             // 计算天数（6个月按180天计算）
             int days = 180;
 
             // 计算平均日销量
             if (days > 0) {
-                return totalOutQuantity.divide(new BigDecimal(days), 6, RoundingMode.HALF_UP);
+                BigDecimal averageDailySales = totalOutQuantity.divide(new BigDecimal(days), 6, RoundingMode.HALF_UP);
+                logger.info("商品{}平均日销量：{}", materialId, averageDailySales);
+                return averageDailySales;
             }
 
             return BigDecimal.ZERO;
@@ -1406,11 +1417,14 @@ public class MaterialService {
      */
     public BigDecimal calculateLowSafeStock(BigDecimal averageDailySales) {
         if (averageDailySales == null || averageDailySales.compareTo(BigDecimal.ZERO) <= 0) {
+            logger.info("平均日销量为0或null，最低安全库存设为0");
             return BigDecimal.ZERO;
         }
 
         // 6个月按180天计算
-        return averageDailySales.multiply(new BigDecimal(180)).setScale(0, RoundingMode.HALF_UP);
+        BigDecimal lowSafeStock = averageDailySales.multiply(new BigDecimal(180)).setScale(0, RoundingMode.HALF_UP);
+        logger.info("根据平均日销量{}计算出最低安全库存：{}", averageDailySales, lowSafeStock);
+        return lowSafeStock;
     }
 
     public List<MaterialVo4Unit> getMaterialByMeId(Long meId) {
