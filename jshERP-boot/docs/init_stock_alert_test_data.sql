@@ -7,48 +7,66 @@
 -- 设置测试租户ID（请根据实际情况修改）
 SET @test_tenant_id = 63;
 
--- 1. 为前几个商品设置不同的库存告急状态用于测试
-UPDATE jsh_material 
+-- 1. 首先为所有商品设置默认的库存告急状态
+-- 这里使用简单的逻辑：随机分配状态用于演示
+UPDATE jsh_material
+SET stock_alert_status = CASE
+    WHEN (id % 3) = 0 THEN 'STOCK_ALERT'
+    WHEN (id % 3) = 1 THEN 'NO_RISK'
+    ELSE 'NO_RISK'
+END,
+last_six_months_sales = CASE
+    WHEN (id % 3) = 0 THEN 150.00  -- 库存告急的商品，假设销量较高
+    ELSE 30.00  -- 无风险的商品，假设销量较低
+END,
+stock_alert_updated_at = NOW()
+WHERE IFNULL(delete_flag, '0') != '1'
+AND tenant_id = @test_tenant_id
+AND stock_alert_status IS NULL;
+
+-- 2. 为前几个商品设置特定的库存告急状态用于测试
+UPDATE jsh_material
 SET stock_alert_status = 'STOCK_ALERT',
     last_six_months_sales = 100.00,
     stock_alert_updated_at = NOW()
 WHERE id IN (
     SELECT id FROM (
-        SELECT id FROM jsh_material 
-        WHERE IFNULL(delete_flag, '0') != '1' 
+        SELECT id FROM jsh_material
+        WHERE IFNULL(delete_flag, '0') != '1'
         AND tenant_id = @test_tenant_id
-        LIMIT 3
+        ORDER BY id
+        LIMIT 2
     ) AS temp
 );
 
--- 2. 为接下来的几个商品设置无风险状态
-UPDATE jsh_material 
+-- 3. 为接下来的几个商品设置无风险状态
+UPDATE jsh_material
 SET stock_alert_status = 'NO_RISK',
     last_six_months_sales = 50.00,
     stock_alert_updated_at = NOW()
 WHERE id IN (
     SELECT id FROM (
-        SELECT id FROM jsh_material 
-        WHERE IFNULL(delete_flag, '0') != '1' 
+        SELECT id FROM jsh_material
+        WHERE IFNULL(delete_flag, '0') != '1'
         AND tenant_id = @test_tenant_id
-        AND stock_alert_status IS NULL
-        LIMIT 3
+        ORDER BY id
+        LIMIT 2, 3  -- 跳过前2个，取接下来的3个
     ) AS temp
 );
 
--- 3. 为一个商品设置忽略风险状态
-UPDATE jsh_material 
+-- 4. 为一个商品设置忽略风险状态
+UPDATE jsh_material
 SET stock_alert_status = 'RISK_IGNORED',
     stock_alert_ignored_at = NOW(),
     last_six_months_sales = 80.00,
     stock_alert_updated_at = NOW()
 WHERE id IN (
     SELECT id FROM (
-        SELECT id FROM jsh_material 
-        WHERE IFNULL(delete_flag, '0') != '1' 
+        SELECT id FROM jsh_material
+        WHERE IFNULL(delete_flag, '0') != '1'
         AND tenant_id = @test_tenant_id
-        AND stock_alert_status IS NULL
-        LIMIT 1
+        ORDER BY id
+        LIMIT 5, 1  -- 跳过前5个，取第6个
     ) AS temp
 );
 

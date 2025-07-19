@@ -174,8 +174,8 @@
               <a-tag v-else-if="value === 'RISK_IGNORED'" color="orange">
                 <a-icon type="eye-invisible" /> 忽略风险
               </a-tag>
-              <a-tag v-else color="default">
-                <a-icon type="question-circle" /> 待计算
+              <a-tag v-else color="blue">
+                <a-icon type="sync" spin /> 计算中
               </a-tag>
             </template>
           </a-table>
@@ -235,6 +235,7 @@
         loadingRequest: null,
         dailyOutData: {},
         dateColumns: [],
+        hasAutoRefreshed: false, // 防止自动刷新无限循环
         // 展示所有商品控制
         showAllProducts: false,
         // 页面样式
@@ -644,9 +645,23 @@
         this.ipagination.total = data.total || 0
         this.dailyOutData = data.dailyOutData || {}
         this.performanceStats = data.performanceStats || {}
-        
+
         // 合并每日出库数据到商品数据中
         this.mergeDataOptimized()
+
+        // 检查是否有状态为空或未计算的商品
+        const hasEmptyStatus = this.dataSource.some(item =>
+          !item.stockAlertStatus || item.stockAlertStatus.trim() === ''
+        )
+
+        // 如果有未计算的状态，延迟3秒后自动刷新一次（仅刷新一次避免无限循环）
+        if (hasEmptyStatus && !this.hasAutoRefreshed) {
+          console.log('发现未计算的库存状态，3秒后自动刷新数据')
+          this.hasAutoRefreshed = true
+          setTimeout(() => {
+            this.loadStockData()
+          }, 3000)
+        }
       },
 
       // 高效的数据合并方法

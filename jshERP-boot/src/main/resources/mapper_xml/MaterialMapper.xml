@@ -498,6 +498,9 @@
       <if test="stockAlertIgnoredAt != null">
         stock_alert_ignored_at = #{stockAlertIgnoredAt,jdbcType=TIMESTAMP},
       </if>
+      <if test="stockAlertIgnoredAt == null and stockAlertStatus != null">
+        stock_alert_ignored_at = NULL,
+      </if>
       <if test="lastSixMonthsSales != null">
         last_six_months_sales = #{lastSixMonthsSales,jdbcType=DECIMAL},
       </if>

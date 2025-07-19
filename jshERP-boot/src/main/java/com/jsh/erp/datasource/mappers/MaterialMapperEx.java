@@ -175,4 +175,12 @@ public interface MaterialMapperEx {
 
     MaterialExtend getMaterialExtendBySerialNumber(
             @Param("serialNumber") String serialNumber);
+
+    /**
+     * 更新库存告急状态并清空忽略时间
+     */
+    int updateStockAlertStatusAndClearIgnored(
+            @Param("materialId") Long materialId,
+            @Param("alertStatus") String alertStatus,
+            @Param("sixMonthsSales") BigDecimal sixMonthsSales);
 }

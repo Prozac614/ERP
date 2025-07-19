@@ -872,4 +872,15 @@
         </if>
     </select>
 
+    <!-- 更新库存告急状态并清空忽略时间 -->
+    <update id="updateStockAlertStatusAndClearIgnored">
+        UPDATE jsh_material
+        SET stock_alert_status = #{alertStatus},
+            last_six_months_sales = #{sixMonthsSales},
+            stock_alert_ignored_at = NULL,
+            stock_alert_updated_at = NOW()
+        WHERE id = #{materialId}
+        AND IFNULL(delete_flag, '0') != '1'
+    </update>
+
 </mapper>

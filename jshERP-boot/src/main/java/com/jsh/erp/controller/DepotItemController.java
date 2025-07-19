@@ -1623,15 +1623,8 @@ public class DepotItemController {
                 return res;
             }
 
-            // 更新商品的库存告急状态为忽略风险
-            materialService.updateStockAlertStatus(materialId, "RISK_IGNORED", null);
-
-            // 记录忽略风险的时间
-            Material material = new Material();
-            material.setId(materialId);
-            material.setStockAlertIgnoredAt(new Date());
-            // 直接使用mapper更新，避免JSON转换问题
-            materialService.updateMaterialByEntity(material);
+            // 使用专门的方法忽略库存风险
+            materialService.ignoreStockRisk(materialId);
 
             res.code = 200;
             res.data = "已忽略库存风险";
@@ -1666,27 +1659,8 @@ public class DepotItemController {
                 return res;
             }
 
-            // 重新计算库存告急状态
-            BigDecimal currentStock = materialService.getCurrentStockByMaterialId(materialId);
-            BigDecimal sixMonthsSales = depotItemMapperEx.getSixMonthsSalesByMaterialId(materialId,
-                userService.getCurrentUser().getTenantId());
-
-            String alertStatus;
-            if (currentStock.compareTo(sixMonthsSales) >= 0) {
-                alertStatus = "NO_RISK";
-            } else {
-                alertStatus = "STOCK_ALERT";
-            }
-
-            // 更新商品的库存告急状态
-            materialService.updateStockAlertStatus(materialId, alertStatus, sixMonthsSales);
-
-            // 清除忽略风险的时间
-            Material material = new Material();
-            material.setId(materialId);
-            material.setStockAlertIgnoredAt(null);
-            // 直接使用mapper更新，避免JSON转换问题
-            materialService.updateMaterialByEntity(material);
+            // 使用专门的方法重新关注库存风险
+            materialService.focusStockRisk(materialId);
 
             res.code = 200;
             res.data = "已重新关注库存风险，当前状态：" + (alertStatus.equals("NO_RISK") ? "无风险" : "库存告急");

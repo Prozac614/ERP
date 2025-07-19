@@ -1693,9 +1693,79 @@ public class MaterialService {
             material.setStockAlertUpdatedAt(new Date());
 
             materialMapper.updateByPrimaryKeySelective(material);
-            logger.debug("更新商品{}库存告急状态为：{}", materialId, alertStatus);
+            logger.info("更新商品{}库存告急状态为：{}", materialId, alertStatus);
         } catch (Exception e) {
             logger.error("更新商品{}库存告急状态失败", materialId, e);
+            throw new RuntimeException("更新库存告急状态失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 忽略商品的库存风险
+     * @param materialId 商品ID
+     */
+    public void ignoreStockRisk(Long materialId) {
+        try {
+            // 先更新状态为忽略风险
+            Material material = new Material();
+            material.setId(materialId);
+            material.setStockAlertStatus("RISK_IGNORED");
+            material.setStockAlertIgnoredAt(new Date());
+            material.setStockAlertUpdatedAt(new Date());
+
+            int result = materialMapper.updateByPrimaryKeySelective(material);
+            logger.info("忽略商品{}库存风险，更新结果：{}", materialId, result);
+
+            if (result == 0) {
+                throw new RuntimeException("更新失败，可能商品不存在");
+            }
+        } catch (Exception e) {
+            logger.error("忽略商品{}库存风险失败", materialId, e);
+            throw new RuntimeException("忽略库存风险失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 重新关注商品的库存风险
+     * @param materialId 商品ID
+     */
+    public void focusStockRisk(Long materialId) {
+        try {
+            // 重新计算库存告急状态
+            BigDecimal currentStock = getCurrentStockByMaterialId(materialId);
+
+            // 获取六个月销量数据，需要通过DepotItemMapperEx获取
+            BigDecimal sixMonthsSales = BigDecimal.ZERO;
+            try {
+                // 获取当前用户的租户ID
+                User currentUser = userService.getCurrentUser();
+                Long tenantId = currentUser != null ? currentUser.getTenantId() : null;
+
+                // 通过DepotItemMapperEx获取六个月销量
+                sixMonthsSales = depotItemMapperEx.getSixMonthsSalesByMaterialId(materialId, tenantId);
+                if (sixMonthsSales == null) {
+                    sixMonthsSales = BigDecimal.ZERO;
+                }
+            } catch (Exception e) {
+                logger.warn("获取商品{}六个月销量失败，使用默认值0", materialId, e);
+                sixMonthsSales = BigDecimal.ZERO;
+            }
+
+            String alertStatus;
+            if (currentStock.compareTo(sixMonthsSales) >= 0) {
+                alertStatus = "NO_RISK";
+            } else {
+                alertStatus = "STOCK_ALERT";
+            }
+
+            // 使用直接SQL更新，确保能清空ignored_at字段
+            materialMapperEx.updateStockAlertStatusAndClearIgnored(materialId, alertStatus, sixMonthsSales);
+            logger.info("重新关注商品{}库存风险，新状态：{}，当前库存：{}，六个月销量：{}",
+                       materialId, alertStatus, currentStock, sixMonthsSales);
+
+        } catch (Exception e) {
+            logger.error("重新关注商品{}库存风险失败", materialId, e);
+            throw new RuntimeException("重新关注库存风险失败: " + e.getMessage());
         }
     }
 

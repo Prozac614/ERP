@@ -417,21 +417,24 @@ public class DepotItemOptimizedService {
 
         try {
             for (MaterialStockPeriodVo stock : stockList) {
-                // 如果数据库中已经有状态，直接使用（SQL查询已经获取了状态）
+                // 获取数据库中的状态
                 String currentStatus = stock.getStockAlertStatus();
+
+                // 获取当前库存
+                BigDecimal currentStock = stock.getCurrentPeriodStock();
+                if (currentStock == null) {
+                    currentStock = BigDecimal.ZERO;
+                }
+
+                // 计算过去6个月的销量（如果没有缓存的话）
+                BigDecimal sixMonthsSales = stock.getLastSixMonthsSales();
+                if (sixMonthsSales == null) {
+                    sixMonthsSales = calculateSixMonthsSales(stock.getMaterialId(), tenantId);
+                    stock.setLastSixMonthsSales(sixMonthsSales);
+                }
 
                 // 如果没有状态或状态为空，则计算新状态
                 if (currentStatus == null || currentStatus.trim().isEmpty()) {
-                    // 获取当前库存
-                    BigDecimal currentStock = stock.getCurrentPeriodStock();
-                    if (currentStock == null) {
-                        currentStock = BigDecimal.ZERO;
-                    }
-
-                    // 计算过去6个月的销量
-                    BigDecimal sixMonthsSales = calculateSixMonthsSales(stock.getMaterialId(), tenantId);
-                    stock.setLastSixMonthsSales(sixMonthsSales);
-
                     // 计算库存告急状态
                     String alertStatus;
                     if (currentStock.compareTo(sixMonthsSales) >= 0) {
@@ -444,12 +447,13 @@ public class DepotItemOptimizedService {
 
                     // 异步更新数据库中的状态（避免影响查询性能）
                     updateMaterialStockAlertStatusAsync(stock.getMaterialId(), alertStatus, sixMonthsSales);
-                } else {
-                    // 如果已经有状态，确保六个月销量数据也存在
-                    if (stock.getLastSixMonthsSales() == null) {
-                        BigDecimal sixMonthsSales = calculateSixMonthsSales(stock.getMaterialId(), tenantId);
-                        stock.setLastSixMonthsSales(sixMonthsSales);
-                    }
+                }
+
+                // 确保每个商品都有状态（防止前端显示"待计算"）
+                if (stock.getStockAlertStatus() == null || stock.getStockAlertStatus().trim().isEmpty()) {
+                    // 如果仍然没有状态，给一个默认状态
+                    String defaultStatus = currentStock.compareTo(sixMonthsSales) >= 0 ? "NO_RISK" : "STOCK_ALERT";
+                    stock.setStockAlertStatus(defaultStatus);
                 }
             }
         } catch (Exception e) {
