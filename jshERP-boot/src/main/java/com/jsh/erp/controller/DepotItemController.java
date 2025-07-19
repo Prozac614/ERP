@@ -1663,8 +1663,8 @@ public class DepotItemController {
             materialService.focusStockRisk(materialId);
 
             res.code = 200;
-            res.data = "已重新关注库存风险，当前状态：" + (alertStatus.equals("NO_RISK") ? "无风险" : "库存告急");
-            logger.info("商品{}已重新关注库存风险，状态：{}", materialId, alertStatus);
+            res.data = "已重新关注库存风险，系统将重新计算库存状态";
+            logger.info("商品{}已重新关注库存风险", materialId);
 
         } catch (Exception e) {
             logger.error("关注库存风险失败，materialId: {}", materialId, e);
