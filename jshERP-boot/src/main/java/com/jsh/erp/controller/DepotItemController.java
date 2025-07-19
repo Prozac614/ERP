@@ -1244,11 +1244,11 @@ public class DepotItemController {
             long endTime = System.currentTimeMillis();
             
             res.code = 200;
-            res.data = Map.of(
-                "message", "汇总数据刷新完成",
-                "type", type,
-                "duration", endTime - startTime + "ms"
-            );
+            Map<String, Object> responseData = new HashMap<>();
+            responseData.put("message", "汇总数据刷新完成");
+            responseData.put("type", type);
+            responseData.put("duration", endTime - startTime + "ms");
+            res.data = responseData;
             
         } catch (Exception e) {
             logger.error("刷新汇总数据失败", e);
@@ -1287,7 +1287,9 @@ public class DepotItemController {
         try {
             depotItemOptimizedService.clearAllCache();
             res.code = 200;
-            res.data = Map.of("message", "缓存清除完成");
+            Map<String, Object> responseData = new HashMap<>();
+            responseData.put("message", "缓存清除完成");
+            res.data = responseData;
         } catch (Exception e) {
             logger.error("清除缓存失败", e);
             res.code = 500;

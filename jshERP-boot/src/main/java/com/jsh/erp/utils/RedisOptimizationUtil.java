@@ -192,7 +192,7 @@ public class RedisOptimizationUtil {
      */
     private void incrementCacheHit() {
         try {
-            optimizationRedisTemplate.opsForValue().increment(STATISTICS_PREFIX + "hits");
+            optimizationRedisTemplate.opsForValue().increment(STATISTICS_PREFIX + "hits", 1L);
         } catch (Exception e) {
             logger.error("增加缓存命中计数失败", e);
         }
@@ -203,7 +203,7 @@ public class RedisOptimizationUtil {
      */
     private void incrementCacheMiss() {
         try {
-            optimizationRedisTemplate.opsForValue().increment(STATISTICS_PREFIX + "misses");
+            optimizationRedisTemplate.opsForValue().increment(STATISTICS_PREFIX + "misses", 1L);
         } catch (Exception e) {
             logger.error("增加缓存未命中计数失败", e);
         }

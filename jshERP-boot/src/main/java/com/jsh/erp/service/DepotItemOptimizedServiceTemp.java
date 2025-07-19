@@ -27,12 +27,29 @@ public class DepotItemOptimizedServiceTemp {
     }
     
     /**
+     * 优化版查询方法（控制器中调用的方法名）
+     */
+    public Map<String, Object> getOptimizedMaterialStockWithDailyOut(
+            Integer currentPage, Integer pageSize, String materialParam, 
+            String beginTime, String endTime, HttpServletRequest request) throws Exception {
+        
+        return getMaterialStockWithDailyOutOptimized(currentPage, pageSize, materialParam, beginTime, endTime, request);
+    }
+    
+    /**
      * 获取缓存统计
      */
     public Map<String, Object> getCacheStatistics() {
         Map<String, Object> stats = new HashMap<>();
         stats.put("status", "temp_implementation");
         return stats;
+    }
+    
+    /**
+     * 获取缓存统计（控制器中调用的方法名）
+     */
+    public Map<String, Object> getCacheStats() {
+        return getCacheStatistics();
     }
     
     /**
@@ -43,9 +60,30 @@ public class DepotItemOptimizedServiceTemp {
     }
     
     /**
+     * 清除所有缓存（控制器中调用的方法名）
+     */
+    public void clearAllCache() {
+        clearCache();
+    }
+    
+    /**
      * 刷新汇总数据
      */
     public void refreshSummaryData(String type, Integer days) {
+        // 临时实现，什么都不做
+    }
+    
+    /**
+     * 刷新商品期间汇总
+     */
+    public void refreshMaterialPeriodSummary(Long tenantId) {
+        // 临时实现，什么都不做
+    }
+    
+    /**
+     * 刷新最近几天的每日汇总
+     */
+    public void refreshDailySummaryForRecentDays(Integer days) {
         // 临时实现，什么都不做
     }
 } 
