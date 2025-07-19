@@ -1604,17 +1604,24 @@ public class DepotItemController {
 
     /**
      * 忽略库存风险
-     * @param materialId 商品ID
+     * @param obj 包含materialId的JSON对象
      * @param request
      * @return
      */
     @PostMapping(value = "/ignoreStockRisk")
     @ApiOperation(value = "忽略库存风险")
     public BaseResponseInfo ignoreStockRisk(
-            @RequestParam("materialId") Long materialId,
+            @RequestBody JSONObject obj,
             HttpServletRequest request) {
         BaseResponseInfo res = new BaseResponseInfo();
         try {
+            Long materialId = obj.getLong("materialId");
+            if (materialId == null) {
+                res.code = 400;
+                res.data = "商品ID不能为空";
+                return res;
+            }
+
             // 更新商品的库存告急状态为忽略风险
             materialService.updateStockAlertStatus(materialId, "RISK_IGNORED", null);
 
@@ -1639,17 +1646,24 @@ public class DepotItemController {
 
     /**
      * 关注库存风险
-     * @param materialId 商品ID
+     * @param obj 包含materialId的JSON对象
      * @param request
      * @return
      */
     @PostMapping(value = "/focusStockRisk")
     @ApiOperation(value = "关注库存风险")
     public BaseResponseInfo focusStockRisk(
-            @RequestParam("materialId") Long materialId,
+            @RequestBody JSONObject obj,
             HttpServletRequest request) {
         BaseResponseInfo res = new BaseResponseInfo();
         try {
+            Long materialId = obj.getLong("materialId");
+            if (materialId == null) {
+                res.code = 400;
+                res.data = "商品ID不能为空";
+                return res;
+            }
+
             // 重新计算库存告急状态
             BigDecimal currentStock = materialService.getCurrentStockByMaterialId(materialId);
             BigDecimal sixMonthsSales = depotItemMapperEx.getSixMonthsSalesByMaterialId(materialId,

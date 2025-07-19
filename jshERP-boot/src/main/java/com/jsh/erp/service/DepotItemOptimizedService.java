@@ -417,33 +417,40 @@ public class DepotItemOptimizedService {
 
         try {
             for (MaterialStockPeriodVo stock : stockList) {
-                // 如果已经是忽略风险状态，跳过计算
-                if ("RISK_IGNORED".equals(stock.getStockAlertStatus())) {
-                    continue;
-                }
+                // 如果数据库中已经有状态，直接使用（SQL查询已经获取了状态）
+                String currentStatus = stock.getStockAlertStatus();
 
-                // 获取当前库存
-                BigDecimal currentStock = stock.getCurrentPeriodStock();
-                if (currentStock == null) {
-                    currentStock = BigDecimal.ZERO;
-                }
+                // 如果没有状态或状态为空，则计算新状态
+                if (currentStatus == null || currentStatus.trim().isEmpty()) {
+                    // 获取当前库存
+                    BigDecimal currentStock = stock.getCurrentPeriodStock();
+                    if (currentStock == null) {
+                        currentStock = BigDecimal.ZERO;
+                    }
 
-                // 计算过去6个月的销量
-                BigDecimal sixMonthsSales = calculateSixMonthsSales(stock.getMaterialId(), tenantId);
-                stock.setLastSixMonthsSales(sixMonthsSales);
+                    // 计算过去6个月的销量
+                    BigDecimal sixMonthsSales = calculateSixMonthsSales(stock.getMaterialId(), tenantId);
+                    stock.setLastSixMonthsSales(sixMonthsSales);
 
-                // 计算库存告急状态
-                String alertStatus;
-                if (currentStock.compareTo(sixMonthsSales) >= 0) {
-                    alertStatus = "NO_RISK";  // 无风险
+                    // 计算库存告急状态
+                    String alertStatus;
+                    if (currentStock.compareTo(sixMonthsSales) >= 0) {
+                        alertStatus = "NO_RISK";  // 无风险
+                    } else {
+                        alertStatus = "STOCK_ALERT";  // 库存告急
+                    }
+
+                    stock.setStockAlertStatus(alertStatus);
+
+                    // 异步更新数据库中的状态（避免影响查询性能）
+                    updateMaterialStockAlertStatusAsync(stock.getMaterialId(), alertStatus, sixMonthsSales);
                 } else {
-                    alertStatus = "STOCK_ALERT";  // 库存告急
+                    // 如果已经有状态，确保六个月销量数据也存在
+                    if (stock.getLastSixMonthsSales() == null) {
+                        BigDecimal sixMonthsSales = calculateSixMonthsSales(stock.getMaterialId(), tenantId);
+                        stock.setLastSixMonthsSales(sixMonthsSales);
+                    }
                 }
-
-                stock.setStockAlertStatus(alertStatus);
-
-                // 异步更新数据库中的状态（避免影响查询性能）
-                updateMaterialStockAlertStatusAsync(stock.getMaterialId(), alertStatus, sixMonthsSales);
             }
         } catch (Exception e) {
             logger.error("计算库存告急状态失败", e);

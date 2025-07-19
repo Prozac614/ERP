@@ -139,19 +139,21 @@
             :rowSelection="{selectedRowKeys: selectedRowKeys, onChange: onSelectChange}"
             @change="handleTableChange">
             <span slot="action" slot-scope="text, record">
-              <a @click="viewChart(record)">查看图表</a>
-              <a-divider type="vertical" v-if="record.stockAlertStatus === 'STOCK_ALERT'" />
-              <a v-if="record.stockAlertStatus === 'STOCK_ALERT'"
-                 @click="ignoreStockRisk(record)"
-                 style="color: #fa8c16;">
-                忽略风险
-              </a>
-              <a-divider type="vertical" v-if="record.stockAlertStatus === 'RISK_IGNORED'" />
-              <a v-if="record.stockAlertStatus === 'RISK_IGNORED'"
-                 @click="focusStockRisk(record)"
-                 style="color: #1890ff;">
-                关注风险
-              </a>
+              <div>
+                <a @click="viewChart(record)">查看图表</a>
+              </div>
+              <div v-if="record.stockAlertStatus === 'STOCK_ALERT'" style="margin-top: 4px;">
+                <a @click="ignoreStockRisk(record)"
+                   style="color: #fa8c16;">
+                  忽略风险
+                </a>
+              </div>
+              <div v-if="record.stockAlertStatus === 'RISK_IGNORED'" style="margin-top: 4px;">
+                <a @click="focusStockRisk(record)"
+                   style="color: #1890ff;">
+                  关注风险
+                </a>
+              </div>
             </span>
             <template slot="customRenderStock" slot-scope="value, record">
               <span style="color:green" v-if="value > 0">{{value || 0}}</span>
@@ -173,7 +175,7 @@
                 <a-icon type="eye-invisible" /> 忽略风险
               </a-tag>
               <a-tag v-else color="default">
-                <a-icon type="question-circle" /> 未知状态
+                <a-icon type="question-circle" /> 待计算
               </a-tag>
             </template>
           </a-table>
