@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -12,13 +13,15 @@
             padding: 20px;
             background-color: #f5f5f5;
         }
+
         .container {
             background: white;
             padding: 20px;
             border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
             margin-bottom: 20px;
         }
+
         .button {
             background-color: #1890ff;
             color: white;
@@ -28,18 +31,23 @@
             cursor: pointer;
             margin: 5px;
         }
+
         .button:hover {
             background-color: #40a9ff;
         }
+
         .button.success {
             background-color: #52c41a;
         }
+
         .button.warning {
             background-color: #faad14;
         }
+
         .button.danger {
             background-color: #ff4d4f;
         }
+
         .result {
             background-color: #f6f6f6;
             padding: 15px;
@@ -50,37 +58,44 @@
             max-height: 400px;
             overflow-y: auto;
         }
+
         .success {
             background-color: #f6ffed;
             border: 1px solid #b7eb8f;
             color: #389e0d;
         }
+
         .error {
             background-color: #fff2f0;
             border: 1px solid #ffccc7;
             color: #cf1322;
         }
+
         .warning {
             background-color: #fffbe6;
             border: 1px solid #ffe58f;
             color: #d48806;
         }
+
         .progress {
             background-color: #e6f7ff;
             border: 1px solid #91d5ff;
             color: #0050b3;
         }
+
         h2 {
             color: #1890ff;
             border-bottom: 2px solid #1890ff;
             padding-bottom: 10px;
         }
+
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 15px;
             margin: 15px 0;
         }
+
         .stats-card {
             background: #fafafa;
             padding: 15px;
@@ -88,16 +103,19 @@
             border: 1px solid #d9d9d9;
             text-align: center;
         }
+
         .stats-number {
             font-size: 24px;
             font-weight: bold;
             color: #1890ff;
         }
+
         .stats-label {
             font-size: 14px;
             color: #666;
             margin-top: 5px;
         }
+
         .progress-bar {
             width: 100%;
             height: 20px;
@@ -106,6 +124,7 @@
             overflow: hidden;
             margin: 10px 0;
         }
+
         .progress-fill {
             height: 100%;
             background-color: #1890ff;
@@ -113,17 +132,30 @@
         }
     </style>
 </head>
+
 <body>
     <h1>📦 当前库存初始化测试工具</h1>
-    
+
+    <div class="container" style="background-color: #e6f7ff; border: 1px solid #91d5ff;">
+        <h3 style="color: #0050b3; margin-top: 0;">💡 重要提示</h3>
+        <p><strong>新功能：</strong>现在点击"库存预警计算"按钮会自动更新当前库存表！</p>
+        <p>如果您只是想修复库存预警报表无数据的问题，可以直接：</p>
+        <ol>
+            <li>点击首页的"库存预警检查"按钮</li>
+            <li>等待计算完成</li>
+            <li>查看库存预警报表</li>
+        </ol>
+        <p>本页面的手动初始化功能主要用于深度诊断和修复。</p>
+    </div>
+
     <!-- 状态检查 -->
     <div class="container">
         <h2>1. 当前库存状态检查</h2>
         <p>检查当前库存表的数据完整性</p>
-        
+
         <button class="button" onclick="checkCurrentStockStatus()">检查状态</button>
         <button class="button" onclick="refreshStatus()">刷新</button>
-        
+
         <div id="statusStats" class="stats-grid" style="display: none;">
             <div class="stats-card">
                 <div class="stats-number" id="materialCount">-</div>
@@ -150,11 +182,11 @@
                 <div class="stats-label">完整度 (%)</div>
             </div>
         </div>
-        
+
         <div class="progress-bar" id="completenessBar" style="display: none;">
             <div class="progress-fill" id="completenessProgress"></div>
         </div>
-        
+
         <div id="statusResult" class="result"></div>
     </div>
 
@@ -162,14 +194,14 @@
     <div class="container">
         <h2>2. 当前库存初始化</h2>
         <p>为所有商品和仓库组合创建当前库存记录</p>
-        
+
         <button class="button warning" onclick="initializeCurrentStock()">开始初始化</button>
         <button class="button" onclick="monitorProgress()" id="monitorBtn" style="display: none;">监控进度</button>
-        
+
         <div id="initProgress" class="progress-bar" style="display: none;">
             <div class="progress-fill" id="initProgressFill"></div>
         </div>
-        
+
         <div id="initResult" class="result"></div>
     </div>
 
@@ -177,10 +209,10 @@
     <div class="container">
         <h2>3. 功能验证测试</h2>
         <p>验证初始化后的库存预警功能是否正常</p>
-        
+
         <button class="button success" onclick="testStockWarningAfterInit()">测试库存预警</button>
         <button class="button" onclick="recalculateSafeStock()">重新计算安全库存</button>
-        
+
         <div id="testResult" class="result"></div>
     </div>
 
@@ -193,17 +225,17 @@
             const resultDiv = document.getElementById('statusResult');
             const statsDiv = document.getElementById('statusStats');
             const progressBar = document.getElementById('completenessBar');
-            
+
             resultDiv.className = 'result progress';
             resultDiv.textContent = '正在检查当前库存状态...\n';
 
             try {
                 const response = await fetch(`${API_BASE}/materialCurrentStock/checkCurrentStockStatus`);
                 const data = await response.json();
-                
+
                 if (data.code === 200) {
                     const result = data.data;
-                    
+
                     // 更新统计卡片
                     document.getElementById('materialCount').textContent = result.materialCount;
                     document.getElementById('depotCount').textContent = result.depotCount;
@@ -211,21 +243,21 @@
                     document.getElementById('actualRecords').textContent = result.actualRecords;
                     document.getElementById('missingRecords').textContent = result.missingRecords;
                     document.getElementById('completeness').textContent = result.completeness.toFixed(1);
-                    
+
                     // 更新进度条
                     const progressFill = document.getElementById('completenessProgress');
                     progressFill.style.width = result.completeness + '%';
-                    
+
                     // 显示统计信息
                     statsDiv.style.display = 'grid';
                     progressBar.style.display = 'block';
-                    
+
                     // 设置结果样式
-                    const statusClass = result.completeness >= 100 ? 'success' : 
-                                      result.completeness >= 50 ? 'warning' : 'error';
-                    const statusIcon = result.completeness >= 100 ? '✅' : 
-                                     result.completeness >= 50 ? '⚠️' : '❌';
-                    
+                    const statusClass = result.completeness >= 100 ? 'success' :
+                        result.completeness >= 50 ? 'warning' : 'error';
+                    const statusIcon = result.completeness >= 100 ? '✅' :
+                        result.completeness >= 50 ? '⚠️' : '❌';
+
                     resultDiv.className = `result ${statusClass}`;
                     resultDiv.textContent = `${statusIcon} 当前库存状态检查完成\n\n` +
                         `商品数量: ${result.materialCount}\n` +
@@ -234,13 +266,13 @@
                         `实际记录数: ${result.actualRecords}\n` +
                         `缺失记录数: ${result.missingRecords}\n` +
                         `数据完整度: ${result.completeness.toFixed(1)}%\n\n`;
-                    
+
                     if (result.completeness < 100) {
                         resultDiv.textContent += '建议执行库存初始化来补全缺失的记录。';
                     } else {
                         resultDiv.textContent += '当前库存数据完整，可以正常使用库存预警功能。';
                     }
-                    
+
                 } else {
                     resultDiv.className = 'result error';
                     resultDiv.textContent = `❌ 检查失败: ${data.data}`;
@@ -261,12 +293,12 @@
             if (!confirm('初始化当前库存可能需要较长时间，确定要继续吗？')) {
                 return;
             }
-            
+
             const resultDiv = document.getElementById('initResult');
             const progressBar = document.getElementById('initProgress');
             const progressFill = document.getElementById('initProgressFill');
             const monitorBtn = document.getElementById('monitorBtn');
-            
+
             resultDiv.className = 'result progress';
             resultDiv.textContent = '正在初始化当前库存数据，请稍候...\n';
             progressBar.style.display = 'block';
@@ -277,18 +309,18 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' }
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.code === 200) {
                     const result = data.data;
                     const successRate = result.totalCount > 0 ? (result.successCount / result.totalCount * 100) : 0;
-                    
+
                     progressFill.style.width = '100%';
-                    
+
                     const statusClass = result.failedCount === 0 ? 'success' : 'warning';
                     const statusIcon = result.failedCount === 0 ? '✅' : '⚠️';
-                    
+
                     resultDiv.className = `result ${statusClass}`;
                     resultDiv.textContent = `${statusIcon} 当前库存初始化完成！\n\n` +
                         `总记录数: ${result.totalCount}\n` +
@@ -300,16 +332,16 @@
                         `仓库数量: ${result.depotCount}\n` +
                         `成功率: ${successRate.toFixed(1)}%\n\n` +
                         `${result.message}`;
-                    
+
                     if (result.failedCount === 0) {
                         resultDiv.textContent += '\n\n🎉 所有记录初始化成功！现在可以测试库存预警功能。';
                     } else {
                         resultDiv.textContent += `\n\n⚠️ 有 ${result.failedCount} 条记录初始化失败，请检查日志。`;
                     }
-                    
+
                     // 自动刷新状态
                     setTimeout(checkCurrentStockStatus, 1000);
-                    
+
                 } else {
                     resultDiv.className = 'result error';
                     resultDiv.textContent = `❌ 初始化失败: ${data.data}`;
@@ -333,11 +365,11 @@
                 resultDiv.textContent += '1. 检查库存预警报表...\n';
                 const warningResponse = await fetch(`${API_BASE}/depotItem/findStockWarningCount?currentPage=1&pageSize=5&materialParam=`);
                 const warningData = await warningResponse.json();
-                
+
                 if (warningData.code === 200) {
                     const total = warningData.data.total || 0;
                     resultDiv.textContent += `   ✅ 预警报表查询成功，发现 ${total} 个预警商品\n`;
-                    
+
                     if (total > 0) {
                         resultDiv.textContent += '   预警商品示例:\n';
                         warningData.data.rows.slice(0, 3).forEach((item, index) => {
@@ -347,12 +379,12 @@
                 } else {
                     resultDiv.textContent += `   ❌ 预警报表查询失败: ${warningData.data}\n`;
                 }
-                
+
                 // 2. 检查当前库存状态
                 resultDiv.textContent += '\n2. 重新检查当前库存状态...\n';
                 const statusResponse = await fetch(`${API_BASE}/materialCurrentStock/checkCurrentStockStatus`);
                 const statusData = await statusResponse.json();
-                
+
                 if (statusData.code === 200) {
                     const status = statusData.data;
                     resultDiv.textContent += `   ✅ 当前库存完整度: ${status.completeness.toFixed(1)}%\n`;
@@ -360,7 +392,7 @@
                 } else {
                     resultDiv.textContent += `   ❌ 状态检查失败: ${statusData.data}\n`;
                 }
-                
+
                 resultDiv.className = 'result success';
                 resultDiv.textContent += '\n🎉 库存预警功能测试完成！\n';
                 resultDiv.textContent += '\n如果预警商品数量为0，这可能是正常情况（所有商品库存都在安全范围内）。\n';
@@ -368,7 +400,7 @@
                 resultDiv.textContent += '1. 设置商品的安全库存阈值\n';
                 resultDiv.textContent += '2. 调整某些商品的当前库存使其超出安全范围\n';
                 resultDiv.textContent += '3. 重新计算安全库存';
-                
+
             } catch (error) {
                 resultDiv.className = 'result error';
                 resultDiv.textContent += `\n❌ 测试异常: ${error.message}`;
@@ -387,14 +419,14 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({})
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.code === 200) {
                     const taskId = data.data.taskId;
                     resultDiv.textContent += `✅ 安全库存计算任务已启动，任务ID: ${taskId}\n`;
                     resultDiv.textContent += '正在监控计算进度...\n';
-                    
+
                     // 监控任务进度
                     await monitorCalculationTask(taskId, resultDiv);
                 } else {
@@ -413,11 +445,11 @@
                 try {
                     const response = await fetch(`${API_BASE}/stockWarning/getTaskStatus?taskId=${taskId}`);
                     const data = await response.json();
-                    
+
                     if (data.code === 200) {
                         const status = data.data;
                         resultDiv.textContent += `进度: ${status.processedCount || 0}/${status.totalCount || 0} (${status.status})\n`;
-                        
+
                         if (status.status === 'COMPLETED') {
                             resultDiv.className = 'result success';
                             resultDiv.textContent += `✅ 安全库存计算完成！成功: ${status.successCount}, 失败: ${status.failedCount}\n`;
@@ -434,19 +466,20 @@
                     resultDiv.textContent += `❌ 监控异常: ${error.message}\n`;
                     return;
                 }
-                
+
                 await new Promise(resolve => setTimeout(resolve, 1000));
             }
-            
+
             resultDiv.className = 'result warning';
             resultDiv.textContent += '⚠️ 计算超时，请手动检查任务状态\n';
         }
 
         // 页面加载完成后自动检查状态
-        window.onload = function() {
+        window.onload = function () {
             console.log('当前库存初始化测试工具已加载');
             checkCurrentStockStatus();
         };
     </script>
 </body>
+
 </html>

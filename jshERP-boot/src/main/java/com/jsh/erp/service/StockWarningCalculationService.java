@@ -36,6 +36,9 @@ public class StockWarningCalculationService {
     
     @Resource
     private MaterialInitialStockMapper materialInitialStockMapper;
+
+    @Resource
+    private DepotItemService depotItemService;
     
     @Resource
     private DepotMapper depotMapper;
@@ -192,22 +195,33 @@ public class StockWarningCalculationService {
         try {
             logger.info("开始执行库存预警计算，任务ID: {}, 商品数量: {}, 仓库数量: {}",
                     task.getTaskId(), materials.size(), depots.size());
+            logger.info("同时更新当前库存表数据");
 
             for (Material material : materials) {
                 try {
-                    // 计算该商品的最低安全库存阈值，传入预先获取的仓库列表
+                    // 1. 先更新该商品在所有仓库的当前库存
+                    for (Depot depot : depots) {
+                        try {
+                            depotItemService.updateCurrentStockFun(material.getId(), depot.getId());
+                        } catch (Exception e) {
+                            logger.warn("更新商品{}在仓库{}的当前库存失败: {}",
+                                    material.getId(), depot.getId(), e.getMessage());
+                        }
+                    }
+
+                    // 2. 计算该商品的最低安全库存阈值
                     calculateMaterialSafeStock(material, depots);
                     task.incrementSuccess();
 
                 } catch (Exception e) {
-                    logger.error("计算商品{}的安全库存失败", material.getId(), e);
+                    logger.error("处理商品{}失败", material.getId(), e);
                     task.incrementFailed();
                 }
 
                 task.incrementProcessed();
 
-                // 每处理100个商品记录一次日志
-                if (task.getProcessedCount() % 100 == 0) {
+                // 每处理50个商品记录一次日志（降低频率因为现在处理更多操作）
+                if (task.getProcessedCount() % 50 == 0) {
                     logger.info("任务进度: {}/{}, 成功: {}, 失败: {}",
                             task.getProcessedCount(), task.getTotalCount(),
                             task.getSuccessCount(), task.getFailedCount());
@@ -219,6 +233,7 @@ public class StockWarningCalculationService {
 
             logger.info("库存预警计算任务完成，任务ID: {}, 总数: {}, 成功: {}, 失败: {}",
                     task.getTaskId(), task.getTotalCount(), task.getSuccessCount(), task.getFailedCount());
+            logger.info("当前库存表更新完成");
 
         } catch (Exception e) {
             task.setStatus("FAILED");

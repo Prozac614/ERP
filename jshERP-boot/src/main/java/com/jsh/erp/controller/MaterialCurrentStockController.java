@@ -60,7 +60,7 @@ public class MaterialCurrentStockController {
             logger.info("开始初始化所有商品的当前库存数据");
             
             // 获取所有商品
-            List<Material> materials = materialService.getAllList();
+            List<Material> materials = materialService.getMaterial();
             // 获取所有仓库
             List<Depot> depots = depotService.getAllList();
             
@@ -203,7 +203,7 @@ public class MaterialCurrentStockController {
         BaseResponseInfo res = new BaseResponseInfo();
         try {
             // 获取商品总数
-            List<Material> materials = materialService.getAllList();
+            List<Material> materials = materialService.getMaterial();
             // 获取仓库总数
             List<Depot> depots = depotService.getAllList();
             

@@ -30,7 +30,7 @@ public class StockWarningController {
     
     /**
      * 开始库存预警检查计算
-     * 
+     *
      * @param request
      * @return
      */
@@ -40,16 +40,17 @@ public class StockWarningController {
         BaseResponseInfo res = new BaseResponseInfo();
         try {
             String taskId = stockWarningCalculationService.startStockWarningCalculation();
-            
+
             Map<String, Object> result = new HashMap<>();
             result.put("taskId", taskId);
-            result.put("message", "库存预警计算任务已启动");
-            
+            result.put("message", "库存预警计算任务已启动，同时会更新当前库存表");
+            result.put("note", "此操作会同时更新当前库存数据和计算安全库存阈值");
+
             res.code = 200;
             res.data = result;
-            
-            logger.info("库存预警计算任务启动成功，任务ID: {}", taskId);
-            
+
+            logger.info("库存预警计算任务启动成功，任务ID: {}，将同时更新当前库存表", taskId);
+
         } catch (Exception e) {
             logger.error("启动库存预警计算任务失败", e);
             res.code = 500;
