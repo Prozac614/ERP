@@ -47,6 +47,9 @@ public class StockWarningCalculationService {
     
     @Resource
     private UserService userService;
+
+    @Resource
+    private MaterialExtendService materialExtendService;
     
     // 任务状态管理
     private static final Map<String, CalculationTask> taskMap = new ConcurrentHashMap<>();
@@ -336,7 +339,18 @@ public class StockWarningCalculationService {
 
         result.put("materialId", materialId);
         result.put("materialName", material.getName());
-        result.put("barCode", material.getBarCode());
+
+        // 获取商品编码（从MaterialExtend表中获取默认的barCode）
+        String barCode = "";
+        try {
+            List<MaterialExtend> meList = materialExtendService.getListByMaterialIdAndDefaultFlag(materialId, "1");
+            if (meList != null && !meList.isEmpty()) {
+                barCode = meList.get(0).getBarCode();
+            }
+        } catch (Exception e) {
+            logger.warn("获取商品{}的编码失败", materialId, e);
+        }
+        result.put("barCode", barCode);
 
         // 计算平均日销量
         BigDecimal averageDailySales = materialService.calculateAverageDailySales(materialId);
