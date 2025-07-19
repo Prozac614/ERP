@@ -343,9 +343,12 @@ public class StockWarningCalculationService {
         // 获取商品编码（从MaterialExtend表中获取默认的barCode）
         String barCode = "";
         try {
-            List<MaterialExtend> meList = materialExtendService.getListByMaterialIdAndDefaultFlag(materialId, "1");
-            if (meList != null && !meList.isEmpty()) {
-                barCode = meList.get(0).getBarCode();
+            Long meId = materialExtendService.selectIdByMaterialIdAndDefaultFlag(materialId, "1");
+            if (meId != null && meId > 0) {
+                MaterialExtend me = materialExtendService.getMaterialExtend(meId);
+                if (me != null) {
+                    barCode = me.getBarCode();
+                }
             }
         } catch (Exception e) {
             logger.warn("获取商品{}的编码失败", materialId, e);
