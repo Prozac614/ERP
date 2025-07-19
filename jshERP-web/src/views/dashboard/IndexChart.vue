@@ -39,7 +39,6 @@
         <div class="table-operator"  style="margin-top: 5px">
           <a-button @click="handleExport" type="primary" icon="download">导出库存</a-button>
           <a-button icon="reload" @click="refreshData">刷新数据</a-button>
-          <a-button @click="startStockWarningCalculation" type="default" icon="warning">库存预警检查</a-button>
 
           <!-- 暂时隐藏展示所有数据按钮 -->
           <!-- 
@@ -170,12 +169,7 @@
             @cancel="handleChartModalCancel"
           />
 
-          <!-- 库存预警计算进度弹窗 -->
-          <StockWarningProgressModal
-            :visible="progressModal.visible"
-            :taskStatus="progressModal.taskStatus"
-            @cancel="handleProgressModalCancel"
-          />
+
 
         </div>
       </a-card>
@@ -191,8 +185,6 @@
   import VirtualTableOptimized from '@/components/VirtualTableOptimized'
   import VirtualTableUltraOptimized from '@/components/VirtualTableUltraOptimized'
   import StockChartModal from '@/components/charts/StockChartModal'
-  import StockWarningProgressModal from '@/components/StockWarningProgressModal'
-  import { startStockWarningCalculation } from '@/api/stockWarning'
 
   export default {
     name: "IndexChart",
@@ -201,8 +193,7 @@
       VirtualTable,
       VirtualTableOptimized,
       VirtualTableUltraOptimized,
-      StockChartModal,
-      StockWarningProgressModal
+      StockChartModal
     },
     data () {
       return {
@@ -254,11 +245,7 @@
           visible: false,
           currentMaterial: {}
         },
-        // 库存预警进度弹窗控制
-        progressModal: {
-          visible: false,
-          taskStatus: {}
-        },
+
         // 表格滚动
         scroll: { x: 800 },
         // 默认索引
@@ -726,71 +713,7 @@
         this.$message.info('显示低库存预警')
       },
 
-      // 库存预警计算相关方法
-      startStockWarningCalculation() {
-        this.$confirm({
-          title: '库存预警检查',
-          content: '即将开始计算所有商品的安全库存阈值，这可能需要一些时间。确定要继续吗？',
-          okText: '确定',
-          cancelText: '取消',
-          onOk: () => {
-            this.executeStockWarningCalculation()
-          }
-        })
-      },
 
-      async executeStockWarningCalculation() {
-        try {
-          const response = await startStockWarningCalculation()
-          if (response.code === 200) {
-            this.progressModal.taskStatus = {
-              taskId: response.data.taskId,
-              status: 'RUNNING',
-              processedCount: 0,
-              totalCount: 0,
-              successCount: 0,
-              failedCount: 0
-            }
-            this.progressModal.visible = true
-            this.startPollingTaskStatus(response.data.taskId)
-            this.$message.success('库存预警计算任务已启动')
-          } else {
-            this.$message.error(response.data || '启动计算任务失败')
-          }
-        } catch (error) {
-          console.error('启动库存预警计算失败:', error)
-          this.$message.error('启动计算任务失败')
-        }
-      },
-
-      startPollingTaskStatus(taskId) {
-        const pollInterval = setInterval(async () => {
-          try {
-            const response = await getAction('/stockWarning/getTaskStatus', { taskId })
-            if (response.code === 200) {
-              this.progressModal.taskStatus = response.data
-
-              // 如果任务完成或失败，停止轮询
-              if (response.data.status === 'COMPLETED' || response.data.status === 'FAILED') {
-                clearInterval(pollInterval)
-                if (response.data.status === 'COMPLETED') {
-                  this.$message.success(`库存预警计算完成！成功处理 ${response.data.successCount} 个商品`)
-                } else {
-                  this.$message.error('库存预警计算失败')
-                }
-              }
-            }
-          } catch (error) {
-            console.error('查询任务状态失败:', error)
-            clearInterval(pollInterval)
-          }
-        }, 2000) // 每2秒查询一次状态
-      },
-
-      handleProgressModalCancel() {
-        this.progressModal.visible = false
-        this.progressModal.taskStatus = {}
-      },
 
       // 优化虚拟表格相关方法
       handleCellClick(cellInfo) {
