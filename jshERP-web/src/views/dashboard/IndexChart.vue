@@ -38,8 +38,14 @@
         <!-- 操作按钮区域 -->
         <div class="table-operator"  style="margin-top: 5px">
           <a-button @click="handleExport" type="primary" icon="download">导出库存</a-button>
-          <a-button icon="reload" @click="loadStockData(1)">刷新数据</a-button>
+          <a-button icon="reload" @click="refreshData">刷新数据</a-button>
           <a-button icon="warning" @click="showLowStockAlert">低库存预警</a-button>
+          <a-button 
+            :type="showAllProducts ? 'default' : 'primary'" 
+            :icon="showAllProducts ? 'table' : 'unordered-list'" 
+            @click="toggleShowAllProducts">
+            {{ showAllProducts ? '分页显示' : '展示所有商品' }}
+          </a-button>
           <a-popover trigger="click" placement="right">
             <template slot="content">
               <a-checkbox-group @change="onColChange" v-model="settingDataIndex" :defaultValue="settingDataIndex">
@@ -93,7 +99,7 @@
             :columns="columns"
             :dataSource="dataSource"
             :components="handleDrag(columns)"
-            :pagination="ipagination"
+            :pagination="paginationConfig"
             :scroll="scroll"
             :loading="loading"
             :rowSelection="{selectedRowKeys: selectedRowKeys, onChange: onSelectChange}"
@@ -115,6 +121,15 @@
               <span style="color: #ccc" v-else>-</span>
             </template>
           </a-table>
+          
+          <!-- 状态提示 -->
+          <div v-if="showAllProducts" style="margin-top: 16px; padding: 12px; background: #f6ffed; border: 1px solid #b7eb8f; border-radius: 6px;">
+            <a-icon type="info-circle" style="color: #52c41a; margin-right: 8px;" />
+            <span style="color: #389e0d;">
+              当前显示所有商品，共 {{ dataSource.length }} 个商品
+              <span v-if="dateColumns.length > 0">，{{ dateColumns.length }} 个日期列</span>
+            </span>
+          </div>
         </div>
       </a-card>
     </a-col>
@@ -144,6 +159,8 @@
         loadingRequest: null,
         dailyOutData: {},
         dateColumns: [],
+        // 展示所有商品控制
+        showAllProducts: false,
         // 页面样式
         cardStyle: 'padding: 0',
         loading: true,
@@ -201,6 +218,13 @@
       },
       allDataIndex() {
         return [...this.settingDataIndex, ...this.dateColumns.map(col => col.dataIndex)]
+      },
+      // 动态分页配置
+      paginationConfig() {
+        if (this.showAllProducts) {
+          return false // 展示所有商品时禁用分页
+        }
+        return this.ipagination
       }
     },
     created() {
@@ -223,14 +247,14 @@
         if (!beginDate || !endDate) return { valid: true }
         
         const daysDiff = endDate.diff(beginDate, 'days')
-        if (daysDiff > 90) {
-          this.$message.warning('为了保证性能，日期范围不能超过90天')
+        if (daysDiff > 180) {
+          this.$message.warning('为了保证性能，日期范围不能超过6个月')
           return { 
             valid: false, 
-            adjustedRange: [endDate.clone().subtract(90, 'days'), endDate]
+            adjustedRange: [endDate.clone().subtract(6, 'months'), endDate]
           }
         }
-        if (daysDiff > 30) {
+        if (daysDiff > 60) {
           this.$message.info('日期范围较大，可能影响加载速度')
         }
         return { valid: true }
@@ -282,10 +306,81 @@
       // 防抖处理的数据加载
       debouncedLoadData: null,
 
+      // 切换展示所有商品模式
+      toggleShowAllProducts() {
+        this.showAllProducts = !this.showAllProducts
+        
+        if (this.showAllProducts) {
+          // 切换到展示所有商品模式时，给出性能警告
+          this.$confirm({
+            title: '性能提示',
+            content: '展示所有商品可能会影响页面性能，特别是在商品数量较多或选择的日期范围较大时。确定要继续吗？',
+            okText: '继续',
+            cancelText: '取消',
+            onOk: () => {
+              this.loadAllProducts()
+            },
+            onCancel: () => {
+              this.showAllProducts = false
+            }
+          })
+        } else {
+          // 切换回分页模式
+          this.ipagination.current = 1
+          this.debouncedLoadStockData()
+        }
+      },
+
+      // 加载所有商品数据
+      loadAllProducts() {
+        this.loading = true
+        
+        const params = {
+          currentPage: 1,
+          pageSize: 10000, // 设置一个很大的pageSize来获取所有数据
+          materialParam: this.queryParam.materialParam || ''
+        }
+        
+        // 如果有日期范围参数，添加到请求中
+        if (this.queryParam.createTimeRange && this.queryParam.createTimeRange.length === 2) {
+          params.beginTime = this.queryParam.createTimeRange[0].format('YYYY-MM-DD')
+          params.endTime = this.queryParam.createTimeRange[1].format('YYYY-MM-DD')
+        }
+
+        // 取消之前的请求
+        if (this.loadingRequest) {
+          this.loadingRequest.abort()
+        }
+
+        this.loadingRequest = getAction('/depotItem/getMaterialStockWithDailyOut', params)
+        this.loadingRequest.then((res) => {
+          if (res.code === 200) {
+            this.processDataResponse(res.data)
+            this.$message.success(`已加载 ${this.dataSource.length} 个商品`)
+          } else {
+            this.$message.error(res.data || '数据加载失败')
+            this.showAllProducts = false // 失败时恢复分页模式
+          }
+        }).catch((error) => {
+          if (error.name !== 'AbortError') {
+            console.error('获取所有商品数据失败:', error)
+            this.$message.error('数据加载失败')
+            this.showAllProducts = false // 失败时恢复分页模式
+          }
+        }).finally(() => {
+          this.loading = false
+          this.loadingRequest = null
+        })
+      },
+
       // 查询方法
       searchQuery() {
-        this.ipagination.current = 1
-        this.debouncedLoadStockData()
+        if (this.showAllProducts) {
+          this.loadAllProducts()
+        } else {
+          this.ipagination.current = 1
+          this.debouncedLoadStockData()
+        }
       },
       // 重置查询
       searchReset() {
@@ -307,12 +402,28 @@
         }, 500)
       },
 
+      // 刷新数据
+      refreshData() {
+        // 清除缓存
+        this.dataCache.clear()
+        
+        if (this.showAllProducts) {
+          this.loadAllProducts()
+        } else {
+          this.loadStockData(1)
+        }
+      },
+
       // 日期变化处理
       onDateChange(dates, dateStrings) {
         this.queryParam.createTimeRange = dates
         this.generateDateColumns()
         if (dates && dates.length === 2) {
-          this.debouncedLoadStockData()
+          if (this.showAllProducts) {
+            this.loadAllProducts()
+          } else {
+            this.debouncedLoadStockData()
+          }
         }
       },
       onDateOk(dates) {
@@ -420,10 +531,13 @@
       },
 
               
-      // 表格操作
+      // 表格操作      
       handleTableChange(pagination, filters, sorter) {
-        this.ipagination = pagination
-        this.loadStockData()
+        if (!this.showAllProducts) {
+          this.ipagination = pagination
+          this.loadStockData()
+        }
+        // 在展示所有商品模式下，不处理分页变化
       },
       onSelectChange(selectedRowKeys) {
         this.selectedRowKeys = selectedRowKeys
