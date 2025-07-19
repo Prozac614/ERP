@@ -137,4 +137,32 @@ public class StockWarningController {
         }
         return res;
     }
+
+    /**
+     * 强制执行单个商品的安全库存计算并更新数据库
+     *
+     * @param materialId 商品ID
+     * @param request
+     * @return
+     */
+    @PostMapping(value = "/forceCalculateAndUpdate")
+    @ApiOperation(value = "强制执行单个商品的安全库存计算并更新数据库")
+    public BaseResponseInfo forceCalculateAndUpdate(@RequestParam("materialId") Long materialId,
+                                                   HttpServletRequest request) {
+        BaseResponseInfo res = new BaseResponseInfo();
+        try {
+            Map<String, Object> result = stockWarningCalculationService.forceCalculateAndUpdateSingleMaterial(materialId);
+
+            res.code = 200;
+            res.data = result;
+
+            logger.info("强制计算并更新商品{}的安全库存完成", materialId);
+
+        } catch (Exception e) {
+            logger.error("强制计算并更新商品{}的安全库存失败", materialId, e);
+            res.code = 500;
+            res.data = "强制计算并更新失败: " + e.getMessage();
+        }
+        return res;
+    }
 }

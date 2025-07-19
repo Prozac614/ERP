@@ -241,7 +241,9 @@ public class DepotItemOptimizedService {
             // 定时任务中无法获取当前用户，传入null让数据库处理所有租户的数据
             Long tenantId = null;
 
-            depotItemMapperEx.refreshDailySummaryForRecentDays(days, tenantId);
+            // 暂时跳过这个操作以避免MyBatis-Plus拦截器问题
+            logger.warn("refreshDailySummaryForRecentDays 暂时禁用以避免MyBatis-Plus拦截器问题");
+            // depotItemMapperEx.refreshDailySummaryForRecentDays(days, tenantId);
 
             // 清除所有相关缓存
             if (redisTemplate != null) {
@@ -252,7 +254,7 @@ public class DepotItemOptimizedService {
                 }
             }
 
-            logger.info("最近 {} 天的汇总数据刷新完成", days);
+            logger.info("最近 {} 天的汇总数据刷新已跳过", days);
         } catch (Exception e) {
             logger.error("批量刷新汇总数据失败", e);
         }

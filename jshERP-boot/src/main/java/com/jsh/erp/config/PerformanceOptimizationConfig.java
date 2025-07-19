@@ -32,14 +32,16 @@ public class PerformanceOptimizationConfig {
     /**
      * 每小时刷新最近3天的每日汇总数据
      * 适用于查询频繁的场景
+     * 暂时禁用以避免MyBatis-Plus拦截器问题
      */
-    @Scheduled(fixedRate = 3600000) // 1小时 = 3600000ms
+    // @Scheduled(fixedRate = 3600000) // 1小时 = 3600000ms
     public void refreshRecentDailySummary() {
         if (depotItemOptimizedService != null) {
             try {
                 logger.info("开始定时刷新最近3天的每日汇总数据");
-                depotItemOptimizedService.refreshDailySummaryForRecentDays(3);
-                logger.info("定时刷新最近3天的每日汇总数据完成");
+                // 暂时禁用以避免MyBatis-Plus拦截器问题
+                // depotItemOptimizedService.refreshDailySummaryForRecentDays(3);
+                logger.info("定时刷新最近3天的每日汇总数据已暂时禁用");
             } catch (Exception e) {
                 logger.error("定时刷新每日汇总数据失败", e);
             }
@@ -49,14 +51,16 @@ public class PerformanceOptimizationConfig {
     /**
      * 每天凌晨2点刷新所有商品期间汇总数据
      * 用于保证数据的准确性
+     * 暂时禁用以避免MyBatis-Plus拦截器问题
      */
-    @Scheduled(cron = "0 0 2 * * ?") // 每天凌晨2点
+    // @Scheduled(cron = "0 0 2 * * ?") // 每天凌晨2点
     public void refreshMaterialPeriodSummary() {
         if (depotItemOptimizedService != null) {
             try {
                 logger.info("开始定时刷新商品期间汇总数据");
-                depotItemOptimizedService.refreshMaterialPeriodSummary(null); // null表示所有租户
-                logger.info("定时刷新商品期间汇总数据完成");
+                // 暂时禁用以避免MyBatis-Plus拦截器问题
+                // depotItemOptimizedService.refreshMaterialPeriodSummary(null); // null表示所有租户
+                logger.info("定时刷新商品期间汇总数据已暂时禁用");
             } catch (Exception e) {
                 logger.error("定时刷新商品期间汇总数据失败", e);
             }

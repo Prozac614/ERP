@@ -386,4 +386,80 @@ public class StockWarningCalculationService {
 
         return result;
     }
+
+    /**
+     * 强制计算并更新单个商品的安全库存
+     *
+     * @param materialId 商品ID
+     * @return 计算和更新结果
+     */
+    @Transactional(value = "transactionManager", rollbackFor = Exception.class)
+    public Map<String, Object> forceCalculateAndUpdateSingleMaterial(Long materialId) throws Exception {
+        Map<String, Object> result = new HashMap<>();
+
+        // 获取商品信息
+        Material material = materialMapper.selectByPrimaryKey(materialId);
+        if (material == null) {
+            throw new RuntimeException("商品不存在，ID: " + materialId);
+        }
+
+        logger.info("=== 开始强制计算并更新商品{}({})的安全库存 ===", material.getName(), materialId);
+
+        result.put("materialId", materialId);
+        result.put("materialName", material.getName());
+        result.put("startTime", new Date());
+
+        try {
+            // 执行计算和更新
+            calculateMaterialSafeStock(material);
+
+            // 获取更新后的安全库存设置
+            List<Depot> depots = getAllActiveDepots();
+            List<Map<String, Object>> updatedSettings = new ArrayList<>();
+
+            for (Depot depot : depots) {
+                MaterialInitialStockExample example = new MaterialInitialStockExample();
+                example.createCriteria()
+                        .andMaterialIdEqualTo(materialId)
+                        .andDepotIdEqualTo(depot.getId())
+                        .andDeleteFlagNotEqualTo(BusinessConstants.DELETE_FLAG_DELETED);
+
+                List<MaterialInitialStock> stockList = materialInitialStockMapper.selectByExample(example);
+
+                Map<String, Object> setting = new HashMap<>();
+                setting.put("depotId", depot.getId());
+                setting.put("depotName", depot.getName());
+
+                if (stockList != null && !stockList.isEmpty()) {
+                    MaterialInitialStock stock = stockList.get(0);
+                    setting.put("lowSafeStock", stock.getLowSafeStock());
+                    setting.put("highSafeStock", stock.getHighSafeStock());
+                    setting.put("updated", true);
+                } else {
+                    setting.put("lowSafeStock", null);
+                    setting.put("highSafeStock", null);
+                    setting.put("updated", false);
+                }
+
+                updatedSettings.add(setting);
+            }
+
+            result.put("updatedSettings", updatedSettings);
+            result.put("depotCount", depots.size());
+            result.put("status", "SUCCESS");
+            result.put("endTime", new Date());
+
+            logger.info("=== 商品{}({})的安全库存强制计算并更新完成 ===", material.getName(), materialId);
+
+        } catch (Exception e) {
+            result.put("status", "FAILED");
+            result.put("error", e.getMessage());
+            result.put("endTime", new Date());
+
+            logger.error("商品{}({})的安全库存强制计算并更新失败", material.getName(), materialId, e);
+            throw e;
+        }
+
+        return result;
+    }
 }
