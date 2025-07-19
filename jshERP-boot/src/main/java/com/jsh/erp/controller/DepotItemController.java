@@ -34,8 +34,12 @@ import org.springframework.web.multipart.MultipartFile;
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import java.io.UnsupportedEncodingException;
 import java.math.BigDecimal;
+import java.net.URLEncoder;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -1216,6 +1220,47 @@ public class DepotItemController {
             res.data = "获取数据失败: " + e.getMessage();
         }
         return res;
+    }
+
+    /**
+     * 导出商品库存数据到Excel
+     * @param currentPage
+     * @param pageSize
+     * @param materialParam
+     * @param beginTime
+     * @param endTime
+     * @param request
+     * @param response
+     * @throws Exception
+     */
+    @GetMapping(value = "/exportMaterialStock")
+    @ApiOperation(value = "导出商品库存数据到Excel")
+    public void exportMaterialStock(
+            @RequestParam(value = "currentPage", required = false) Integer currentPage,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize,
+            @RequestParam(value = "materialParam", required = false) String materialParam,
+            @RequestParam(value = "beginTime", required = false) String beginTime,
+            @RequestParam(value = "endTime", required = false) String endTime,
+            HttpServletRequest request,
+            HttpServletResponse response) throws Exception {
+        try {
+            // 设置响应头
+            response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            response.setCharacterEncoding("UTF-8");
+
+            // 生成文件名
+            String fileName = "商品库存数据_" + new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date()) + ".xlsx";
+            response.setHeader("Content-Disposition", "attachment; filename=" + URLEncoder.encode(fileName, "UTF-8"));
+
+            // 调用服务导出数据
+            depotItemOptimizedService.exportMaterialStockToExcel(
+                currentPage, pageSize, materialParam, beginTime, endTime, request, response.getOutputStream());
+
+        } catch (Exception e) {
+            logger.error("导出商品库存数据失败", e);
+            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+            response.getWriter().write("导出失败：" + e.getMessage());
+        }
     }
 
     /**

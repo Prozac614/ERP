@@ -760,7 +760,77 @@
         this.chartModal.currentMaterial = {}
       },
       handleExport() {
-        this.$message.info('导出库存数据功能')
+        this.$confirm({
+          title: '确认导出',
+          content: '是否导出当前查询条件下的所有商品库存数据？',
+          onOk: () => {
+            this.exportData()
+          }
+        })
+      },
+
+      // 导出数据
+      async exportData() {
+        try {
+          this.$message.loading('正在导出数据，请稍候...', 0)
+
+          // 构建导出参数
+          const params = new URLSearchParams()
+          params.append('currentPage', '1')
+          params.append('pageSize', '999999') // 导出所有数据
+
+          if (this.queryParam.materialParam) {
+            params.append('materialParam', this.queryParam.materialParam)
+          }
+          if (this.queryParam.beginTime) {
+            params.append('beginTime', this.queryParam.beginTime)
+          }
+          if (this.queryParam.endTime) {
+            params.append('endTime', this.queryParam.endTime)
+          }
+
+          // 发起导出请求
+          const response = await fetch(`${this.$store.getters.apiUrl}/depotItem/exportMaterialStock?${params.toString()}`, {
+            method: 'GET',
+            headers: {
+              'X-Access-Token': this.$store.getters.token,
+              'Content-Type': 'application/json'
+            }
+          })
+
+          if (!response.ok) {
+            throw new Error(`导出失败: ${response.status}`)
+          }
+
+          // 获取文件名
+          const contentDisposition = response.headers.get('Content-Disposition')
+          let filename = '商品库存数据.xlsx'
+          if (contentDisposition) {
+            const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
+            if (filenameMatch && filenameMatch[1]) {
+              filename = decodeURIComponent(filenameMatch[1].replace(/['"]/g, ''))
+            }
+          }
+
+          // 下载文件
+          const blob = await response.blob()
+          const url = window.URL.createObjectURL(blob)
+          const link = document.createElement('a')
+          link.href = url
+          link.download = filename
+          document.body.appendChild(link)
+          link.click()
+          document.body.removeChild(link)
+          window.URL.revokeObjectURL(url)
+
+          this.$message.destroy()
+          this.$message.success('导出成功！')
+
+        } catch (error) {
+          console.error('导出失败:', error)
+          this.$message.destroy()
+          this.$message.error('导出失败: ' + error.message)
+        }
       },
       showLowStockAlert() {
         this.$message.info('显示低库存预警')

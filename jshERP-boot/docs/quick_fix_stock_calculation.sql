@@ -80,7 +80,8 @@ BEGIN
         -- 本期结存：使用当前库存（确保是整数）
         COALESCE(cs.current_stock, 0) as current_period_stock,
 
-        -- 上期结存：根据库存平衡公式反推
+        -- 上期结存：上期结束时的商品库存
+        -- 计算方法：本期结存 - 本期入库 + 本期出库 = 上期结存
         GREATEST(0, COALESCE(cs.current_stock, 0) - COALESCE(ci.current_in, 0) + COALESCE(co.current_out, 0)) as previous_period_stock,
 
         -- 本期出库
