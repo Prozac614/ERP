@@ -654,20 +654,6 @@
         this.dailyOutData = data.dailyOutData || {}
         this.performanceStats = data.performanceStats || {}
 
-        // 临时调试：输出前几条数据的库存状态
-        console.log('=== 库存状态调试信息 ===')
-        this.dataSource.slice(0, 5).forEach((item, index) => {
-          console.log(`商品${index + 1}: ID=${item.materialId}, 名称=${item.materialName}, 状态=${item.stockAlertStatus}`)
-        })
-
-        // 统计各种状态的数量
-        const statusCount = {}
-        this.dataSource.forEach(item => {
-          const status = item.stockAlertStatus || 'NULL'
-          statusCount[status] = (statusCount[status] || 0) + 1
-        })
-        console.log('状态统计:', statusCount)
-
         // 合并每日出库数据到商品数据中
         this.mergeDataOptimized()
       },
@@ -834,31 +820,31 @@
         try {
           // 显示确认对话框
           this.$confirm({
-            title: '确认操作',
-            content: '此操作将重新计算所有商品的库存预警状态，可能需要较长时间，是否继续？',
-            okText: '确认',
+            title: '确认校验',
+            content: '此操作将重新校验所有商品的库存预警状态，校验结果将覆盖原有状态（包括忽略风险状态），是否继续？',
+            okText: '确认校验',
             cancelText: '取消',
             onOk: async () => {
               this.calculatingAlert = true
               try {
                 const res = await this.$http.post('/depotItem/calculateAllStockAlertStatus')
                 if (res.code === 200) {
-                  this.$message.success(res.data || '库存预警状态计算完成')
+                  this.$message.success(res.data || '库存预警状态校验完成')
                   // 刷新数据
                   this.loadStockData()
                 } else {
-                  this.$message.error(res.data || '计算失败')
+                  this.$message.error(res.data || '校验失败')
                 }
               } catch (error) {
-                console.error('批量计算失败:', error)
-                this.$message.error('计算失败')
+                console.error('批量校验失败:', error)
+                this.$message.error('校验失败')
               } finally {
                 this.calculatingAlert = false
               }
             }
           })
         } catch (error) {
-          console.error('批量计算操作失败:', error)
+          console.error('批量校验操作失败:', error)
           this.$message.error('操作失败')
         }
       },
