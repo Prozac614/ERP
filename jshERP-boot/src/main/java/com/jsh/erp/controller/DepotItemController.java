@@ -1253,30 +1253,32 @@ public class DepotItemController {
             params.put("beginTime", beginTime);
             params.put("endTime", endTime);
 
-            Map<String, Object> result = depotItemOptimizedService.getMaterialStockWithDailyOutOptimized(params, request);
+            Map<String, Object> result = depotItemOptimizedService.getOptimizedMaterialStockWithDailyOut(
+                (Integer) params.get("currentPage"),
+                (Integer) params.get("pageSize"),
+                (String) params.get("materialParam"),
+                (String) params.get("beginTime"),
+                (String) params.get("endTime"),
+                request);
             List<MaterialStockPeriodVo> dataList = (List<MaterialStockPeriodVo>) result.get("rows");
 
-            // 准备导出数据
+            // 准备导出数据（只导出VO中存在的字段）
             List<Object[]> objects = new ArrayList<>();
             if (dataList != null) {
                 for (MaterialStockPeriodVo item : dataList) {
-                    Object[] row = new Object[10];
+                    Object[] row = new Object[6];
                     row[0] = item.getBarCode() != null ? item.getBarCode() : "";
                     row[1] = item.getMaterialName() != null ? item.getMaterialName() : "";
-                    row[2] = item.getMaterialModel() != null ? item.getMaterialModel() : "";
-                    row[3] = item.getMaterialUnit() != null ? item.getMaterialUnit() : "";
-                    row[4] = item.getCurrentPeriodStock() != null ? item.getCurrentPeriodStock() : BigDecimal.ZERO;
-                    row[5] = item.getPreviousPeriodStock() != null ? item.getPreviousPeriodStock() : BigDecimal.ZERO;
-                    row[6] = item.getCurrentPeriodOut() != null ? item.getCurrentPeriodOut() : BigDecimal.ZERO;
-                    row[7] = item.getPreviousPeriodOut() != null ? item.getPreviousPeriodOut() : BigDecimal.ZERO;
-                    row[8] = item.getCurrentPeriodIn() != null ? item.getCurrentPeriodIn() : BigDecimal.ZERO;
-                    row[9] = item.getPreviousPeriodIn() != null ? item.getPreviousPeriodIn() : BigDecimal.ZERO;
+                    row[2] = item.getCurrentPeriodStock() != null ? item.getCurrentPeriodStock() : BigDecimal.ZERO;
+                    row[3] = item.getPreviousPeriodStock() != null ? item.getPreviousPeriodStock() : BigDecimal.ZERO;
+                    row[4] = item.getCurrentPeriodOut() != null ? item.getCurrentPeriodOut() : BigDecimal.ZERO;
+                    row[5] = item.getPreviousPeriodOut() != null ? item.getPreviousPeriodOut() : BigDecimal.ZERO;
                     objects.add(row);
                 }
             }
 
             // 使用现有的ExcelUtils导出
-            String[] names = {"商品编码", "商品名称", "规格型号", "单位", "本期结存", "上期结存", "本期出库", "上期出库", "本期入库", "上期入库"};
+            String[] names = {"商品编码", "商品名称", "本期结存", "上期结存", "本期出库", "上期出库"};
             String fileName = "商品库存数据_" + new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
             String tip = "导出时间：" + new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date());
             if (beginTime != null && endTime != null) {
