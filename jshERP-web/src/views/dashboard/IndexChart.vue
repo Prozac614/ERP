@@ -701,16 +701,23 @@
           previousPeriodOut: materialRecord.previousPeriodOut
         }
 
-        console.log('传递给图表组件的数据:', materialInfo)
-        console.log('日期范围:', this.queryParam.createTimeRange)
+        console.log('=== 首页传递数据 ===')
+        console.log('materialInfo:', materialInfo)
+        console.log('dateRange:', this.queryParam.createTimeRange)
+        console.log('==================')
 
         // 先设置数据，再显示弹窗，确保数据传递完整
         this.chartModal.chartType = 'history' // 默认显示库存历史
         this.chartModal.currentMaterial = materialInfo
 
-        // 使用$nextTick确保数据更新后再显示弹窗
+        // 使用多重延迟确保数据完全传递
         this.$nextTick(() => {
-          this.chartModal.visible = true
+          setTimeout(() => {
+            console.log('准备显示图表弹窗，最终数据检查:')
+            console.log('currentMaterial:', this.chartModal.currentMaterial)
+            console.log('createTimeRange:', this.queryParam.createTimeRange)
+            this.chartModal.visible = true
+          }, 100)
         })
       },
 

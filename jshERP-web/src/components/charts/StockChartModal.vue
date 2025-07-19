@@ -128,14 +128,9 @@ export default {
   },
   watch: {
     visible(newVal) {
+      console.log('visible变化:', newVal)
       if (newVal) {
-        this.$nextTick(() => {
-          this.initChart()
-          // 延迟一下确保所有props都已经传递完成
-          setTimeout(() => {
-            this.loadChartData()
-          }, 100)
-        })
+        this.handleInitialLoad()
       } else {
         this.destroyChart()
       }
@@ -145,68 +140,93 @@ export default {
         this.loadChartData()
       }
     },
-    // 监听dateRange变化，确保数据及时更新
-    dateRange: {
-      handler(newVal, oldVal) {
-        console.log('dateRange变化:', oldVal, '->', newVal)
-        if (this.canLoadData()) {
-          // 避免重复加载，只有当值真正改变时才重新加载
-          if (!oldVal || oldVal.length !== 2 ||
-              newVal[0] !== oldVal[0] || newVal[1] !== oldVal[1]) {
-            setTimeout(() => {
-              this.loadChartData()
-            }, 50)
-          }
-        }
-      },
-      deep: true,
-      immediate: true
-    },
     // 监听materialInfo变化
     materialInfo: {
       handler(newVal, oldVal) {
         console.log('materialInfo变化:', oldVal, '->', newVal)
-        if (this.canLoadData()) {
-          // 避免重复加载，只有当materialId真正改变时才重新加载
-          if (!oldVal || oldVal.materialId !== newVal.materialId) {
-            setTimeout(() => {
-              this.loadChartData()
-            }, 50)
-          }
+        if (this.visible && newVal && newVal.materialId &&
+            (!oldVal || oldVal.materialId !== newVal.materialId)) {
+          this.waitForDataAndLoad()
         }
       },
-      deep: true,
-      immediate: true
+      deep: true
+    },
+
+    // 监听dateRange变化
+    dateRange: {
+      handler(newVal, oldVal) {
+        console.log('dateRange变化:', oldVal, '->', newVal)
+        if (this.visible && newVal && newVal.length === 2 &&
+            (!oldVal || oldVal.length !== 2 || newVal[0] !== oldVal[0] || newVal[1] !== oldVal[1])) {
+          this.waitForDataAndLoad()
+        }
+      },
+      deep: true
     }
   },
   mounted() {
+    console.log('图表组件已挂载，visible:', this.visible)
     // 如果组件挂载时已经是可见状态，立即加载数据
     if (this.visible) {
-      this.$nextTick(() => {
-        this.initChart()
-        setTimeout(() => {
-          this.loadChartData()
-        }, 100)
-      })
+      this.handleInitialLoad()
     }
   },
   beforeDestroy() {
     this.destroyChart()
   },
   methods: {
+    // 处理初始加载
+    handleInitialLoad() {
+      console.log('处理初始加载...')
+      this.$nextTick(() => {
+        this.initChart()
+        // 使用轮询方式等待数据准备就绪
+        this.waitForDataAndLoad()
+      })
+    },
+
+    // 等待数据准备就绪并加载
+    waitForDataAndLoad(attempts = 0) {
+      console.log(`等待数据准备，尝试次数: ${attempts + 1}`)
+
+      if (this.canLoadData()) {
+        console.log('数据已准备就绪，开始加载图表')
+        this.loadChartData()
+        return
+      }
+
+      if (attempts < 10) { // 最多尝试10次，每次间隔100ms
+        setTimeout(() => {
+          this.waitForDataAndLoad(attempts + 1)
+        }, 100)
+      } else {
+        console.warn('等待数据超时，无法加载图表')
+        this.error = '数据加载超时，请检查商品信息和日期范围'
+      }
+    },
+
     // 验证是否可以加载数据
     canLoadData() {
-      const hasValidMaterial = this.materialInfo && this.materialInfo.materialId
-      const hasValidDateRange = this.dateRange && this.dateRange.length === 2
+      const hasValidMaterial = this.materialInfo &&
+                              this.materialInfo.materialId &&
+                              this.materialInfo.materialId !== null &&
+                              this.materialInfo.materialId !== undefined
+
+      const hasValidDateRange = this.dateRange &&
+                               this.dateRange.length === 2 &&
+                               this.dateRange[0] &&
+                               this.dateRange[1]
+
       const isVisible = this.visible
 
-      console.log('数据加载条件检查:', {
-        hasValidMaterial,
-        hasValidDateRange,
-        isVisible,
-        materialInfo: this.materialInfo,
-        dateRange: this.dateRange
-      })
+      console.log('=== 数据加载条件检查 ===')
+      console.log('isVisible:', isVisible)
+      console.log('materialInfo:', this.materialInfo)
+      console.log('hasValidMaterial:', hasValidMaterial)
+      console.log('dateRange:', this.dateRange)
+      console.log('hasValidDateRange:', hasValidDateRange)
+      console.log('最终结果:', hasValidMaterial && hasValidDateRange && isVisible)
+      console.log('========================')
 
       return hasValidMaterial && hasValidDateRange && isVisible
     },
