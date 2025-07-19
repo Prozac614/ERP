@@ -1085,6 +1085,86 @@ public class DepotItemController {
     }
 
     /**
+     * 获取商品库存统计与每日出库数据合并结果（性能优化版本）
+     * @param currentPage
+     * @param pageSize
+     * @param materialParam
+     * @param beginTime
+     * @param endTime
+     * @param request
+     * @return
+     * @throws Exception
+     */
+    @GetMapping(value = "/getMaterialStockWithDailyOut")
+    @ApiOperation(value = "获取商品库存统计与每日出库数据")
+    public BaseResponseInfo getMaterialStockWithDailyOut(
+            @RequestParam(value = "currentPage", required = false) Integer currentPage,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize,
+            @RequestParam(value = "materialParam", required = false) String materialParam,
+            @RequestParam(value = "beginTime", required = false) String beginTime,
+            @RequestParam(value = "endTime", required = false) String endTime,
+            HttpServletRequest request) throws Exception {
+        BaseResponseInfo res = new BaseResponseInfo();
+        Map<String, Object> objectMap = new HashMap<>();
+        try {
+            // 设置默认分页参数
+            if (currentPage == null) {
+                currentPage = 1;
+            }
+            if (pageSize == null) {
+                pageSize = 10;
+            }
+            
+            // 获取商品库存统计数据
+            List<MaterialStockPeriodVo> stockList = depotItemService.getMaterialPeriodStock(materialParam, 
+                    (currentPage - 1) * pageSize, pageSize);
+            int total = depotItemService.getMaterialPeriodStockCount(materialParam);
+            
+            // 如果有日期范围，获取每日出库数据
+            Map<String, Map<String, Object>> dailyOutMap = new HashMap<>();
+            if (StringUtil.isNotEmpty(beginTime) && StringUtil.isNotEmpty(endTime)) {
+                // 提取商品ID列表
+                StringBuilder materialIds = new StringBuilder();
+                for (int i = 0; i < stockList.size(); i++) {
+                    if (i > 0) materialIds.append(",");
+                    materialIds.append(stockList.get(i).getMaterialId());
+                }
+                
+                if (materialIds.length() > 0) {
+                    String formattedBeginTime = beginTime + BusinessConstants.DAY_FIRST_TIME;
+                    String formattedEndTime = endTime + BusinessConstants.DAY_LAST_TIME;
+                    
+                    List<Map<String, Object>> dailyOutList = depotItemService.getDailyOutStock(
+                            materialIds.toString(), formattedBeginTime, formattedEndTime);
+                    
+                    // 将每日出库数据按商品ID和日期组织
+                    for (Map<String, Object> dailyOut : dailyOutList) {
+                        String barCode = (String) dailyOut.get("barCode");
+                        String outDate = (String) dailyOut.get("outDate");
+                        if (!dailyOutMap.containsKey(barCode)) {
+                            dailyOutMap.put(barCode, new HashMap<>());
+                        }
+                        dailyOutMap.get(barCode).put(outDate, dailyOut.get("outQuantity"));
+                    }
+                }
+            }
+            
+            objectMap.put("rows", stockList);
+            objectMap.put("total", total);
+            objectMap.put("dailyOutData", dailyOutMap);
+            objectMap.put("beginTime", beginTime);
+            objectMap.put("endTime", endTime);
+            res.code = 200;
+            res.data = objectMap;
+        } catch (Exception e) {
+            logger.error(e.getMessage(), e);
+            res.code = 500;
+            res.data = "获取数据失败";
+        }
+        return res;
+    }
+
+    /**
      * 获取批次商品列表信息
      * 
      * @param request

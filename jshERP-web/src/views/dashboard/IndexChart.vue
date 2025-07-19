@@ -54,6 +54,20 @@
                     </template>
                   </template>
                 </a-row>
+                <a-row v-if="dateColumns.length > 0" style="padding-top: 10px;">
+                  <a-col :span="24">
+                    <span style="font-weight: 600; color: #666;">每日出库量列:</span>
+                  </a-col>
+                </a-row>
+                <a-row v-if="dateColumns.length > 0" style="width: 500px; max-height: 120px; overflow-y: auto;">
+                  <template v-for="(dateCol,index) in dateColumns">
+                    <a-col :span="6" :key="dateCol.dataIndex">
+                      <a-checkbox :value="dateCol.dataIndex" disabled>
+                        {{dateCol.title}}
+                      </a-checkbox>
+                    </a-col>
+                  </template>
+                </a-row>
                 <a-row style="padding-top: 10px;">
                   <a-col>
                     恢复默认列配置：<a-button @click="handleRestDefault" type="link" size="small">恢复默认</a-button>
@@ -96,6 +110,10 @@
               <span style="color:red" v-if="value < 0">{{value || 0}}</span>
               <span style="color:#666" v-if="value === 0 || value === null || value === undefined">0</span>
             </template>
+            <template slot="dailyOutRender" slot-scope="value, record, index, column">
+              <span style="color: #1890ff; font-weight: 500" v-if="value > 0">{{value}}</span>
+              <span style="color: #ccc" v-else>-</span>
+            </template>
           </a-table>
         </div>
       </a-card>
@@ -121,6 +139,11 @@
           materialParam: "",
           createTimeRange: [moment().subtract(1, 'months'), moment()]
         },
+        // 性能优化相关
+        dataCache: new Map(),
+        loadingRequest: null,
+        dailyOutData: {},
+        dateColumns: [],
         // 页面样式
         cardStyle: 'padding: 0',
         loading: true,
@@ -172,17 +195,97 @@
     },
     computed: {
       columns() {
-        return this.defColumns.filter(item => this.settingDataIndex.includes(item.dataIndex))
+        const baseColumns = this.defColumns.filter(item => this.settingDataIndex.includes(item.dataIndex))
+        const allColumns = [...baseColumns, ...this.dateColumns]
+        return allColumns
+      },
+      allDataIndex() {
+        return [...this.settingDataIndex, ...this.dateColumns.map(col => col.dataIndex)]
       }
     },
     created() {
+      this.generateDateColumns()
       this.loadStockData()
     },
+    beforeDestroy() {
+      // 清理内存
+      if (this.loadingRequest) {
+        this.loadingRequest.abort()
+      }
+      if (this.debouncedLoadData) {
+        clearTimeout(this.debouncedLoadData)
+      }
+      this.dataCache.clear()
+    },
     methods: {
+      // 性能优化 - 日期范围验证
+      validateDateRange(beginDate, endDate) {
+        if (!beginDate || !endDate) return { valid: true }
+        
+        const daysDiff = endDate.diff(beginDate, 'days')
+        if (daysDiff > 90) {
+          this.$message.warning('为了保证性能，日期范围不能超过90天')
+          return { 
+            valid: false, 
+            adjustedRange: [endDate.clone().subtract(90, 'days'), endDate]
+          }
+        }
+        if (daysDiff > 30) {
+          this.$message.info('日期范围较大，可能影响加载速度')
+        }
+        return { valid: true }
+      },
+
+      // 生成日期范围数组
+      generateDateRange(beginDate, endDate) {
+        const dates = []
+        let current = beginDate.clone()
+        while (current.isSameOrBefore(endDate)) {
+          dates.push(current.format('YYYY-MM-DD'))
+          current.add(1, 'day')
+        }
+        return dates
+      },
+
+      // 生成动态日期列
+      generateDateColumns() {
+        if (!this.queryParam.createTimeRange || this.queryParam.createTimeRange.length !== 2) {
+          this.dateColumns = []
+          return
+        }
+
+        const [beginDate, endDate] = this.queryParam.createTimeRange
+        const validation = this.validateDateRange(beginDate, endDate)
+        
+        let actualBeginDate = beginDate
+        let actualEndDate = endDate
+        
+        if (!validation.valid && validation.adjustedRange) {
+          [actualBeginDate, actualEndDate] = validation.adjustedRange
+          this.queryParam.createTimeRange = validation.adjustedRange
+        }
+
+        const dates = this.generateDateRange(actualBeginDate, actualEndDate)
+        
+        this.dateColumns = dates.map(date => ({
+          title: moment(date).format('MM-DD'),
+          dataIndex: `out_${date}`,
+          width: 80,
+          align: 'center',
+          scopedSlots: { customRender: 'dailyOutRender' }
+        }))
+        
+        // 更新滚动宽度
+        this.scroll.x = 800 + (this.dateColumns.length * 80)
+      },
+
+      // 防抖处理的数据加载
+      debouncedLoadData: null,
+
       // 查询方法
       searchQuery() {
         this.ipagination.current = 1
-        this.loadStockData()
+        this.debouncedLoadStockData()
       },
       // 重置查询
       searchReset() {
@@ -190,20 +293,40 @@
           materialParam: "",
           createTimeRange: [moment().subtract(1, 'months'), moment()]
         }
+        this.generateDateColumns()
         this.searchQuery()
+      },
+
+      // 防抖处理的数据加载
+      debouncedLoadStockData() {
+        if (this.debouncedLoadData) {
+          clearTimeout(this.debouncedLoadData)
+        }
+        this.debouncedLoadData = setTimeout(() => {
+          this.loadStockData()
+        }, 500)
       },
 
       // 日期变化处理
       onDateChange(dates, dateStrings) {
         this.queryParam.createTimeRange = dates
+        this.generateDateColumns()
+        if (dates && dates.length === 2) {
+          this.debouncedLoadStockData()
+        }
       },
       onDateOk(dates) {
         console.log('选择的日期: ', dates)
       },
-      // 加载库存数据
+      // 加载库存数据（性能优化版本）
       loadStockData(page) {
         if (page) {
           this.ipagination.current = page
+        }
+        
+        // 取消之前的请求
+        if (this.loadingRequest) {
+          this.loadingRequest.abort()
         }
         
         this.loading = true
@@ -219,19 +342,81 @@
           params.endTime = this.queryParam.createTimeRange[1].format('YYYY-MM-DD')
         }
 
-        getAction('/depotItem/getMaterialPeriodStock', params).then((res) => {
+        // 检查缓存
+        const cacheKey = JSON.stringify(params)
+        const cached = this.dataCache.get(cacheKey)
+        if (cached && (Date.now() - cached.timestamp < 300000)) { // 5分钟缓存
+          this.processDataResponse(cached.data)
+          this.loading = false
+          return
+        }
+
+        // 使用新的合并API
+        this.loadingRequest = getAction('/depotItem/getMaterialStockWithDailyOut', params)
+        this.loadingRequest.then((res) => {
           if (res.code === 200) {
-            this.dataSource = res.data.rows || []
-            this.ipagination.total = res.data.total || 0
+            // 缓存结果
+            this.dataCache.set(cacheKey, {
+              data: res.data,
+              timestamp: Date.now()
+            })
+            
+            this.processDataResponse(res.data)
           } else {
             this.$message.error(res.data || '数据加载失败')
           }
         }).catch((error) => {
-          console.error('获取库存数据失败:', error)
-          this.$message.error('数据加载失败')
+          if (error.name !== 'AbortError') {
+            console.error('获取库存数据失败:', error)
+            this.$message.error('数据加载失败')
+          }
         }).finally(() => {
           this.loading = false
+          this.loadingRequest = null
         })
+      },
+
+      // 处理API响应数据
+      processDataResponse(data) {
+        this.dataSource = data.rows || []
+        this.ipagination.total = data.total || 0
+        this.dailyOutData = data.dailyOutData || {}
+        
+        // 合并每日出库数据到商品数据中
+        this.mergeDataOptimized()
+      },
+
+      // 高效的数据合并方法
+      mergeDataOptimized() {
+        if (!this.dailyOutData || Object.keys(this.dailyOutData).length === 0) {
+          return
+        }
+
+        // 使用requestAnimationFrame分批处理，避免UI阻塞
+        const batchSize = 10
+        let index = 0
+        
+        const processBatch = () => {
+          const endIndex = Math.min(index + batchSize, this.dataSource.length)
+          
+          for (let i = index; i < endIndex; i++) {
+            const item = this.dataSource[i]
+            const dailyData = this.dailyOutData[item.barCode] || {}
+            
+            // 为每个日期列添加出库数据
+            this.dateColumns.forEach(column => {
+              const date = column.dataIndex.replace('out_', '')
+              this.$set(item, column.dataIndex, dailyData[date] || 0)
+            })
+          }
+          
+          index = endIndex
+          if (index < this.dataSource.length) {
+            requestAnimationFrame(processBatch)
+          }
+        }
+        
+        processBatch()
       },
 
               
