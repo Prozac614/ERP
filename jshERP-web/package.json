@@ -109,5 +109,9 @@
     "> 1%",
     "last 2 versions",
     "not ie <= 10"
-  ]
+  ],
+  "resolutions": {
+    "minimatch": "^3.0.4",
+    "glob": "^7.2.3"
+  }
 }
