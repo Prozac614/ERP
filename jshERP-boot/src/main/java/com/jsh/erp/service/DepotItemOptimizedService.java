@@ -39,9 +39,6 @@ public class DepotItemOptimizedService {
     @Resource
     private UserService userService;
 
-    @Resource
-    private MaterialService materialService;
-
     @Autowired(required = false)
     private RedisTemplate<String, Object> redisTemplate;
 
