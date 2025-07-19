@@ -762,69 +762,83 @@
       handleExport() {
         this.$confirm({
           title: '确认导出',
-          content: '是否导出当前查询条件下的所有商品库存数据？',
+          content: '是否导出当前表格中的商品库存数据？',
           onOk: () => {
-            this.exportData()
+            this.exportTableData()
           }
         })
       },
 
-      // 导出数据
-      async exportData() {
+      // 直接导出表格数据为CSV格式
+      exportTableData() {
         try {
           this.$message.loading('正在导出数据，请稍候...', 0)
 
-          // 构建导出参数
-          const params = new URLSearchParams()
-          params.append('currentPage', '1')
-          params.append('pageSize', '999999') // 导出所有数据
-
-          if (this.queryParam.materialParam) {
-            params.append('materialParam', this.queryParam.materialParam)
-          }
-          if (this.queryParam.beginTime) {
-            params.append('beginTime', this.queryParam.beginTime)
-          }
-          if (this.queryParam.endTime) {
-            params.append('endTime', this.queryParam.endTime)
+          // 检查是否有数据
+          if (!this.dataSource || this.dataSource.length === 0) {
+            this.$message.destroy()
+            this.$message.warning('没有数据可以导出')
+            return
           }
 
-          // 发起导出请求
-          const response = await fetch(`${this.$store.getters.apiUrl}/depotItem/exportMaterialStock?${params.toString()}`, {
-            method: 'GET',
-            headers: {
-              'X-Access-Token': this.$store.getters.token,
-              'Content-Type': 'application/json'
-            }
+          // 准备CSV数据
+          let csvContent = ''
+
+          // 添加BOM以支持中文
+          csvContent += '\uFEFF'
+
+          // 添加表头
+          const headers = [
+            '商品编码',
+            '商品名称',
+            '本期结存',
+            '上期结存',
+            '本期出库',
+            '上期出库'
+          ]
+          csvContent += headers.join(',') + '\n'
+
+          // 添加数据行
+          this.dataSource.forEach(item => {
+            const row = [
+              `"${item.barCode || ''}"`,
+              `"${item.materialName || ''}"`,
+              item.currentPeriodStock || 0,
+              item.previousPeriodStock || 0,
+              item.currentPeriodOut || 0,
+              item.previousPeriodOut || 0
+            ]
+            csvContent += row.join(',') + '\n'
           })
 
-          if (!response.ok) {
-            throw new Error(`导出失败: ${response.status}`)
-          }
+          // 创建Blob对象
+          const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
 
-          // 获取文件名
-          const contentDisposition = response.headers.get('Content-Disposition')
-          let filename = '商品库存数据.xlsx'
-          if (contentDisposition) {
-            const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
-            if (filenameMatch && filenameMatch[1]) {
-              filename = decodeURIComponent(filenameMatch[1].replace(/['"]/g, ''))
-            }
-          }
+          // 生成文件名
+          const now = new Date()
+          const timestamp = now.getFullYear() +
+                          String(now.getMonth() + 1).padStart(2, '0') +
+                          String(now.getDate()).padStart(2, '0') + '_' +
+                          String(now.getHours()).padStart(2, '0') +
+                          String(now.getMinutes()).padStart(2, '0') +
+                          String(now.getSeconds()).padStart(2, '0')
+          const filename = `商品库存数据_${timestamp}.csv`
 
-          // 下载文件
-          const blob = await response.blob()
-          const url = window.URL.createObjectURL(blob)
+          // 创建下载链接
           const link = document.createElement('a')
-          link.href = url
-          link.download = filename
-          document.body.appendChild(link)
-          link.click()
-          document.body.removeChild(link)
-          window.URL.revokeObjectURL(url)
+          if (link.download !== undefined) {
+            const url = URL.createObjectURL(blob)
+            link.setAttribute('href', url)
+            link.setAttribute('download', filename)
+            link.style.visibility = 'hidden'
+            document.body.appendChild(link)
+            link.click()
+            document.body.removeChild(link)
+            URL.revokeObjectURL(url)
+          }
 
           this.$message.destroy()
-          this.$message.success('导出成功！')
+          this.$message.success(`导出成功！共导出 ${this.dataSource.length} 条数据`)
 
         } catch (error) {
           console.error('导出失败:', error)
