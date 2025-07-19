@@ -31,12 +31,18 @@ public class TenantConfig {
         tenantSqlParser.setTenantHandler(new TenantHandler() {
             @Override
             public Expression getTenantId() {
-                String token = request.getHeader("X-Access-Token");
-                Long tenantId = Tools.getTenantIdByToken(token);
-                if (tenantId!=0L) {
-                    return new LongValue(tenantId);
-                } else {
-                    //超管
+                try {
+                    String token = request.getHeader("X-Access-Token");
+                    Long tenantId = Tools.getTenantIdByToken(token);
+                    if (tenantId!=0L) {
+                        return new LongValue(tenantId);
+                    } else {
+                        //超管
+                        return null;
+                    }
+                } catch (IllegalStateException e) {
+                    // 在异步线程中无法获取请求上下文时，返回null（超管权限）
+                    // 这样可以避免异步任务失败，但需要确保异步任务的安全性
                     return null;
                 }
             }
@@ -50,16 +56,21 @@ public class TenantConfig {
             public boolean doTableFilter(String tableName) {
                 //获取开启状态
                 Boolean res = true;
-                String token = request.getHeader("X-Access-Token");
-                Long tenantId = Tools.getTenantIdByToken(token);
-                if (tenantId!=0L) {
-                    // 这里可以判断是否过滤表
-                    if ("jsh_sequence".equals(tableName) || "jsh_function".equals(tableName)
-                            || "jsh_platform_config".equals(tableName) || "jsh_tenant".equals(tableName)) {
-                        res = true;
-                    } else {
-                        res = false;
+                try {
+                    String token = request.getHeader("X-Access-Token");
+                    Long tenantId = Tools.getTenantIdByToken(token);
+                    if (tenantId!=0L) {
+                        // 这里可以判断是否过滤表
+                        if ("jsh_sequence".equals(tableName) || "jsh_function".equals(tableName)
+                                || "jsh_platform_config".equals(tableName) || "jsh_tenant".equals(tableName)) {
+                            res = true;
+                        } else {
+                            res = false;
+                        }
                     }
+                } catch (IllegalStateException e) {
+                    // 在异步线程中无法获取请求上下文时，不过滤表（超管权限）
+                    res = true;
                 }
                 return res;
             }

@@ -16,6 +16,7 @@ import java.math.RoundingMode;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -50,7 +51,10 @@ public class StockWarningCalculationService {
 
     @Resource
     private MaterialExtendService materialExtendService;
-    
+
+    @Resource(name = "stockWarningTaskExecutor")
+    private Executor stockWarningTaskExecutor;
+
     // 任务状态管理
     private static final Map<String, CalculationTask> taskMap = new ConcurrentHashMap<>();
     
@@ -103,32 +107,37 @@ public class StockWarningCalculationService {
     
     /**
      * 开始库存预警计算任务
-     * 
+     *
      * @return 任务ID
      */
     public String startStockWarningCalculation() {
         try {
             Long userId = userService.getCurrentUser().getId();
             String taskId = "stock_warning_" + System.currentTimeMillis() + "_" + userId;
-            
-            // 获取所有有效商品
+
+            // 在主线程中获取所有有效商品和仓库（避免异步线程中的租户上下文问题）
             List<Material> materials = getAllActiveMaterials();
-            
+            List<Depot> depots = getAllActiveDepots();
+
             if (materials.isEmpty()) {
                 throw new RuntimeException("没有找到需要计算的商品");
             }
-            
+
+            if (depots.isEmpty()) {
+                throw new RuntimeException("没有找到有效的仓库");
+            }
+
             // 创建计算任务
             CalculationTask task = new CalculationTask(taskId, materials.size(), userId);
             taskMap.put(taskId, task);
-            
-            // 异步执行计算
-            new Thread(() -> executeCalculation(task, materials)).start();
-            
-            logger.info("库存预警计算任务已启动，任务ID: {}, 商品数量: {}", taskId, materials.size());
-            
+
+            // 异步执行计算，传入预先获取的仓库列表
+            new Thread(() -> executeCalculation(task, materials, depots)).start();
+
+            logger.info("库存预警计算任务已启动，任务ID: {}, 商品数量: {}, 仓库数量: {}", taskId, materials.size(), depots.size());
+
             return taskId;
-            
+
         } catch (Exception e) {
             logger.error("启动库存预警计算任务失败", e);
             throw new RuntimeException("启动计算任务失败: " + e.getMessage());
@@ -179,37 +188,38 @@ public class StockWarningCalculationService {
     /**
      * 执行计算任务
      */
-    private void executeCalculation(CalculationTask task, List<Material> materials) {
+    private void executeCalculation(CalculationTask task, List<Material> materials, List<Depot> depots) {
         try {
-            logger.info("开始执行库存预警计算，任务ID: {}, 商品数量: {}", task.getTaskId(), materials.size());
-            
+            logger.info("开始执行库存预警计算，任务ID: {}, 商品数量: {}, 仓库数量: {}",
+                    task.getTaskId(), materials.size(), depots.size());
+
             for (Material material : materials) {
                 try {
-                    // 计算该商品的最低安全库存阈值
-                    calculateMaterialSafeStock(material);
+                    // 计算该商品的最低安全库存阈值，传入预先获取的仓库列表
+                    calculateMaterialSafeStock(material, depots);
                     task.incrementSuccess();
-                    
+
                 } catch (Exception e) {
                     logger.error("计算商品{}的安全库存失败", material.getId(), e);
                     task.incrementFailed();
                 }
-                
+
                 task.incrementProcessed();
-                
+
                 // 每处理100个商品记录一次日志
                 if (task.getProcessedCount() % 100 == 0) {
-                    logger.info("任务进度: {}/{}, 成功: {}, 失败: {}", 
-                            task.getProcessedCount(), task.getTotalCount(), 
+                    logger.info("任务进度: {}/{}, 成功: {}, 失败: {}",
+                            task.getProcessedCount(), task.getTotalCount(),
                             task.getSuccessCount(), task.getFailedCount());
                 }
             }
-            
+
             task.setStatus("COMPLETED");
             task.setEndTime(new Date());
-            
-            logger.info("库存预警计算任务完成，任务ID: {}, 总数: {}, 成功: {}, 失败: {}", 
+
+            logger.info("库存预警计算任务完成，任务ID: {}, 总数: {}, 成功: {}, 失败: {}",
                     task.getTaskId(), task.getTotalCount(), task.getSuccessCount(), task.getFailedCount());
-            
+
         } catch (Exception e) {
             task.setStatus("FAILED");
             task.setErrorMessage(e.getMessage());
@@ -222,7 +232,7 @@ public class StockWarningCalculationService {
      * 计算单个商品的安全库存并更新到数据库
      */
     @Transactional(value = "transactionManager", rollbackFor = Exception.class)
-    private void calculateMaterialSafeStock(Material material) throws Exception {
+    private void calculateMaterialSafeStock(Material material, List<Depot> depots) throws Exception {
         logger.info("开始计算商品{}({})的安全库存", material.getName(), material.getId());
 
         // 计算平均日销量
@@ -237,8 +247,6 @@ public class StockWarningCalculationService {
             return;
         }
 
-        // 获取所有仓库
-        List<Depot> depots = getAllActiveDepots();
         logger.info("商品{}({})将更新{}个仓库的安全库存，安全库存值：{}",
                 material.getName(), material.getId(), depots.size(), lowSafeStock);
 
@@ -249,7 +257,18 @@ public class StockWarningCalculationService {
 
         logger.info("商品{}({})安全库存更新完成", material.getName(), material.getId());
     }
-    
+
+    /**
+     * 计算单个商品的安全库存并更新到数据库（重载方法，保持向后兼容）
+     */
+    @Transactional(value = "transactionManager", rollbackFor = Exception.class)
+    private void calculateMaterialSafeStock(Material material) throws Exception {
+        // 获取所有仓库
+        List<Depot> depots = getAllActiveDepots();
+        // 调用带仓库参数的方法
+        calculateMaterialSafeStock(material, depots);
+    }
+
     /**
      * 获取所有有效仓库
      */
@@ -410,11 +429,11 @@ public class StockWarningCalculationService {
         result.put("startTime", new Date());
 
         try {
-            // 执行计算和更新
-            calculateMaterialSafeStock(material);
-
-            // 获取更新后的安全库存设置
+            // 获取所有仓库（在主线程中获取，避免租户上下文问题）
             List<Depot> depots = getAllActiveDepots();
+
+            // 执行计算和更新
+            calculateMaterialSafeStock(material, depots);
             List<Map<String, Object>> updatedSettings = new ArrayList<>();
 
             for (Depot depot : depots) {
