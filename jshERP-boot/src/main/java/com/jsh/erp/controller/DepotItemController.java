@@ -1614,8 +1614,9 @@ public class DepotItemController {
             @RequestBody JSONObject obj,
             HttpServletRequest request) {
         BaseResponseInfo res = new BaseResponseInfo();
+        Long materialId = null;
         try {
-            Long materialId = obj.getLong("materialId");
+            materialId = obj.getLong("materialId");
             if (materialId == null) {
                 res.code = 400;
                 res.data = "商品ID不能为空";
@@ -1656,8 +1657,9 @@ public class DepotItemController {
             @RequestBody JSONObject obj,
             HttpServletRequest request) {
         BaseResponseInfo res = new BaseResponseInfo();
+        Long materialId = null;
         try {
-            Long materialId = obj.getLong("materialId");
+            materialId = obj.getLong("materialId");
             if (materialId == null) {
                 res.code = 400;
                 res.data = "商品ID不能为空";
