@@ -1,6 +1,7 @@
 package com.jsh.erp.config;
 
 import com.jsh.erp.service.DepotItemOptimizedService;
+import com.jsh.erp.service.StockWarningCalculationService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,6 +25,9 @@ public class PerformanceOptimizationConfig {
 
     @Autowired(required = false)
     private DepotItemOptimizedService depotItemOptimizedService;
+
+    @Autowired(required = false)
+    private StockWarningCalculationService stockWarningCalculationService;
 
     /**
      * 每小时刷新最近3天的每日汇总数据
@@ -101,4 +105,21 @@ public class PerformanceOptimizationConfig {
             }
         }
     }
-} 
+
+    /**
+     * 每天凌晨4点清理库存预警计算任务
+     * 清理超过24小时的已完成任务
+     */
+    @Scheduled(cron = "0 0 4 * * ?") // 每天凌晨4点
+    public void cleanupStockWarningTasks() {
+        if (stockWarningCalculationService != null) {
+            try {
+                logger.info("开始清理库存预警计算任务");
+                stockWarningCalculationService.cleanupCompletedTasks();
+                logger.info("库存预警计算任务清理完成");
+            } catch (Exception e) {
+                logger.error("清理库存预警计算任务失败", e);
+            }
+        }
+    }
+}

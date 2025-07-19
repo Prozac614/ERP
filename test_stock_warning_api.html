@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>库存预警API测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        button {
+            background-color: #1890ff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #40a9ff;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        .result {
+            background-color: #f6f6f6;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+            white-space: pre-wrap;
+        }
+        .progress {
+            margin: 10px 0;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background-color: #f0f0f0;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background-color: #1890ff;
+            transition: width 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+    <h1>库存预警API测试工具</h1>
+    
+    <div class="test-section">
+        <h3>1. 启动库存预警计算</h3>
+        <button onclick="startCalculation()">启动计算任务</button>
+        <div id="startResult" class="result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>2. 查询任务状态</h3>
+        <input type="text" id="taskIdInput" placeholder="输入任务ID" style="width: 300px; padding: 5px;">
+        <button onclick="getTaskStatus()">查询状态</button>
+        <button onclick="startPolling()" id="pollingBtn">开始轮询</button>
+        <button onclick="stopPolling()" id="stopPollingBtn" disabled>停止轮询</button>
+        
+        <div class="progress">
+            <div class="progress-bar">
+                <div id="progressFill" class="progress-fill" style="width: 0%"></div>
+            </div>
+            <div id="progressText">进度: 0%</div>
+        </div>
+        
+        <div id="statusResult" class="result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>3. 清理已完成任务</h3>
+        <button onclick="cleanupTasks()">清理任务</button>
+        <div id="cleanupResult" class="result"></div>
+    </div>
+
+    <script>
+        const API_BASE = '/jshERP-boot'; // 根据实际部署调整
+        let pollingInterval = null;
+        let currentTaskId = null;
+
+        // 启动计算任务
+        async function startCalculation() {
+            const resultDiv = document.getElementById('startResult');
+            resultDiv.textContent = '正在启动计算任务...';
+            
+            try {
+                const response = await fetch(`${API_BASE}/stockWarning/startCalculation`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({})
+                });
+                
+                const data = await response.json();
+                resultDiv.textContent = JSON.stringify(data, null, 2);
+                
+                if (data.code === 200 && data.data.taskId) {
+                    currentTaskId = data.data.taskId;
+                    document.getElementById('taskIdInput').value = currentTaskId;
+                    resultDiv.textContent += '\n\n任务ID已自动填入查询框';
+                }
+            } catch (error) {
+                resultDiv.textContent = '请求失败: ' + error.message;
+            }
+        }
+
+        // 查询任务状态
+        async function getTaskStatus() {
+            const taskId = document.getElementById('taskIdInput').value;
+            const resultDiv = document.getElementById('statusResult');
+            
+            if (!taskId) {
+                resultDiv.textContent = '请输入任务ID';
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/stockWarning/getTaskStatus?taskId=${taskId}`);
+                const data = await response.json();
+                
+                resultDiv.textContent = JSON.stringify(data, null, 2);
+                
+                // 更新进度条
+                if (data.code === 200 && data.data.progress !== undefined) {
+                    updateProgress(data.data);
+                }
+            } catch (error) {
+                resultDiv.textContent = '请求失败: ' + error.message;
+            }
+        }
+
+        // 更新进度显示
+        function updateProgress(taskStatus) {
+            const progressFill = document.getElementById('progressFill');
+            const progressText = document.getElementById('progressText');
+            
+            const progress = Math.round(taskStatus.progress || 0);
+            progressFill.style.width = progress + '%';
+            
+            let statusText = '';
+            switch (taskStatus.status) {
+                case 'RUNNING':
+                    statusText = '计算中';
+                    progressFill.style.backgroundColor = '#1890ff';
+                    break;
+                case 'COMPLETED':
+                    statusText = '已完成';
+                    progressFill.style.backgroundColor = '#52c41a';
+                    break;
+                case 'FAILED':
+                    statusText = '失败';
+                    progressFill.style.backgroundColor = '#ff4d4f';
+                    break;
+                default:
+                    statusText = taskStatus.status || '未知';
+            }
+            
+            progressText.textContent = `进度: ${progress}% (${statusText}) - 总数: ${taskStatus.totalCount || 0}, 已处理: ${taskStatus.processedCount || 0}, 成功: ${taskStatus.successCount || 0}, 失败: ${taskStatus.failedCount || 0}`;
+        }
+
+        // 开始轮询
+        function startPolling() {
+            const taskId = document.getElementById('taskIdInput').value;
+            if (!taskId) {
+                alert('请输入任务ID');
+                return;
+            }
+            
+            document.getElementById('pollingBtn').disabled = true;
+            document.getElementById('stopPollingBtn').disabled = false;
+            
+            pollingInterval = setInterval(async () => {
+                await getTaskStatus();
+                
+                // 检查是否完成
+                const resultDiv = document.getElementById('statusResult');
+                const resultText = resultDiv.textContent;
+                if (resultText.includes('"status":"COMPLETED"') || resultText.includes('"status":"FAILED"')) {
+                    stopPolling();
+                }
+            }, 2000);
+        }
+
+        // 停止轮询
+        function stopPolling() {
+            if (pollingInterval) {
+                clearInterval(pollingInterval);
+                pollingInterval = null;
+            }
+            
+            document.getElementById('pollingBtn').disabled = false;
+            document.getElementById('stopPollingBtn').disabled = true;
+        }
+
+        // 清理任务
+        async function cleanupTasks() {
+            const resultDiv = document.getElementById('cleanupResult');
+            resultDiv.textContent = '正在清理任务...';
+            
+            try {
+                const response = await fetch(`${API_BASE}/stockWarning/cleanupTasks`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({})
+                });
+                
+                const data = await response.json();
+                resultDiv.textContent = JSON.stringify(data, null, 2);
+            } catch (error) {
+                resultDiv.textContent = '请求失败: ' + error.message;
+            }
+        }
+
+        // 页面卸载时停止轮询
+        window.addEventListener('beforeunload', stopPolling);
+    </script>
+</body>
+</html>

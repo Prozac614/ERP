@@ -27,6 +27,8 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.File;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.text.SimpleDateFormat;
 import java.util.*;
 
 @Service
@@ -1333,7 +1335,7 @@ public class MaterialService {
 
     /**
      * 根据商品和仓库获取安全库存信息
-     * 
+     *
      * @param materialId
      * @param depotId
      * @return
@@ -1348,6 +1350,67 @@ public class MaterialService {
             materialInitialStock = list.get(0);
         }
         return materialInitialStock;
+    }
+
+    /**
+     * 计算商品过去6个月的平均日销量
+     *
+     * @param materialId 商品ID
+     * @return 平均日销量
+     */
+    public BigDecimal calculateAverageDailySales(Long materialId) {
+        try {
+            // 计算6个月前的日期
+            Calendar calendar = Calendar.getInstance();
+            calendar.add(Calendar.MONTH, -6);
+            String beginTime = new SimpleDateFormat("yyyy-MM-dd").format(calendar.getTime()) + " 00:00:00";
+            String endTime = new SimpleDateFormat("yyyy-MM-dd").format(new Date()) + " 23:59:59";
+
+            // 获取该商品的每日出库数据
+            List<Map<String, Object>> dailyOutList = depotItemService.getDailyOutStock(
+                    materialId.toString(), beginTime, endTime);
+
+            if (dailyOutList == null || dailyOutList.isEmpty()) {
+                return BigDecimal.ZERO;
+            }
+
+            // 计算总出库量
+            BigDecimal totalOutQuantity = BigDecimal.ZERO;
+            for (Map<String, Object> dailyOut : dailyOutList) {
+                Object outQuantity = dailyOut.get("outQuantity");
+                if (outQuantity != null) {
+                    totalOutQuantity = totalOutQuantity.add(new BigDecimal(outQuantity.toString()));
+                }
+            }
+
+            // 计算天数（6个月按180天计算）
+            int days = 180;
+
+            // 计算平均日销量
+            if (days > 0) {
+                return totalOutQuantity.divide(new BigDecimal(days), 6, RoundingMode.HALF_UP);
+            }
+
+            return BigDecimal.ZERO;
+        } catch (Exception e) {
+            logger.error("计算商品{}平均日销量失败", materialId, e);
+            return BigDecimal.ZERO;
+        }
+    }
+
+    /**
+     * 根据平均日销量计算最低安全库存阈值
+     *
+     * @param averageDailySales 平均日销量
+     * @return 最低安全库存阈值（6个月的销量）
+     */
+    public BigDecimal calculateLowSafeStock(BigDecimal averageDailySales) {
+        if (averageDailySales == null || averageDailySales.compareTo(BigDecimal.ZERO) <= 0) {
+            return BigDecimal.ZERO;
+        }
+
+        // 6个月按180天计算
+        return averageDailySales.multiply(new BigDecimal(180)).setScale(0, RoundingMode.HALF_UP);
     }
 
     public List<MaterialVo4Unit> getMaterialByMeId(Long meId) {

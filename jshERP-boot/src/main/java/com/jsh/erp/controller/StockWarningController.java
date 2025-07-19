@@ -1,0 +1,112 @@
+package com.jsh.erp.controller;
+
+import com.jsh.erp.service.StockWarningCalculationService;
+import com.jsh.erp.utils.BaseResponseInfo;
+import io.swagger.annotations.Api;
+import io.swagger.annotations.ApiOperation;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.web.bind.annotation.*;
+
+import javax.annotation.Resource;
+import javax.servlet.http.HttpServletRequest;
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * 库存预警控制器
+ * 
+ * @author jishenghua
+ */
+@RestController
+@RequestMapping(value = "/stockWarning")
+@Api(tags = {"库存预警管理"})
+public class StockWarningController {
+    
+    private Logger logger = LoggerFactory.getLogger(StockWarningController.class);
+    
+    @Resource
+    private StockWarningCalculationService stockWarningCalculationService;
+    
+    /**
+     * 开始库存预警检查计算
+     * 
+     * @param request
+     * @return
+     */
+    @PostMapping(value = "/startCalculation")
+    @ApiOperation(value = "开始库存预警检查计算")
+    public BaseResponseInfo startCalculation(HttpServletRequest request) {
+        BaseResponseInfo res = new BaseResponseInfo();
+        try {
+            String taskId = stockWarningCalculationService.startStockWarningCalculation();
+            
+            Map<String, Object> result = new HashMap<>();
+            result.put("taskId", taskId);
+            result.put("message", "库存预警计算任务已启动");
+            
+            res.code = 200;
+            res.data = result;
+            
+            logger.info("库存预警计算任务启动成功，任务ID: {}", taskId);
+            
+        } catch (Exception e) {
+            logger.error("启动库存预警计算任务失败", e);
+            res.code = 500;
+            res.data = "启动计算任务失败: " + e.getMessage();
+        }
+        return res;
+    }
+    
+    /**
+     * 获取计算任务状态
+     * 
+     * @param taskId 任务ID
+     * @param request
+     * @return
+     */
+    @GetMapping(value = "/getTaskStatus")
+    @ApiOperation(value = "获取计算任务状态")
+    public BaseResponseInfo getTaskStatus(@RequestParam("taskId") String taskId, 
+                                        HttpServletRequest request) {
+        BaseResponseInfo res = new BaseResponseInfo();
+        try {
+            Map<String, Object> taskStatus = stockWarningCalculationService.getTaskStatus(taskId);
+            
+            res.code = 200;
+            res.data = taskStatus;
+            
+        } catch (Exception e) {
+            logger.error("获取任务状态失败，任务ID: {}", taskId, e);
+            res.code = 500;
+            res.data = "获取任务状态失败: " + e.getMessage();
+        }
+        return res;
+    }
+    
+    /**
+     * 清理已完成的任务
+     * 
+     * @param request
+     * @return
+     */
+    @PostMapping(value = "/cleanupTasks")
+    @ApiOperation(value = "清理已完成的任务")
+    public BaseResponseInfo cleanupTasks(HttpServletRequest request) {
+        BaseResponseInfo res = new BaseResponseInfo();
+        try {
+            stockWarningCalculationService.cleanupCompletedTasks();
+            
+            res.code = 200;
+            res.data = "任务清理完成";
+            
+            logger.info("库存预警计算任务清理完成");
+            
+        } catch (Exception e) {
+            logger.error("清理任务失败", e);
+            res.code = 500;
+            res.data = "清理任务失败: " + e.getMessage();
+        }
+        return res;
+    }
+}

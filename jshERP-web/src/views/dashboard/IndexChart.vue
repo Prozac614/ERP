@@ -40,6 +40,7 @@
           <a-button @click="handleExport" type="primary" icon="download">导出库存</a-button>
           <a-button icon="reload" @click="refreshData">刷新数据</a-button>
           <a-button icon="warning" @click="showLowStockAlert">低库存预警</a-button>
+          <a-button icon="calculator" @click="startStockWarningCalculation" :loading="calculationLoading">库存预警检查</a-button>
 
           <!-- 暂时隐藏展示所有数据按钮 -->
           <!-- 
@@ -179,6 +180,7 @@
 <script>
   import moment from 'moment'
   import { getAction, postAction } from '@/api/manage'
+  import { startStockWarningCalculation, getTaskStatus } from '@/api/stockWarning'
   import JEllipsis from '@/components/jeecg/JEllipsis'
   import VirtualTable from '@/components/VirtualTable'
   import VirtualTableOptimized from '@/components/VirtualTableOptimized'
@@ -207,8 +209,6 @@
         loadingRequest: null,
         dailyOutData: {},
         dateColumns: [],
-        cacheBreaker: null, // 缓存破坏参数
-        cacheBreaker: null, // 缓存破坏参数
         // 展示所有商品控制
         showAllProducts: false,
         // 页面样式
@@ -447,11 +447,6 @@
           params.endTime = this.queryParam.createTimeRange[1].format('YYYY-MM-DD')
         }
 
-        // 添加缓存破坏参数
-        if (this.cacheBreaker) {
-          params._t = this.cacheBreaker
-        }
-
         // 取消之前的请求
         if (this.loadingRequest) {
           this.loadingRequest.abort()
@@ -531,56 +526,14 @@
       },
 
       // 刷新数据
-      async refreshData() {
-        this.loading = true
-
-        try {
-          // 1. 清除前端缓存
-          this.dataCache.clear()
-
-          // 2. 添加缓存破坏参数
-          this.cacheBreaker = Date.now()
-          console.log('添加缓存破坏参数:', this.cacheBreaker)
-
-          // 3. 尝试清除服务器端缓存（如果接口可用）
-          try {
-            console.log('尝试清除服务器端缓存...')
-            const clearCacheResponse = await postAction('/depotItem/clearCache', {})
-
-            if (clearCacheResponse.code === 200) {
-              console.log('服务器端缓存清除成功')
-              this.$message.success('缓存已清除，正在刷新数据...')
-            } else {
-              console.warn('清除服务器端缓存失败:', clearCacheResponse.data)
-              this.$message.info('正在刷新数据...')
-            }
-          } catch (cacheError) {
-            console.warn('清除服务器端缓存接口不可用，使用缓存破坏机制')
-            this.$message.info('正在刷新数据...')
-          }
-
-        } catch (error) {
-          console.error('刷新过程出错:', error)
-        }
-
-        // 3. 添加缓存破坏参数并重新加载数据
-        try {
-          // 添加时间戳参数来绕过缓存
-          this.cacheBreaker = Date.now()
-
-          if (this.showAllProducts) {
-            await this.loadAllProducts()
-          } else {
-            await this.loadStockData(1)
-          }
-
-          this.$message.success('数据刷新完成')
-
-        } catch (error) {
-          console.error('刷新数据失败:', error)
-          this.$message.error('刷新数据失败: ' + (error.message || '未知错误'))
-        } finally {
-          this.loading = false
+      refreshData() {
+        // 清除缓存
+        this.dataCache.clear()
+        
+        if (this.showAllProducts) {
+          this.loadAllProducts()
+        } else {
+          this.loadStockData(1)
         }
       },
 
@@ -621,11 +574,6 @@
         if (this.queryParam.createTimeRange && this.queryParam.createTimeRange.length === 2) {
           params.beginTime = this.queryParam.createTimeRange[0].format('YYYY-MM-DD')
           params.endTime = this.queryParam.createTimeRange[1].format('YYYY-MM-DD')
-        }
-
-        // 添加缓存破坏参数
-        if (this.cacheBreaker) {
-          params._t = this.cacheBreaker
         }
 
         // 检查缓存
@@ -760,97 +708,92 @@
         this.chartModal.currentMaterial = {}
       },
       handleExport() {
-        this.$confirm({
-          title: '确认导出',
-          content: '是否导出当前表格中的商品库存数据？',
-          onOk: () => {
-            this.exportTableData()
-          }
-        })
-      },
-
-      // 直接导出表格数据为CSV格式
-      exportTableData() {
-        try {
-          this.$message.loading('正在导出数据，请稍候...', 0)
-
-          // 检查是否有数据
-          if (!this.dataSource || this.dataSource.length === 0) {
-            this.$message.destroy()
-            this.$message.warning('没有数据可以导出')
-            return
-          }
-
-          // 准备CSV数据
-          let csvContent = ''
-
-          // 添加BOM以支持中文
-          csvContent += '\uFEFF'
-
-          // 添加表头
-          const headers = [
-            '商品编码',
-            '商品名称',
-            '本期结存',
-            '上期结存',
-            '本期出库',
-            '上期出库'
-          ]
-          csvContent += headers.join(',') + '\n'
-
-          // 添加数据行
-          this.dataSource.forEach(item => {
-            const row = [
-              `"${item.barCode || ''}"`,
-              `"${item.materialName || ''}"`,
-              item.currentPeriodStock || 0,
-              item.previousPeriodStock || 0,
-              item.currentPeriodOut || 0,
-              item.previousPeriodOut || 0
-            ]
-            csvContent += row.join(',') + '\n'
-          })
-
-          // 创建Blob对象
-          const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-
-          // 生成文件名
-          const now = new Date()
-          const timestamp = now.getFullYear() +
-                          String(now.getMonth() + 1).padStart(2, '0') +
-                          String(now.getDate()).padStart(2, '0') + '_' +
-                          String(now.getHours()).padStart(2, '0') +
-                          String(now.getMinutes()).padStart(2, '0') +
-                          String(now.getSeconds()).padStart(2, '0')
-          const filename = `商品库存数据_${timestamp}.csv`
-
-          // 创建下载链接
-          const link = document.createElement('a')
-          if (link.download !== undefined) {
-            const url = URL.createObjectURL(blob)
-            link.setAttribute('href', url)
-            link.setAttribute('download', filename)
-            link.style.visibility = 'hidden'
-            document.body.appendChild(link)
-            link.click()
-            document.body.removeChild(link)
-            URL.revokeObjectURL(url)
-          }
-
-          this.$message.destroy()
-          this.$message.success(`导出成功！共导出 ${this.dataSource.length} 条数据`)
-
-        } catch (error) {
-          console.error('导出失败:', error)
-          this.$message.destroy()
-          this.$message.error('导出失败: ' + error.message)
-        }
+        this.$message.info('导出库存数据功能')
       },
       showLowStockAlert() {
         this.$message.info('显示低库存预警')
       },
 
+      // 开始库存预警计算
+      startStockWarningCalculation() {
+        this.$confirm({
+          title: '库存预警检查',
+          content: '系统将自动计算所有商品过去6个月的平均日销量，并设置最低安全库存阈值。此过程可能需要几分钟时间，是否继续？',
+          onOk: () => {
+            this.executeStockWarningCalculation()
+          }
+        })
+      },
 
+      // 执行库存预警计算
+      async executeStockWarningCalculation() {
+        this.calculationLoading = true
+        try {
+          // 启动计算任务
+          const response = await startStockWarningCalculation()
+          if (response.code === 200) {
+            this.calculationTaskId = response.data.taskId
+            this.$message.success('库存预警计算任务已启动')
+
+            // 显示进度弹窗
+            this.showCalculationProgress()
+          } else {
+            this.$message.error('启动计算任务失败: ' + response.data)
+          }
+        } catch (error) {
+          console.error('启动库存预警计算失败:', error)
+          this.$message.error('启动计算任务失败: ' + error.message)
+        } finally {
+          this.calculationLoading = false
+        }
+      },
+
+      // 显示计算进度
+      showCalculationProgress() {
+        // 显示进度弹窗
+        this.progressModal.visible = true
+        this.progressModal.taskStatus = {
+          status: 'RUNNING',
+          totalCount: 0,
+          processedCount: 0,
+          successCount: 0,
+          failedCount: 0,
+          progress: 0
+        }
+
+        // 定时查询进度
+        this.checkProgress()
+      },
+
+      // 查询计算进度
+      async checkProgress() {
+        try {
+          const response = await getTaskStatus(this.calculationTaskId)
+          if (response.code === 200) {
+            const taskStatus = response.data
+            this.progressModal.taskStatus = taskStatus
+
+            if (taskStatus.status === 'COMPLETED') {
+              this.$message.success(`库存预警计算完成！成功处理 ${taskStatus.successCount} 个商品`)
+              return
+            } else if (taskStatus.status === 'FAILED') {
+              this.$message.error('库存预警计算失败: ' + taskStatus.errorMessage)
+              return
+            }
+
+            // 继续查询进度
+            setTimeout(() => this.checkProgress(), 2000)
+          }
+        } catch (error) {
+          console.error('查询计算进度失败:', error)
+          this.$message.error('查询计算进度失败: ' + error.message)
+        }
+      },
+
+      // 关闭进度弹窗
+      handleProgressModalCancel() {
+        this.progressModal.visible = false
+      },
 
       // 优化虚拟表格相关方法
       handleCellClick(cellInfo) {
