@@ -1295,29 +1295,33 @@
     <!-- 优化的商品期间库存统计查询 -->
     <select id="getMaterialPeriodStockOptimized" resultType="com.jsh.erp.datasource.vo.MaterialStockPeriodVo">
         select
-            mps.material_id as materialId,
-            mps.bar_code as barCode,
-            mps.material_name as materialName,
-            mps.current_period_stock as currentPeriodStock,
-            mps.previous_period_stock as previousPeriodStock,
-            mps.current_period_out as currentPeriodOut,
-            mps.previous_period_out as previousPeriodOut,
-            -- 库存告急状态计算
+            m.id as materialId,
+            m.bar_code as barCode,
+            m.name as materialName,
+            -- 从期间汇总表获取库存统计数据（如果有的话）
+            IFNULL(mps.current_period_stock, 0) as currentPeriodStock,
+            IFNULL(mps.previous_period_stock, 0) as previousPeriodStock,
+            IFNULL(mps.current_period_out, 0) as currentPeriodOut,
+            IFNULL(mps.previous_period_out, 0) as previousPeriodOut,
+            -- 直接从商品表获取库存告急状态
             m.stock_alert_status as stockAlertStatus,
             m.last_six_months_sales as lastSixMonthsSales,
             m.stock_alert_ignored_at as stockAlertIgnoredAt
-        from jsh_material_period_summary mps
-        left join jsh_material m on mps.material_id = m.id
-        where ifnull(mps.delete_flag,'0') != '1'
-        and ifnull(m.delete_flag,'0') != '1'
+        from jsh_material m
+        left join jsh_material_period_summary mps on m.id = mps.material_id
+            and ifnull(mps.delete_flag,'0') != '1'
+            <if test="tenantId != null">
+                and mps.tenant_id = #{tenantId}
+            </if>
+        where ifnull(m.delete_flag,'0') != '1'
         <if test="tenantId != null">
-            and mps.tenant_id = #{tenantId}
+            and m.tenant_id = #{tenantId}
         </if>
         <if test="materialParam != null and materialParam != ''">
-            and (mps.bar_code like concat('%', #{materialParam}, '%')
-                or mps.material_name like concat('%', #{materialParam}, '%'))
+            and (m.bar_code like concat('%', #{materialParam}, '%')
+                or m.name like concat('%', #{materialParam}, '%'))
         </if>
-        order by mps.material_id
+        order by m.id
         <if test="offset != null and rows != null">
             limit #{offset}, #{rows}
         </if>
@@ -1326,14 +1330,14 @@
     <!-- 优化的商品期间库存统计计数 -->
     <select id="getMaterialPeriodStockCountOptimized" resultType="java.lang.Integer">
         select count(1)
-        from jsh_material_period_summary mps
-        where ifnull(mps.delete_flag,'0') != '1'
+        from jsh_material m
+        where ifnull(m.delete_flag,'0') != '1'
         <if test="tenantId != null">
-            and mps.tenant_id = #{tenantId}
+            and m.tenant_id = #{tenantId}
         </if>
         <if test="materialParam != null and materialParam != ''">
-            and (mps.bar_code like concat('%', #{materialParam}, '%')
-                or mps.material_name like concat('%', #{materialParam}, '%'))
+            and (m.bar_code like concat('%', #{materialParam}, '%')
+                or m.name like concat('%', #{materialParam}, '%'))
         </if>
     </select>
 
