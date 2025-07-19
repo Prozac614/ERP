@@ -36,6 +36,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -77,6 +78,9 @@ public class DepotItemController {
     
     @Resource
     private DepotItemOptimizedService depotItemOptimizedService;
+
+    @Resource
+    private com.jsh.erp.datasource.mappers.DepotItemMapperEx depotItemMapperEx;
 
     @Value(value = "${file.uploadType}")
     private Long fileUploadType;
@@ -1618,7 +1622,8 @@ public class DepotItemController {
             Material material = new Material();
             material.setId(materialId);
             material.setStockAlertIgnoredAt(new Date());
-            materialService.updateMaterial(material, request);
+            // 直接使用mapper更新，避免JSON转换问题
+            materialService.updateMaterialByEntity(material);
 
             res.code = 200;
             res.data = "已忽略库存风险";
@@ -1664,7 +1669,8 @@ public class DepotItemController {
             Material material = new Material();
             material.setId(materialId);
             material.setStockAlertIgnoredAt(null);
-            materialService.updateMaterial(material, request);
+            // 直接使用mapper更新，避免JSON转换问题
+            materialService.updateMaterialByEntity(material);
 
             res.code = 200;
             res.data = "已重新关注库存风险，当前状态：" + (alertStatus.equals("NO_RISK") ? "无风险" : "库存告急");

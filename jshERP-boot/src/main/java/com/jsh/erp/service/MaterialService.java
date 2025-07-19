@@ -1725,4 +1725,17 @@ public class MaterialService {
             return BigDecimal.ZERO;
         }
     }
+
+    /**
+     * 直接使用实体对象更新商品信息
+     * @param material 商品实体对象
+     */
+    public void updateMaterialByEntity(Material material) {
+        try {
+            materialMapper.updateByPrimaryKeySelective(material);
+            logger.debug("更新商品{}信息成功", material.getId());
+        } catch (Exception e) {
+            logger.error("更新商品{}信息失败", material.getId(), e);
+        }
+    }
 }
