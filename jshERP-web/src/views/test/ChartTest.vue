@@ -11,19 +11,19 @@
           </a-col>
           <a-col :span="6">
             <a-form-item label="开始日期">
-              <a-date-picker 
-                v-model="testParams.beginDate" 
+              <a-date-picker
+                v-model="testParams.beginDate"
                 format="YYYY-MM-DD"
-                placeholder="选择开始日期" 
+                placeholder="选择开始日期"
               />
             </a-form-item>
           </a-col>
           <a-col :span="6">
             <a-form-item label="结束日期">
-              <a-date-picker 
-                v-model="testParams.endDate" 
+              <a-date-picker
+                v-model="testParams.endDate"
                 format="YYYY-MM-DD"
-                placeholder="选择结束日期" 
+                placeholder="选择结束日期"
               />
             </a-form-item>
           </a-col>
@@ -49,11 +49,11 @@
           <a-descriptions-item label="开始日期">{{ testResult.beginTime }}</a-descriptions-item>
           <a-descriptions-item label="结束日期">{{ testResult.endTime }}</a-descriptions-item>
         </a-descriptions>
-        
+
         <!-- 出库数据表格 -->
-        <a-table 
-          :columns="outboundColumns" 
-          :dataSource="testResult.dailyOutData" 
+        <a-table
+          :columns="outboundColumns"
+          :dataSource="testResult.dailyOutData"
           :pagination="{ pageSize: 10 }"
           size="small"
           style="margin-top: 16px"
@@ -147,10 +147,14 @@ export default {
       }
 
       // 构造图表所需的商品信息
+      const firstOutData = this.testResult.dailyOutData && this.testResult.dailyOutData.length > 0
+        ? this.testResult.dailyOutData[0]
+        : {}
+
       const materialInfo = {
         materialId: parseInt(this.testParams.materialId),
-        barCode: this.testResult.dailyOutData[0]?.barCode || 'TEST001',
-        materialName: this.testResult.dailyOutData[0]?.materialName || '测试商品',
+        barCode: firstOutData.barCode || 'TEST001',
+        materialName: firstOutData.materialName || '测试商品',
         currentPeriodStock: 100,
         previousPeriodStock: 150,
         currentPeriodOut: 50,
