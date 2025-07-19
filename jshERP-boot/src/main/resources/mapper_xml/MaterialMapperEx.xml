@@ -883,4 +883,14 @@
         AND IFNULL(delete_flag, '0') != '1'
     </update>
 
+    <!-- 将商品状态更新为忽略风险 -->
+    <update id="updateStockAlertToIgnored">
+        UPDATE jsh_material
+        SET stock_alert_status = 'RISK_IGNORED',
+            stock_alert_ignored_at = NOW(),
+            stock_alert_updated_at = NOW()
+        WHERE id = #{materialId}
+        AND IFNULL(delete_flag, '0') != '1'
+    </update>
+
 </mapper>

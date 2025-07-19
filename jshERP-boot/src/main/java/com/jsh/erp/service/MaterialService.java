@@ -1706,18 +1706,12 @@ public class MaterialService {
      */
     public void ignoreStockRisk(Long materialId) {
         try {
-            // 先更新状态为忽略风险
-            Material material = new Material();
-            material.setId(materialId);
-            material.setStockAlertStatus("RISK_IGNORED");
-            material.setStockAlertIgnoredAt(new Date());
-            material.setStockAlertUpdatedAt(new Date());
-
-            int result = materialMapper.updateByPrimaryKeySelective(material);
+            // 使用直接SQL更新，确保数据库更新成功
+            int result = materialMapperEx.updateStockAlertToIgnored(materialId);
             logger.info("忽略商品{}库存风险，更新结果：{}", materialId, result);
 
             if (result == 0) {
-                throw new RuntimeException("更新失败，可能商品不存在");
+                throw new RuntimeException("更新失败，可能商品不存在或已被删除");
             }
         } catch (Exception e) {
             logger.error("忽略商品{}库存风险失败", materialId, e);

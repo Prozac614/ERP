@@ -183,4 +183,9 @@ public interface MaterialMapperEx {
             @Param("materialId") Long materialId,
             @Param("alertStatus") String alertStatus,
             @Param("sixMonthsSales") BigDecimal sixMonthsSales);
+
+    /**
+     * 将商品状态更新为忽略风险
+     */
+    int updateStockAlertToIgnored(@Param("materialId") Long materialId);
 }

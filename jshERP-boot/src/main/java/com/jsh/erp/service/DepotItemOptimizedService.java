@@ -17,6 +17,7 @@ import javax.servlet.http.HttpServletRequest;
 import java.math.BigDecimal;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 /**
  * 商品库存优化服务类
@@ -31,6 +32,9 @@ public class DepotItemOptimizedService {
 
     @Resource
     private DepotItemMapperEx depotItemMapperEx;
+
+    @Resource
+    private MaterialService materialService;
     
     @Resource
     private UserService userService;
@@ -133,8 +137,17 @@ public class DepotItemOptimizedService {
             }
         }
 
-        // 3. 计算和更新库存告急状态
-        calculateAndUpdateStockAlertStatus(stockList, tenantId);
+        // 3. 直接读取数据库状态，不进行自动计算
+        // 只确保每个商品都有一个默认状态（如果数据库中为空的话）
+        ensureDefaultStatus(stockList);
+
+        // 调试：输出前几条数据的库存状态
+        logger.debug("=== 库存状态读取结果 ===");
+        stockList.stream().limit(3).forEach(stock -> {
+            logger.debug("商品: ID={}, 名称={}, 状态={}",
+                       stock.getMaterialId(), stock.getMaterialName(),
+                       stock.getStockAlertStatus());
+        });
 
         resultMap.put("rows", stockList);
         resultMap.put("total", total);
@@ -162,8 +175,17 @@ public class DepotItemOptimizedService {
                     materialParam, (currentPage - 1) * pageSize, pageSize, tenantId);
             int total = depotItemMapperEx.getMaterialPeriodStockCountOptimized(materialParam, tenantId);
 
-            // 计算和更新库存告急状态
-            calculateAndUpdateStockAlertStatus(stockList, tenantId);
+        // 临时调试：检查查询后的原始数据
+        logger.info("=== 查询后原始数据检查 ===");
+        stockList.stream()
+            .filter(stock -> "RISK_IGNORED".equals(stock.getStockAlertStatus()))
+            .forEach(stock -> {
+                logger.info("查询到忽略风险商品：ID={}, 名称={}, 状态={}",
+                           stock.getMaterialId(), stock.getMaterialName(), stock.getStockAlertStatus());
+            });
+
+            // 直接读取数据库状态，不进行自动计算
+            ensureDefaultStatus(stockList);
 
             resultMap.put("rows", stockList);
             resultMap.put("total", total);
@@ -406,19 +428,56 @@ public class DepotItemOptimizedService {
     }
 
     /**
-     * 计算和更新库存告急状态
+     * 确保每个商品都有默认状态（仅用于空状态的情况）
      * @param stockList 商品库存列表
-     * @param tenantId 租户ID
      */
-    private void calculateAndUpdateStockAlertStatus(List<MaterialStockPeriodVo> stockList, Long tenantId) {
+    private void ensureDefaultStatus(List<MaterialStockPeriodVo> stockList) {
         if (stockList == null || stockList.isEmpty()) {
             return;
         }
 
         try {
             for (MaterialStockPeriodVo stock : stockList) {
-                // 获取数据库中的状态
                 String currentStatus = stock.getStockAlertStatus();
+
+                // 只有当状态为空时，才设置默认状态
+                if (currentStatus == null || currentStatus.trim().isEmpty()) {
+                    stock.setStockAlertStatus("NO_RISK");  // 设置默认状态
+                    logger.debug("商品{}状态为空，设置默认状态：NO_RISK", stock.getMaterialId());
+                }
+            }
+        } catch (Exception e) {
+            logger.error("确保默认状态失败", e);
+        }
+    }
+
+    /**
+     * 批量计算和更新所有商品的库存告急状态（手动触发）
+     * @param tenantId 租户ID
+     * @return 更新结果
+     */
+    public Map<String, Object> calculateAllStockAlertStatus(Long tenantId) {
+        Map<String, Object> result = new HashMap<>();
+
+        try {
+            logger.info("开始批量计算库存告急状态，租户ID：{}", tenantId);
+
+            // 获取所有商品（不分页）
+            List<MaterialStockPeriodVo> allStockList = depotItemMapperEx.getMaterialPeriodStockOptimized(
+                    null, 0, Integer.MAX_VALUE, tenantId);
+
+            int totalCount = allStockList.size();
+            int updatedCount = 0;
+            int ignoredCount = 0;
+
+            for (MaterialStockPeriodVo stock : allStockList) {
+                String currentStatus = stock.getStockAlertStatus();
+
+                // 跳过已忽略风险的商品
+                if ("RISK_IGNORED".equals(currentStatus)) {
+                    ignoredCount++;
+                    continue;
+                }
 
                 // 获取当前库存
                 BigDecimal currentStock = stock.getCurrentPeriodStock();
@@ -426,40 +485,43 @@ public class DepotItemOptimizedService {
                     currentStock = BigDecimal.ZERO;
                 }
 
-                // 计算过去6个月的销量（如果没有缓存的话）
-                BigDecimal sixMonthsSales = stock.getLastSixMonthsSales();
-                if (sixMonthsSales == null) {
-                    sixMonthsSales = calculateSixMonthsSales(stock.getMaterialId(), tenantId);
-                    stock.setLastSixMonthsSales(sixMonthsSales);
+                // 计算过去6个月的销量
+                BigDecimal sixMonthsSales = calculateSixMonthsSales(stock.getMaterialId(), tenantId);
+
+                // 计算新的告急状态
+                String newStatus;
+                if (currentStock.compareTo(sixMonthsSales) >= 0) {
+                    newStatus = "NO_RISK";  // 无风险
+                } else {
+                    newStatus = "STOCK_ALERT";  // 库存告急
                 }
 
-                // 如果没有状态或状态为空，则计算新状态
-                if (currentStatus == null || currentStatus.trim().isEmpty()) {
-                    // 计算库存告急状态
-                    String alertStatus;
-                    if (currentStock.compareTo(sixMonthsSales) >= 0) {
-                        alertStatus = "NO_RISK";  // 无风险
-                    } else {
-                        alertStatus = "STOCK_ALERT";  // 库存告急
-                    }
+                // 更新数据库
+                materialService.updateStockAlertStatus(stock.getMaterialId(), newStatus, sixMonthsSales);
+                updatedCount++;
 
-                    stock.setStockAlertStatus(alertStatus);
-
-                    // 异步更新数据库中的状态（避免影响查询性能）
-                    updateMaterialStockAlertStatusAsync(stock.getMaterialId(), alertStatus, sixMonthsSales);
-                }
-
-                // 确保每个商品都有状态（防止前端显示"待计算"）
-                if (stock.getStockAlertStatus() == null || stock.getStockAlertStatus().trim().isEmpty()) {
-                    // 如果仍然没有状态，给一个默认状态
-                    String defaultStatus = currentStock.compareTo(sixMonthsSales) >= 0 ? "NO_RISK" : "STOCK_ALERT";
-                    stock.setStockAlertStatus(defaultStatus);
+                if (updatedCount % 100 == 0) {
+                    logger.info("已处理{}个商品", updatedCount);
                 }
             }
+
+            result.put("success", true);
+            result.put("totalCount", totalCount);
+            result.put("updatedCount", updatedCount);
+            result.put("ignoredCount", ignoredCount);
+            result.put("message", String.format("成功计算%d个商品的库存状态，跳过%d个已忽略风险的商品",
+                                               updatedCount, ignoredCount));
+
+            logger.info("批量计算库存告急状态完成：总数={}, 更新={}, 跳过={}",
+                       totalCount, updatedCount, ignoredCount);
+
         } catch (Exception e) {
-            logger.error("计算库存告急状态失败", e);
-            // 不抛出异常，避免影响主要查询功能
+            logger.error("批量计算库存告急状态失败", e);
+            result.put("success", false);
+            result.put("message", "计算失败：" + e.getMessage());
         }
+
+        return result;
     }
 
     /**

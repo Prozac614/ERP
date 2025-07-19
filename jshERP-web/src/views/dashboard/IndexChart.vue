@@ -38,6 +38,13 @@
         <!-- 操作按钮区域 -->
         <div class="table-operator"  style="margin-top: 5px">
           <a-button @click="handleExport" type="primary" icon="download">导出库存</a-button>
+          <a-button @click="calculateAllStockAlert"
+                    type="default"
+                    icon="calculator"
+                    style="margin-left: 8px;"
+                    :loading="calculatingAlert">
+            库存预警校验
+          </a-button>
           <a-button icon="reload" @click="refreshData">刷新数据</a-button>
 
           <!-- 暂时隐藏展示所有数据按钮 -->
@@ -236,6 +243,7 @@
         dailyOutData: {},
         dateColumns: [],
         hasAutoRefreshed: false, // 防止自动刷新无限循环
+        calculatingAlert: false, // 库存预警校验加载状态
         // 展示所有商品控制
         showAllProducts: false,
         // 页面样式
@@ -646,22 +654,22 @@
         this.dailyOutData = data.dailyOutData || {}
         this.performanceStats = data.performanceStats || {}
 
+        // 临时调试：输出前几条数据的库存状态
+        console.log('=== 库存状态调试信息 ===')
+        this.dataSource.slice(0, 5).forEach((item, index) => {
+          console.log(`商品${index + 1}: ID=${item.materialId}, 名称=${item.materialName}, 状态=${item.stockAlertStatus}`)
+        })
+
+        // 统计各种状态的数量
+        const statusCount = {}
+        this.dataSource.forEach(item => {
+          const status = item.stockAlertStatus || 'NULL'
+          statusCount[status] = (statusCount[status] || 0) + 1
+        })
+        console.log('状态统计:', statusCount)
+
         // 合并每日出库数据到商品数据中
         this.mergeDataOptimized()
-
-        // 检查是否有状态为空或未计算的商品
-        const hasEmptyStatus = this.dataSource.some(item =>
-          !item.stockAlertStatus || item.stockAlertStatus.trim() === ''
-        )
-
-        // 如果有未计算的状态，延迟3秒后自动刷新一次（仅刷新一次避免无限循环）
-        if (hasEmptyStatus && !this.hasAutoRefreshed) {
-          console.log('发现未计算的库存状态，3秒后自动刷新数据')
-          this.hasAutoRefreshed = true
-          setTimeout(() => {
-            this.loadStockData()
-          }, 3000)
-        }
       },
 
       // 高效的数据合并方法
@@ -819,6 +827,40 @@
           console.error('关注库存风险失败:', error)
           this.$message.error('操作失败，请重试')
         })
+      },
+
+      // 批量计算库存预警状态
+      async calculateAllStockAlert() {
+        try {
+          // 显示确认对话框
+          this.$confirm({
+            title: '确认操作',
+            content: '此操作将重新计算所有商品的库存预警状态，可能需要较长时间，是否继续？',
+            okText: '确认',
+            cancelText: '取消',
+            onOk: async () => {
+              this.calculatingAlert = true
+              try {
+                const res = await this.$http.post('/depotItem/calculateAllStockAlertStatus')
+                if (res.code === 200) {
+                  this.$message.success(res.data || '库存预警状态计算完成')
+                  // 刷新数据
+                  this.loadStockData()
+                } else {
+                  this.$message.error(res.data || '计算失败')
+                }
+              } catch (error) {
+                console.error('批量计算失败:', error)
+                this.$message.error('计算失败')
+              } finally {
+                this.calculatingAlert = false
+              }
+            }
+          })
+        } catch (error) {
+          console.error('批量计算操作失败:', error)
+          this.$message.error('操作失败')
+        }
       },
 
       // 优化虚拟表格相关方法

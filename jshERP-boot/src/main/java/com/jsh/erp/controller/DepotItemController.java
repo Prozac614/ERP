@@ -1617,14 +1617,19 @@ public class DepotItemController {
         Long materialId = null;
         try {
             materialId = obj.getLong("materialId");
+            logger.info("接收到忽略库存风险请求，商品ID：{}", materialId);
+
             if (materialId == null) {
                 res.code = 400;
                 res.data = "商品ID不能为空";
+                logger.warn("忽略库存风险失败：商品ID为空");
                 return res;
             }
 
             // 使用专门的方法忽略库存风险
+            logger.info("开始执行忽略库存风险操作，商品ID：{}", materialId);
             materialService.ignoreStockRisk(materialId);
+            logger.info("忽略库存风险操作执行成功，商品ID：{}", materialId);
 
             res.code = 200;
             res.data = "已忽略库存风险";
@@ -1670,6 +1675,41 @@ public class DepotItemController {
             logger.error("关注库存风险失败，materialId: {}", materialId, e);
             res.code = 500;
             res.data = "操作失败: " + e.getMessage();
+        }
+        return res;
+    }
+
+    /**
+     * 批量计算所有商品的库存告急状态
+     */
+    @PostMapping(value = "/calculateAllStockAlertStatus")
+    public BaseResponseInfo calculateAllStockAlertStatus(HttpServletRequest request) throws Exception {
+        BaseResponseInfo res = new BaseResponseInfo();
+        try {
+            // 获取当前用户的租户ID
+            User currentUser = userService.getCurrentUser();
+            Long tenantId = currentUser.getTenantId();
+
+            logger.info("开始批量计算库存告急状态，操作用户：{}, 租户ID：{}",
+                       currentUser.getUsername(), tenantId);
+
+            // 调用批量计算服务
+            Map<String, Object> result = depotItemOptimizedService.calculateAllStockAlertStatus(tenantId);
+
+            if ((Boolean) result.get("success")) {
+                res.code = 200;
+                res.data = result.get("message");
+                logger.info("批量计算库存告急状态成功：{}", result.get("message"));
+            } else {
+                res.code = 500;
+                res.data = result.get("message");
+                logger.error("批量计算库存告急状态失败：{}", result.get("message"));
+            }
+
+        } catch (Exception e) {
+            logger.error("批量计算库存告急状态失败", e);
+            res.code = 500;
+            res.data = "计算失败：" + e.getMessage();
         }
         return res;
     }
