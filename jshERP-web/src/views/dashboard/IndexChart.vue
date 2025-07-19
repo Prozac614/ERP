@@ -12,15 +12,7 @@
                   <a-input placeholder="请输入唛头、名称、助记码、规格、型号等信息" v-model="queryParam.materialParam"></a-input>
                 </a-form-item>
               </a-col>
-              <a-col :md="6" :sm="24">
-                <a-form-item label="仓库名称" :labelCol="labelCol" :wrapperCol="wrapperCol">
-                  <a-select placeholder="请选择仓库" showSearch allow-clear optionFilterProp="children" v-model="queryParam.depotId">
-                    <a-select-option v-for="(depot,index) in depotList" :key="index" :value="depot.id">
-                      {{ depot.depotName }}
-                    </a-select-option>
-                  </a-select>
-                </a-form-item>
-              </a-col>
+
               <a-col :md="6" :sm="24">
                 <a-form-item label="统计日期" :labelCol="labelCol" :wrapperCol="wrapperCol">
                   <a-range-picker
@@ -47,7 +39,6 @@
         <div class="table-operator"  style="margin-top: 5px">
           <a-button @click="handleExport" type="primary" icon="download">导出库存</a-button>
           <a-button icon="reload" @click="loadStockData(1)">刷新数据</a-button>
-          <a-button icon="pie-chart" @click="showStockChart">库存统计</a-button>
           <a-button icon="warning" @click="showLowStockAlert">低库存预警</a-button>
           <a-popover trigger="click" placement="right">
             <template slot="content">
@@ -242,14 +233,7 @@
           this.loading = false
         })
       },
-      // 获取仓库数据
-      getDepotData() {
-        getAction('/depot/list', { pageSize: 100 }).then((res) => {
-          if (res.success) {
-            this.depotList = res.result.records || []
-          }
-        })
-      },
+
               
       // 表格操作
       handleTableChange(pagination, filters, sorter) {
@@ -282,9 +266,6 @@
       },
       handleExport() {
         this.$message.info('导出库存数据功能')
-      },
-      showStockChart() {
-        this.$message.info('显示库存统计图表')
       },
       showLowStockAlert() {
         this.$message.info('显示低库存预警')
