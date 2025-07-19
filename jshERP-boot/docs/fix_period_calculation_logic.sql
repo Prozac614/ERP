@@ -228,21 +228,21 @@ END$$
 DELIMITER ;
 
 -- 2. 测试期间判断逻辑
-SELECT 
-    NOW() as current_time,
+SELECT
+    NOW() as current_datetime,
     MONTH(NOW()) as current_month,
-    CASE 
+    CASE
         WHEN MONTH(NOW()) >= 2 AND MONTH(NOW()) <= 7 THEN '第一期(2-7月)'
         WHEN MONTH(NOW()) >= 8 THEN '第二期(8-12月)'
         WHEN MONTH(NOW()) = 1 THEN '第二期(1月)'
         ELSE '未知期间'
     END as current_period,
-    CASE 
-        WHEN MONTH(NOW()) >= 2 AND MONTH(NOW()) <= 7 THEN 
+    CASE
+        WHEN MONTH(NOW()) >= 2 AND MONTH(NOW()) <= 7 THEN
             CONCAT('本期: ', YEAR(NOW()), '-02-01 到 ', YEAR(NOW()), '-07-31')
-        WHEN MONTH(NOW()) >= 8 THEN 
+        WHEN MONTH(NOW()) >= 8 THEN
             CONCAT('本期: ', YEAR(NOW()), '-08-01 到 ', YEAR(NOW()) + 1, '-01-31')
-        WHEN MONTH(NOW()) = 1 THEN 
+        WHEN MONTH(NOW()) = 1 THEN
             CONCAT('本期: ', YEAR(NOW()) - 1, '-08-01 到 ', YEAR(NOW()), '-01-31')
     END as current_period_range;
 

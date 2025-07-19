@@ -38,11 +38,7 @@
         <!-- 操作按钮区域 -->
         <div class="table-operator"  style="margin-top: 5px">
           <a-button @click="handleExport" type="primary" icon="download">导出库存</a-button>
-          <a-tooltip title="清除缓存并刷新数据，解决数据显示不一致问题">
-            <a-button icon="reload" @click="refreshData" :loading="loading">
-              {{ loading ? '刷新中...' : '刷新数据' }}
-            </a-button>
-          </a-tooltip>
+          <a-button icon="reload" @click="refreshData">刷新数据</a-button>
           <a-button icon="warning" @click="showLowStockAlert">低库存预警</a-button>
 
           <!-- 暂时隐藏展示所有数据按钮 -->
@@ -211,6 +207,8 @@
         loadingRequest: null,
         dailyOutData: {},
         dateColumns: [],
+        cacheBreaker: null, // 缓存破坏参数
+        cacheBreaker: null, // 缓存破坏参数
         // 展示所有商品控制
         showAllProducts: false,
         // 页面样式
@@ -449,6 +447,11 @@
           params.endTime = this.queryParam.createTimeRange[1].format('YYYY-MM-DD')
         }
 
+        // 添加缓存破坏参数
+        if (this.cacheBreaker) {
+          params._t = this.cacheBreaker
+        }
+
         // 取消之前的请求
         if (this.loadingRequest) {
           this.loadingRequest.abort()
@@ -535,25 +538,36 @@
           // 1. 清除前端缓存
           this.dataCache.clear()
 
-          // 2. 清除服务器端缓存
-          console.log('正在清除服务器端缓存...')
-          const clearCacheResponse = await postAction('/depotItem/clearAllCache', {})
+          // 2. 添加缓存破坏参数
+          this.cacheBreaker = Date.now()
+          console.log('添加缓存破坏参数:', this.cacheBreaker)
 
-          if (clearCacheResponse.code === 200) {
-            console.log('服务器端缓存清除成功')
-            this.$message.success('缓存已清除，正在刷新数据...')
-          } else {
-            console.warn('清除服务器端缓存失败:', clearCacheResponse.data)
-            this.$message.warning('清除缓存失败，但仍会刷新数据')
+          // 3. 尝试清除服务器端缓存（如果接口可用）
+          try {
+            console.log('尝试清除服务器端缓存...')
+            const clearCacheResponse = await postAction('/depotItem/clearCache', {})
+
+            if (clearCacheResponse.code === 200) {
+              console.log('服务器端缓存清除成功')
+              this.$message.success('缓存已清除，正在刷新数据...')
+            } else {
+              console.warn('清除服务器端缓存失败:', clearCacheResponse.data)
+              this.$message.info('正在刷新数据...')
+            }
+          } catch (cacheError) {
+            console.warn('清除服务器端缓存接口不可用，使用缓存破坏机制')
+            this.$message.info('正在刷新数据...')
           }
 
         } catch (error) {
-          console.error('清除服务器端缓存出错:', error)
-          this.$message.warning('清除缓存出错，但仍会刷新数据')
+          console.error('刷新过程出错:', error)
         }
 
-        // 3. 重新加载数据
+        // 3. 添加缓存破坏参数并重新加载数据
         try {
+          // 添加时间戳参数来绕过缓存
+          this.cacheBreaker = Date.now()
+
           if (this.showAllProducts) {
             await this.loadAllProducts()
           } else {
@@ -607,6 +621,11 @@
         if (this.queryParam.createTimeRange && this.queryParam.createTimeRange.length === 2) {
           params.beginTime = this.queryParam.createTimeRange[0].format('YYYY-MM-DD')
           params.endTime = this.queryParam.createTimeRange[1].format('YYYY-MM-DD')
+        }
+
+        // 添加缓存破坏参数
+        if (this.cacheBreaker) {
+          params._t = this.cacheBreaker
         }
 
         // 检查缓存
@@ -719,12 +738,6 @@
       showChartModal(materialRecord) {
         console.log('显示图表弹窗，商品记录:', materialRecord)
 
-        // 检查是否设置了统计日期范围
-        if (!this.queryParam.createTimeRange || this.queryParam.createTimeRange.length !== 2) {
-          this.$message.warning('请先设置统计日期范围')
-          return
-        }
-
         // 确保传递正确的数据结构给图表组件
         const materialInfo = {
           materialId: materialRecord.materialId,
@@ -736,24 +749,9 @@
           previousPeriodOut: materialRecord.previousPeriodOut
         }
 
-        console.log('=== 首页传递数据 ===')
-        console.log('materialInfo:', materialInfo)
-        console.log('dateRange:', this.queryParam.createTimeRange)
-        console.log('==================')
-
-        // 先设置数据，再显示弹窗，确保数据传递完整
         this.chartModal.chartType = 'history' // 默认显示库存历史
         this.chartModal.currentMaterial = materialInfo
-
-        // 使用多重延迟确保数据完全传递
-        this.$nextTick(() => {
-          setTimeout(() => {
-            console.log('准备显示图表弹窗，最终数据检查:')
-            console.log('currentMaterial:', this.chartModal.currentMaterial)
-            console.log('createTimeRange:', this.queryParam.createTimeRange)
-            this.chartModal.visible = true
-          }, 100)
-        })
+        this.chartModal.visible = true
       },
 
       // 关闭图表弹窗
