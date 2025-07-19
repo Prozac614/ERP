@@ -94,7 +94,7 @@
         <div>
           <!-- 超级优化虚拟滚动表格 (当显示所有商品时) -->
           <VirtualTableUltraOptimized
-            v-if="showAllProducts && !loading"
+            v-if="showAllProducts && !loading && dataSource.length > 0"
             ref="virtualTableUltra"
             :dataGetter="getCellDataOptimized"
             :totalRows="totalRows"
@@ -104,8 +104,25 @@
             :columnWidth="90"
             :fixedColumnCount="3"
             :bufferSize="2"
-            :showMemoryInfo="false"
+            :showMemoryInfo="true"
           />
+          
+          <!-- 无数据提示 -->
+          <div v-if="showAllProducts && !loading && dataSource.length === 0" 
+               style="text-align: center; padding: 50px; color: #999;">
+            <a-icon type="inbox" style="font-size: 48px; margin-bottom: 16px;" />
+            <p style="font-size: 16px;">暂无数据</p>
+            <p>请检查查询条件或联系管理员</p>
+          </div>
+          
+          <!-- 调试信息 -->
+          <div v-if="showAllProducts && !loading" style="margin: 10px; padding: 10px; background: #f5f5f5; border-radius: 4px;">
+            <p><strong>调试信息:</strong></p>
+            <p>数据行数: {{ dataSource.length }}</p>
+            <p>列数: {{ columns.length }}</p>
+            <p>总行数: {{ totalRows }}</p>
+            <p>显示状态: showAllProducts={{ showAllProducts }}, loading={{ loading }}</p>
+          </div>
           
           <!-- 普通分页表格 (正常分页模式) -->
           <a-table
@@ -261,7 +278,9 @@
       
       // 总行数（用于超级虚拟表格）
       totalRows() {
-        return this.lightweightData.rows.length || this.dataSource.length
+        const count = this.dataSource.length
+        console.log(`总行数: ${count}`)
+        return count
       }
     },
     created() {
@@ -469,21 +488,18 @@
             // 设置基础数据
             this.ipagination.total = data.total || 0
             
-            // 优化：只保存必要的行数据到轻量级存储
+            // 优化：保存数据到轻量级存储，同时保持dataSource兼容性
             const processRows = async () => {
               const rawRows = data.rows || []
               
-              // 第一步：只保存基础信息，不保存完整对象
+              // 第一步：完整保存到轻量级存储
               this.lightweightData.rows = rawRows.map((row, index) => ({
-                // 只保存必要字段，减少内存占用
-                id: row.id || index,
-                barCode: row.barCode || '',
-                materialName: row.materialName || '',
-                ...row // 保留其他字段，但让虚拟表格按需获取
+                ...row, // 保留完整数据
+                id: row.id || index
               }))
               
-              // 第二步：清空传统dataSource，只在非虚拟模式下使用
-              this.dataSource = []
+              // 第二步：保持dataSource兼容性（但数据由轻量级存储提供）
+              this.dataSource = this.lightweightData.rows
             }
             
             // 处理列信息
@@ -508,7 +524,27 @@
             
             // 并行处理
             Promise.all([processRows(), processColumns()]).then(() => {
-              console.log(`🚀 内存优化完成: ${this.lightweightData.rows.length} 行数据`)
+              // 输出详细的调试信息
+              console.log('🔍 数据处理详情:')
+              console.log('- 原始行数据数量:', data.rows?.length || 0)
+              console.log('- 轻量级存储行数:', this.lightweightData.rows.length)
+              console.log('- dataSource长度:', this.dataSource.length)
+              console.log('- 列定义数量:', this.defColumns.length)
+              console.log('- 日期列数量:', this.dateColumns.length)
+              console.log('- 每日出库数据Keys:', Object.keys(data.dailyOutData || {}).length)
+              
+              // 重要：处理每日出库数据合并
+              if (data.dailyOutData) {
+                this.dailyOutData = data.dailyOutData
+                this.mergeDataOptimized()
+              }
+              
+              // 检查第一行数据
+              if (this.dataSource.length > 0) {
+                console.log('📋 第一行数据示例:', this.dataSource[0])
+              }
+              
+              console.log(`🚀 内存优化完成: ${this.lightweightData.rows.length} 行数据，${this.dateColumns.length} 个日期列`)
               resolve()
             }).catch(reject)
             
@@ -766,11 +802,19 @@
           return this.lightweightData.cellValueCache.get(cacheKey)
         }
         
-        // 从轻量级数据获取
-        const row = this.lightweightData.rows[rowIndex] || this.dataSource[rowIndex]
-        if (!row) return '-'
+        // 从数据源获取（优先使用dataSource，保证兼容性）
+        const row = this.dataSource[rowIndex]
+        if (!row) {
+          console.warn(`❌ 行数据不存在: rowIndex=${rowIndex}, total=${this.dataSource.length}`)
+          return '-'
+        }
         
         let value = row[columnKey]
+        
+        // 调试特定行的数据
+        if (rowIndex <= 2) {
+          console.log(`🔍 单元格数据获取 [${rowIndex}, ${columnKey}]:`, value)
+        }
         
         // 数据格式化（最小化处理）
         if (typeof value === 'number') {
@@ -779,7 +823,7 @@
           } else if (typeof value === 'number' && value !== 0) {
             value = value.toFixed(2)
           }
-        } else if (!value) {
+        } else if (value === null || value === undefined || value === '') {
           value = '-'
         }
         
