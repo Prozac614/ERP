@@ -14,6 +14,7 @@ import com.jsh.erp.exception.BusinessRunTimeException;
 import com.jsh.erp.service.DepotService;
 import com.jsh.erp.service.DepotHeadService;
 import com.jsh.erp.service.DepotItemService;
+import com.jsh.erp.service.DepotItemOptimizedService;
 import com.jsh.erp.service.MaterialService;
 import com.jsh.erp.service.RoleService;
 import com.jsh.erp.service.SystemConfigService;
