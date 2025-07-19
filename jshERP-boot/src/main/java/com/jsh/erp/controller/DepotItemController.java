@@ -14,7 +14,7 @@ import com.jsh.erp.exception.BusinessRunTimeException;
 import com.jsh.erp.service.DepotService;
 import com.jsh.erp.service.DepotHeadService;
 import com.jsh.erp.service.DepotItemService;
-import com.jsh.erp.service.DepotItemOptimizedService;
+import com.jsh.erp.service.DepotItemOptimizedServiceTemp;
 import com.jsh.erp.service.MaterialService;
 import com.jsh.erp.service.RoleService;
 import com.jsh.erp.service.SystemConfigService;
@@ -76,7 +76,7 @@ public class DepotItemController {
     private SystemConfigService systemConfigService;
     
     @Resource
-    private DepotItemOptimizedService depotItemOptimizedService;
+    private DepotItemOptimizedServiceTemp depotItemOptimizedService;
 
     @Value(value = "${file.uploadType}")
     private Long fileUploadType;
