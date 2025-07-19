@@ -92,19 +92,17 @@
         </div>
         <!-- table区域-begin -->
         <div>
-          <!-- 超级优化虚拟滚动表格 (当显示所有商品时) -->
-          <VirtualTableUltraOptimized
+          <!-- 回到可靠的虚拟滚动表格 -->
+          <VirtualTable
             v-if="showAllProducts && !loading && dataSource.length > 0"
-            ref="virtualTableUltra"
-            :dataGetter="getCellDataOptimized"
-            :totalRows="totalRows"
+            ref="virtualTable"
+            :dataSource="dataSource"
             :columns="columns"
             :containerHeight="600"
-            :rowHeight="40"
-            :columnWidth="90"
-            :fixedColumnCount="Math.min(2, columns.length)"
-            :bufferSize="2"
-            :showMemoryInfo="true"
+            :rowHeight="54"
+            :showPerformanceInfo="false"
+            rowKey="id"
+            @row-click="handleRowClick"
           />
           
           <!-- 无数据提示 -->
@@ -115,13 +113,12 @@
             <p>请检查查询条件或联系管理员</p>
           </div>
           
-          <!-- 调试信息 -->
-          <div v-if="showAllProducts && !loading" style="margin: 10px; padding: 10px; background: #f5f5f5; border-radius: 4px;">
-            <p><strong>调试信息:</strong></p>
-            <p>数据行数: {{ dataSource.length }}</p>
-            <p>列数: {{ columns.length }}</p>
-            <p>总行数: {{ totalRows }}</p>
-            <p>显示状态: showAllProducts={{ showAllProducts }}, loading={{ loading }}</p>
+          <!-- 简化的状态信息 -->
+          <div v-if="showAllProducts && !loading" style="margin: 10px; padding: 10px; background: #e6f7ff; border: 1px solid #91d5ff; border-radius: 4px;">
+            <p><strong>📊 数据状态:</strong></p>
+            <p>✅ 数据行数: {{ dataSource.length }}</p>
+            <p>✅ 列数: {{ columns.length }} (基础列: {{ defColumns.length }}, 日期列: {{ dateColumns.length }})</p>
+            <p>✅ 日期范围: {{ queryParam.createTimeRange && queryParam.createTimeRange.length === 2 ? queryParam.createTimeRange[0].format('MM-DD') + ' 至 ' + queryParam.createTimeRange[1].format('MM-DD') : '未设置' }}</p>
           </div>
           
           <!-- 普通分页表格 (正常分页模式) -->
@@ -478,95 +475,10 @@
         })
       },
 
-      // 分批处理大量数据（超级内存优化版）
+      // 回到可靠的数据处理方法
       async processLargeDataResponse(data) {
-        return new Promise((resolve, reject) => {
-          try {
-            // 清理旧缓存
-            this.clearMemoryCache()
-            
-            // 设置基础数据
-            this.ipagination.total = data.total || 0
-            
-            // 优化：保存数据到轻量级存储，同时保持dataSource兼容性
-            const processRows = async () => {
-              const rawRows = data.rows || []
-              
-              // 第一步：完整保存到轻量级存储
-              this.lightweightData.rows = rawRows.map((row, index) => ({
-                ...row, // 保留完整数据
-                id: row.id || index
-              }))
-              
-              // 第二步：保持dataSource兼容性（但数据由轻量级存储提供）
-              this.dataSource = this.lightweightData.rows
-            }
-            
-            // 处理列信息
-            const processColumns = async () => {
-              const serverColumns = data.columns || []
-              
-              // 创建列映射以提高查找效率
-              this.lightweightData.columnMapping.clear()
-              serverColumns.forEach((col, index) => {
-                this.lightweightData.columnMapping.set(col.dataIndex, index)
-              })
-              
-              // 🔧 关键修复：不要覆盖基础列定义，只更新日期列
-              if (serverColumns.length > 0) {
-                // 从服务器列中提取日期列（以'out_'开头的列）
-                const dynamicColumns = serverColumns.filter(col => 
-                  col.dataIndex && col.dataIndex.startsWith('out_')
-                )
-                this.dateColumns = dynamicColumns
-                
-                // 如果服务器返回了基础列定义，则更新
-                const baseServerColumns = serverColumns.filter(col => 
-                  col.dataIndex && !col.dataIndex.startsWith('out_')
-                )
-                if (baseServerColumns.length > 0) {
-                  // 合并基础列定义
-                  this.defColumns = [...baseServerColumns]
-                }
-              } else {
-                // 如果没有服务器列数据，保持原来的基础列定义
-                this.dateColumns = []
-              }
-            }
-            
-            // 并行处理
-            Promise.all([processRows(), processColumns()]).then(() => {
-              // 输出详细的调试信息
-              console.log('🔍 数据处理详情:')
-              console.log('- 原始行数据数量:', (data.rows && data.rows.length) || 0)
-              console.log('- 轻量级存储行数:', this.lightweightData.rows.length)
-              console.log('- dataSource长度:', this.dataSource.length)
-              console.log('- 服务器返回列数量:', (data.columns && data.columns.length) || 0)
-              console.log('- defColumns数量:', this.defColumns.length)
-              console.log('- dateColumns数量:', this.dateColumns.length)
-              console.log('- 计算后的columns数量:', this.columns.length)
-              console.log('- settingDataIndex:', this.settingDataIndex)
-              console.log('- 每日出库数据Keys:', Object.keys(data.dailyOutData || {}).length)
-              
-              // 重要：处理每日出库数据合并
-              if (data.dailyOutData) {
-                this.dailyOutData = data.dailyOutData
-                this.mergeDataOptimized()
-              }
-              
-              // 检查第一行数据
-              if (this.dataSource.length > 0) {
-                console.log('📋 第一行数据示例:', this.dataSource[0])
-              }
-              
-              console.log(`🚀 内存优化完成: ${this.lightweightData.rows.length} 行数据，${this.dateColumns.length} 个日期列`)
-              resolve()
-            }).catch(reject)
-            
-          } catch (error) {
-            reject(error)
-          }
-        })
+        // 使用原来可靠的方法，避免过度优化
+        this.processDataResponse(data)
       },
 
       // 查询方法
@@ -859,16 +771,22 @@
         }
       },
 
+      // 虚拟表格相关方法
+      handleRowClick(record, index) {
+        console.log('点击行:', record, index)
+        // 可以添加行点击逻辑
+      },
+
       // 虚拟表格滚动控制
       scrollToTop() {
-        if (this.$refs.virtualTableUltra) {
-          this.$refs.virtualTableUltra.scrollToRow(0)
+        if (this.$refs.virtualTable) {
+          this.$refs.virtualTable.scrollToTop()
         }
       },
 
       scrollToRow(rowIndex) {
-        if (this.$refs.virtualTableUltra) {
-          this.$refs.virtualTableUltra.scrollToRow(rowIndex)
+        if (this.$refs.virtualTable) {
+          this.$refs.virtualTable.scrollToIndex(rowIndex)
         }
       }
     }
