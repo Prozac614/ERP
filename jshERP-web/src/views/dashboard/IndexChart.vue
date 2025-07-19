@@ -690,35 +690,9 @@
 
       // 显示图表弹窗
       showChartModal(materialRecord, chartType) {
-        // 检查是否有日期范围
-        if (!this.queryParam.createTimeRange || this.queryParam.createTimeRange.length !== 2) {
-          this.$message.warning('请先选择统计时间范围')
-          return
-        }
-
-        // 检查商品记录是否包含必要信息
-        if (!materialRecord || !materialRecord.id) {
-          this.$message.error('商品信息不完整，无法显示图表')
-          return
-        }
-
-        // 设置弹窗参数
         this.chartModal.chartType = chartType
-        this.chartModal.currentMaterial = {
-          id: materialRecord.id,
-          materialName: materialRecord.materialName || materialRecord.name || '未知商品',
-          barCode: materialRecord.barCode || materialRecord.code || 'N/A'
-        }
+        this.chartModal.currentMaterial = materialRecord
         this.chartModal.visible = true
-
-        console.log('打开图表弹窗:', {
-          materialId: materialRecord.id,
-          materialName: materialRecord.materialName,
-          barCode: materialRecord.barCode,
-          chartType: chartType,
-          dateRange: this.queryParam.createTimeRange,
-          fullRecord: materialRecord
-        })
       },
 
       // 关闭图表弹窗

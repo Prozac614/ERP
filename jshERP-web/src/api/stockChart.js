@@ -9,19 +9,17 @@ import moment from 'moment'
  * @param {string} params.endDate - 结束日期
  */
 export function getStockHistory(params) {
-    // TODO: 实际项目中调用真实API
-    // return getAction('/depotItem/getStockHistory', params)
-
-    // 临时使用模拟数据
-    return new Promise((resolve) => {
-        setTimeout(() => {
-            const mockData = generateMockStockHistory(params)
-            resolve({
-                code: 200,
-                message: 'success',
-                data: mockData
-            })
-        }, 1000) // 模拟网络延迟
+    // 复用现有的getDailyOutStock接口获取出库数据
+    return getAction('/depotItem/getDailyOutStock', {
+        materialIds: params.materialId,
+        beginTime: params.beginDate,
+        endTime: params.endDate
+    }).then(response => {
+        if (response.code === 200) {
+            // 将现有接口数据转换为图表所需格式
+            return transformToStockHistoryData(response.data, params)
+        }
+        return response
     })
 }
 
@@ -33,75 +31,75 @@ export function getStockHistory(params) {
  * @param {string} params.endDate - 结束日期
  */
 export function getOutboundFlow(params) {
-    // TODO: 实际项目中调用真实API
-    // return getAction('/depotItem/getOutboundFlow', params)
-
-    // 临时使用模拟数据
-    return new Promise((resolve) => {
-        setTimeout(() => {
-            const mockData = generateMockOutboundFlow(params)
-            resolve({
-                code: 200,
-                message: 'success',
-                data: mockData
-            })
-        }, 1000) // 模拟网络延迟
+    // 复用现有的getDailyOutStock接口
+    return getAction('/depotItem/getDailyOutStock', {
+        materialIds: params.materialId,
+        beginTime: params.beginDate,
+        endTime: params.endDate
+    }).then(response => {
+        if (response.code === 200) {
+            // 将现有接口数据转换为图表所需格式
+            return transformToChartData(response.data, params)
+        }
+        return response
     })
 }
 
 /**
- * 生成模拟库存历史数据
+ * 将现有接口数据转换为库存历史图表格式
  */
-function generateMockStockHistory(params) {
-    const { beginDate, endDate } = params
-    const startDate = moment(beginDate)
-    const endDateMoment = moment(endDate)
-
+function transformToStockHistoryData(dailyOutList, params) {
+    // 生成日期序列
+    const startDate = moment(params.beginDate)
+    const endDate = moment(params.endDate)
     const dates = []
-    const stockData = []
+    const stockDataArray = []
     const dailyOutData = []
 
     let currentDate = startDate.clone()
-    let currentStock = Math.floor(Math.random() * 500) + 200 // 初始库存 200-700
+    // 模拟初始库存（实际项目中可以从其他接口获取）
+    let currentStock = 100
 
-    while (currentDate.isSameOrBefore(endDateMoment)) {
-        dates.push(currentDate.format('YYYY-MM-DD'))
+    while (currentDate.isSameOrBefore(endDate)) {
+        const dateStr = currentDate.format('YYYY-MM-DD')
+        dates.push(dateStr)
 
-        // 模拟每日出库量 (0-20)
-        const dailyOut = Math.floor(Math.random() * 21)
-        dailyOutData.push(dailyOut)
+        // 查找该日期的出库数据
+        const dayData = dailyOutList.find(item => item.outDate === dateStr)
+        const dailyOut = dayData ? parseFloat(dayData.outQuantity) : 0
 
         // 库存变化：减去出库量，偶尔补货
-        currentStock -= dailyOut
+        currentStock = Math.max(0, currentStock - dailyOut)
 
         // 随机补货（10%概率）
         if (Math.random() < 0.1) {
-            const restockAmount = Math.floor(Math.random() * 100) + 50
-            currentStock += restockAmount
+            currentStock += Math.floor(Math.random() * 50) + 20
         }
 
-        // 确保库存不为负数
-        currentStock = Math.max(0, currentStock)
-        stockData.push(currentStock)
+        stockDataArray.push(currentStock)
+        dailyOutData.push(dailyOut)
 
         currentDate.add(1, 'day')
     }
 
     return {
-        dates,
-        stockData,
-        dailyOutData
+        code: 200,
+        message: 'success',
+        data: {
+            dates,
+            stockData: stockDataArray,
+            dailyOutData
+        }
     }
 }
 
 /**
- * 生成模拟出库流水数据
+ * 将现有接口数据转换为出库流水图表格式
  */
-function generateMockOutboundFlow(params) {
-    const { beginDate, endDate } = params
-    const startDate = moment(beginDate)
-    const endDateMoment = moment(endDate)
-
+function transformToChartData(dailyOutList, params) {
+    // 生成日期序列
+    const startDate = moment(params.beginDate)
+    const endDate = moment(params.endDate)
     const dates = []
     const outboundData = []
     const cumulativeData = []
@@ -109,13 +107,13 @@ function generateMockOutboundFlow(params) {
     let currentDate = startDate.clone()
     let cumulativeOut = 0
 
-    while (currentDate.isSameOrBefore(endDateMoment)) {
-        dates.push(currentDate.format('YYYY-MM-DD'))
+    while (currentDate.isSameOrBefore(endDate)) {
+        const dateStr = currentDate.format('YYYY-MM-DD')
+        dates.push(dateStr)
 
-        // 模拟每日出库量，工作日较多，周末较少
-        const isWeekend = currentDate.day() === 0 || currentDate.day() === 6
-        const baseAmount = isWeekend ? 3 : 12
-        const dailyOut = Math.floor(Math.random() * baseAmount) + (isWeekend ? 0 : 2)
+        // 查找该日期的出库数据
+        const dayData = dailyOutList.find(item => item.outDate === dateStr)
+        const dailyOut = dayData ? parseFloat(dayData.outQuantity) : 0
 
         outboundData.push(dailyOut)
         cumulativeOut += dailyOut
@@ -125,11 +123,17 @@ function generateMockOutboundFlow(params) {
     }
 
     return {
-        dates,
-        outboundData,
-        cumulativeData
+        code: 200,
+        message: 'success',
+        data: {
+            dates,
+            outboundData,
+            cumulativeData
+        }
     }
 }
+
+
 
 // 导出默认对象以支持不同的导入方式
 export default {

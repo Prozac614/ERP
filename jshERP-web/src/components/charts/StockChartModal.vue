@@ -176,41 +176,22 @@ export default {
 
     // 加载图表数据
     async loadChartData() {
-      console.log('开始加载图表数据:', {
-        materialInfo: this.materialInfo,
-        dateRange: this.dateRange,
-        chartType: this.chartType
-      })
-
-      if (!this.materialInfo || !this.materialInfo.id) {
-        this.error = '缺少商品ID参数'
-        return
-      }
-
-      if (!this.dateRange || this.dateRange.length !== 2) {
-        this.error = '缺少日期范围参数'
-        return
-      }
-
       this.loading = true
       this.error = null
 
       try {
         const params = {
           materialId: this.materialInfo.id,
+          barCode: this.materialInfo.barCode,
           beginDate: this.dateRange[0].format('YYYY-MM-DD'),
           endDate: this.dateRange[1].format('YYYY-MM-DD'),
           chartType: this.chartType
         }
 
-        console.log('API请求参数:', params)
-
         // 使用对应的API函数
         const response = this.chartType === 'history' 
           ? await getStockHistory(params)
           : await getOutboundFlow(params)
-
-        console.log('API响应:', response)
         
         if (response.code === 200) {
           this.chartData = response.data
