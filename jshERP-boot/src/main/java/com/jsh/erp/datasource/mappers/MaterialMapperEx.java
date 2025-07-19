@@ -118,6 +118,11 @@ public interface MaterialMapperEx {
             @Param("beginTime") String beginTime,
             @Param("endTime") String endTime);
 
+    java.math.BigDecimal getTotalOutQuantity(
+            @Param("materialId") Long materialId,
+            @Param("beginTime") String beginTime,
+            @Param("endTime") String endTime);
+
     int setUnitIdToNull(@Param("id") Long id);
 
     int setExpiryNumToNull(@Param("id") Long id);

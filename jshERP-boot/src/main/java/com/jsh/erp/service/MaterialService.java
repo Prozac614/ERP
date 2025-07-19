@@ -1374,10 +1374,15 @@ public class MaterialService {
                 dailyOutList = depotItemService.getDailyOutStock(materialId.toString(), beginTime, endTime);
                 logger.info("商品{}获取到{}条每日出库记录", materialId, dailyOutList != null ? dailyOutList.size() : 0);
             } catch (Exception e) {
-                logger.warn("获取商品{}的每日出库数据失败，尝试直接查询原始数据", materialId, e);
-                // 如果汇总表查询失败，直接查询原始数据
-                dailyOutList = getDirectDailyOutStock(materialId, beginTime, endTime);
-                logger.info("商品{}直接查询获取到{}条每日出库记录", materialId, dailyOutList != null ? dailyOutList.size() : 0);
+                logger.warn("获取商品{}的每日出库数据失败，原因：{}", materialId, e.getMessage());
+                // 如果汇总表查询失败，尝试直接查询原始数据
+                try {
+                    dailyOutList = getDirectDailyOutStock(materialId, beginTime, endTime);
+                    logger.info("商品{}直接查询获取到{}条每日出库记录", materialId, dailyOutList != null ? dailyOutList.size() : 0);
+                } catch (Exception e2) {
+                    logger.error("商品{}直接查询每日出库数据也失败，返回空列表", materialId, e2);
+                    dailyOutList = new ArrayList<>();
+                }
             }
 
             if (dailyOutList == null || dailyOutList.isEmpty()) {
@@ -1446,7 +1451,40 @@ public class MaterialService {
             // 直接查询原始数据
             return materialMapperEx.getDirectDailyOutStock(materialId, beginTime, endTime);
         } catch (Exception e) {
-            logger.error("直接查询商品{}的每日出库数据失败", materialId, e);
+            logger.error("直接查询商品{}的每日出库数据失败，使用简化计算", materialId, e);
+            // 如果直接查询也失败，使用简化的计算方法
+            return getSimplifiedDailyOutStock(materialId, beginTime, endTime);
+        }
+    }
+
+    /**
+     * 简化的每日出库数据计算（最后的备用方案）
+     *
+     * @param materialId 商品ID
+     * @param beginTime 开始时间
+     * @param endTime 结束时间
+     * @return 简化的每日出库数据列表
+     */
+    private List<Map<String, Object>> getSimplifiedDailyOutStock(Long materialId, String beginTime, String endTime) {
+        try {
+            // 使用简化的查询，只获取总出库量，不按日期分组
+            BigDecimal totalOut = materialMapperEx.getTotalOutQuantity(materialId, beginTime, endTime);
+
+            List<Map<String, Object>> result = new ArrayList<>();
+            if (totalOut != null && totalOut.compareTo(BigDecimal.ZERO) > 0) {
+                Map<String, Object> record = new HashMap<>();
+                record.put("barCode", "");
+                record.put("materialName", "");
+                record.put("outDate", beginTime.substring(0, 10)); // 使用开始日期
+                record.put("outQuantity", totalOut);
+                result.add(record);
+
+                logger.info("商品{}使用简化计算，总出库量：{}", materialId, totalOut);
+            }
+
+            return result;
+        } catch (Exception e) {
+            logger.error("商品{}简化计算也失败", materialId, e);
             return new ArrayList<>();
         }
     }

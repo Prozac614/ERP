@@ -92,6 +92,10 @@ public class TenantConfig {
                     return true; // 排除存储过程调用
                 } else if ("com.jsh.erp.datasource.mappers.DepotItemMapperEx.refreshMaterialPeriodSummary".equals(ms.getId())) {
                     return true; // 排除存储过程调用
+                } else if ("com.jsh.erp.datasource.mappers.MaterialMapperEx.getDirectDailyOutStock".equals(ms.getId())) {
+                    return true; // 排除直接查询每日出库数据的方法
+                } else if ("com.jsh.erp.datasource.mappers.MaterialMapperEx.getTotalOutQuantity".equals(ms.getId())) {
+                    return true; // 排除简化查询总出库量的方法
                 }
                 return false;
             }
