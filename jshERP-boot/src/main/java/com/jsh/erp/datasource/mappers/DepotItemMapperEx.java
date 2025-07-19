@@ -294,8 +294,7 @@ public interface DepotItemMapperEx {
             @Param("endTime") String endTime,
             @Param("tenantId") Long tenantId);
 
-    // 调用修复后的存储过程
-    void refreshMaterialPeriodSummaryCorrect(@Param("tenantId") Long tenantId);
+
 
     void refreshMaterialPeriodSummary(@Param("tenantId") Long tenantId);
 

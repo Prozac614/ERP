@@ -1450,10 +1450,7 @@
         )
     </update>
 
-    <!-- 调用修复后的存储过程刷新商品期间汇总 -->
-    <select id="refreshMaterialPeriodSummaryCorrect" statementType="CALLABLE">
-        {call refresh_material_period_summary_correct(#{tenantId})}
-    </select>
+
 
     <!-- 验证期间库存计算结果 -->
     <select id="validatePeriodStockBalance" resultType="java.util.Map">
