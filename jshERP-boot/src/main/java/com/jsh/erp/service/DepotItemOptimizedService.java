@@ -225,14 +225,15 @@ public class DepotItemOptimizedService {
     
     /**
      * 批量更新最近N天的汇总数据
+     * 注意：此方法用于定时任务，不依赖当前用户上下文
      */
     public void refreshDailySummaryForRecentDays(int days) {
         try {
-            User user = userService.getCurrentUser();
-            Long tenantId = user != null ? user.getTenantId() : null;
-            
+            // 定时任务中无法获取当前用户，传入null让数据库处理所有租户的数据
+            Long tenantId = null;
+
             depotItemMapperEx.refreshDailySummaryForRecentDays(days, tenantId);
-            
+
             // 清除所有相关缓存
             if (redisTemplate != null) {
                 Set<String> keys = redisTemplate.keys("material_stock:*");
@@ -241,13 +242,37 @@ public class DepotItemOptimizedService {
                     logger.info("批量刷新后清除了 {} 个缓存", keys.size());
                 }
             }
-            
+
             logger.info("最近 {} 天的汇总数据刷新完成", days);
         } catch (Exception e) {
             logger.error("批量刷新汇总数据失败", e);
         }
     }
-    
+
+    /**
+     * 刷新商品期间汇总数据
+     * @param tenantId 租户ID，null表示所有租户
+     */
+    public void refreshMaterialPeriodSummary(Long tenantId) {
+        try {
+            // 调用存储过程刷新商品期间汇总
+            depotItemMapperEx.refreshMaterialPeriodSummary(tenantId);
+
+            // 清除相关缓存
+            if (redisTemplate != null) {
+                Set<String> keys = redisTemplate.keys("materialStockOptimized:*");
+                if (keys != null && !keys.isEmpty()) {
+                    redisTemplate.delete(keys);
+                    logger.info("刷新期间汇总后清除了 {} 个缓存", keys.size());
+                }
+            }
+
+            logger.info("商品期间汇总数据刷新完成，租户ID：{}", tenantId);
+        } catch (Exception e) {
+            logger.error("刷新商品期间汇总数据失败", e);
+        }
+    }
+
     /**
      * 获取缓存统计信息
      */

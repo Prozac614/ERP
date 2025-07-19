@@ -1206,14 +1206,70 @@ public class DepotItemController {
             res.code = 200;
             res.data = resultMap;
             
-            logger.info("高性能API调用完成，耗时: {}ms, 商品数: {}", 
-                       duration, 
+            logger.info("高性能API调用完成，耗时: {}ms, 商品数: {}",
+                       duration,
                        resultMap.get("rows") != null ? ((List<?>) resultMap.get("rows")).size() : 0);
-            
+
         } catch (Exception e) {
             logger.error("高性能API调用失败", e);
             res.code = 500;
             res.data = "获取数据失败: " + e.getMessage();
+        }
+        return res;
+    }
+
+    /**
+     * 测试图表数据接口
+     * 用于验证图表功能是否正常工作
+     * @param materialId
+     * @param beginTime
+     * @param endTime
+     * @param request
+     * @return
+     * @throws Exception
+     */
+    @GetMapping(value = "/testChartData")
+    @ApiOperation(value = "测试图表数据接口")
+    public BaseResponseInfo testChartData(
+            @RequestParam(value = "materialId", required = false) String materialId,
+            @RequestParam(value = "beginTime", required = false) String beginTime,
+            @RequestParam(value = "endTime", required = false) String endTime,
+            HttpServletRequest request) throws Exception {
+        BaseResponseInfo res = new BaseResponseInfo();
+        try {
+            // 设置默认值用于测试
+            if (StringUtil.isEmpty(materialId)) {
+                materialId = "1"; // 默认商品ID
+            }
+            if (StringUtil.isEmpty(beginTime)) {
+                beginTime = "2024-01-01";
+            }
+            if (StringUtil.isEmpty(endTime)) {
+                endTime = "2024-01-31";
+            }
+
+            // 调用现有的getDailyOutStock接口
+            List<Map<String, Object>> dailyOutList = depotItemService.getDailyOutStock(
+                    materialId,
+                    beginTime + BusinessConstants.DAY_FIRST_TIME,
+                    endTime + BusinessConstants.DAY_LAST_TIME);
+
+            Map<String, Object> result = new HashMap<>();
+            result.put("materialId", materialId);
+            result.put("beginTime", beginTime);
+            result.put("endTime", endTime);
+            result.put("dailyOutData", dailyOutList);
+            result.put("dataCount", dailyOutList.size());
+
+            res.code = 200;
+            res.data = result;
+
+            logger.info("测试图表数据接口调用成功，商品ID: {}, 数据条数: {}", materialId, dailyOutList.size());
+
+        } catch (Exception e) {
+            logger.error("测试图表数据接口失败", e);
+            res.code = 500;
+            res.data = "测试接口调用失败: " + e.getMessage();
         }
         return res;
     }
