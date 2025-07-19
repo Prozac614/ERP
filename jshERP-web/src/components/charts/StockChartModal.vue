@@ -23,14 +23,15 @@
 
       <!-- 图表容器 -->
       <div class="chart-container">
-        <div 
-          ref="chartContainer" 
+        <!-- 图表容器始终存在，确保可以正确初始化 -->
+        <div
+          ref="chartContainer"
           class="chart-wrapper"
-          v-show="!loading && !error && hasData"
+          :style="{ visibility: (!loading && !error && hasData) ? 'visible' : 'hidden' }"
         ></div>
-        
-        <!-- 加载状态 -->
-        <div v-if="loading" class="chart-loading">
+
+        <!-- 加载状态覆盖层 -->
+        <div v-if="loading" class="chart-overlay chart-loading">
           <a-spin size="large">
             <div style="text-align: center; padding: 100px 0;">
               <p style="margin-top: 20px; color: #666;">正在加载图表数据...</p>
@@ -38,12 +39,22 @@
           </a-spin>
         </div>
 
-        <!-- 错误状态 -->
-        <div v-if="error && !loading" class="chart-error">
+        <!-- 错误状态覆盖层 -->
+        <div v-if="error && !loading" class="chart-overlay chart-error">
           <div style="text-align: center; padding: 60px 0;">
             <a-icon type="exclamation-circle" style="font-size: 48px; color: #ff7875; margin-bottom: 16px;" />
             <h4>数据加载失败</h4>
             <p style="color: #666; margin-bottom: 20px;">{{ error }}</p>
+            <a-button type="primary" @click="refreshChart">重新加载</a-button>
+          </div>
+        </div>
+
+        <!-- 无数据状态覆盖层 -->
+        <div v-if="!loading && !error && !hasData" class="chart-overlay chart-empty">
+          <div style="text-align: center; padding: 60px 0;">
+            <a-icon type="bar-chart" style="font-size: 48px; color: #d9d9d9; margin-bottom: 16px;" />
+            <h4>暂无数据</h4>
+            <p style="color: #666; margin-bottom: 20px;">请检查商品信息和日期范围设置</p>
             <a-button type="primary" @click="refreshChart">重新加载</a-button>
           </div>
         </div>
@@ -79,7 +90,6 @@
 
 <script>
 import * as echarts from 'echarts'
-import { getAction } from '@/api/manage'
 import { getStockHistory, getOutboundFlow } from '@/api/stockChart'
 import moment from 'moment'
 
@@ -131,6 +141,13 @@ export default {
       console.log('visible变化:', newVal)
       if (newVal) {
         this.handleInitialLoad()
+        // 模态框显示后，确保图表正确调整尺寸
+        setTimeout(() => {
+          if (this.chartInstance) {
+            console.log('模态框显示完成，调整图表尺寸')
+            this.chartInstance.resize()
+          }
+        }, 300)
       } else {
         this.destroyChart()
       }
@@ -233,27 +250,45 @@ export default {
 
     // 初始化图表
     initChart() {
-      if (!this.$refs.chartContainer) return
-      
-      this.destroyChart()
-      
-      // 确保容器有正确的尺寸
-      const container = this.$refs.chartContainer
-      if (container.offsetWidth === 0) {
-        // 如果容器宽度为0，延迟初始化，避免无限递归
+      console.log('开始初始化图表...')
+
+      if (!this.$refs.chartContainer) {
+        console.log('图表容器不存在，延迟初始化')
         setTimeout(() => {
-          if (this.$refs.chartContainer && this.$refs.chartContainer.offsetWidth > 0) {
-            this.initChart()
-          }
+          this.initChart()
         }, 100)
         return
       }
-      
+
+      this.destroyChart()
+
+      const container = this.$refs.chartContainer
+      console.log('容器尺寸:', {
+        offsetWidth: container.offsetWidth,
+        offsetHeight: container.offsetHeight,
+        clientWidth: container.clientWidth,
+        clientHeight: container.clientHeight
+      })
+
       try {
-        this.chartInstance = echarts.init(container)
-        
+        // 强制初始化，即使容器暂时不可见
+        this.chartInstance = echarts.init(container, null, {
+          width: container.clientWidth || 1350, // 使用默认宽度
+          height: container.clientHeight || 450  // 使用默认高度
+        })
+
+        console.log('图表实例创建成功:', this.chartInstance)
+
         // 监听窗口大小变化
         window.addEventListener('resize', this.handleResize)
+
+        // 确保图表正确渲染
+        this.$nextTick(() => {
+          if (this.chartInstance) {
+            this.chartInstance.resize()
+          }
+        })
+
       } catch (error) {
         console.error('图表初始化失败:', error)
         this.error = '图表初始化失败，请刷新页面重试'
@@ -352,17 +387,42 @@ export default {
 
     // 渲染图表
     renderChart() {
-      if (!this.chartInstance || !this.hasData) return
+      console.log('开始渲染图表...')
+      console.log('chartInstance存在:', !!this.chartInstance)
+      console.log('hasData:', this.hasData)
+      console.log('chartData:', this.chartData)
 
-      const option = this.getChartOption()
-      this.chartInstance.setOption(option)
-      
-      // 强制重新计算尺寸
-      this.$nextTick(() => {
-        if (this.chartInstance) {
-          this.chartInstance.resize()
+      if (!this.chartInstance) {
+        console.log('图表实例不存在，重新初始化')
+        this.initChart()
+        if (!this.chartInstance) {
+          console.error('图表实例初始化失败')
+          return
         }
-      })
+      }
+
+      if (!this.hasData) {
+        console.log('没有数据，显示空状态')
+        return
+      }
+
+      try {
+        const option = this.getChartOption()
+        console.log('图表配置:', option)
+
+        this.chartInstance.setOption(option, true) // 使用notMerge=true确保完全重新渲染
+
+        // 强制重新计算尺寸
+        this.$nextTick(() => {
+          if (this.chartInstance) {
+            this.chartInstance.resize()
+            console.log('图表渲染完成并调整尺寸')
+          }
+        })
+      } catch (error) {
+        console.error('图表渲染失败:', error)
+        this.error = '图表渲染失败: ' + error.message
+      }
     },
 
     // 获取图表配置
@@ -753,9 +813,7 @@ export default {
   border-radius: 8px;
 }
 
-.chart-loading,
-.chart-error,
-.chart-empty {
+.chart-overlay {
   position: absolute;
   top: 0;
   left: 0;
@@ -764,7 +822,21 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #fafafa;
+  background: rgba(255, 255, 255, 0.95);
+  z-index: 10;
+  border-radius: 8px;
+}
+
+.chart-loading {
+  background: rgba(250, 250, 250, 0.95);
+}
+
+.chart-error {
+  background: rgba(255, 247, 247, 0.95);
+}
+
+.chart-empty {
+  background: rgba(250, 250, 250, 0.95);
 }
 
 .chart-legend {
