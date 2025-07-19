@@ -1713,4 +1713,26 @@ public class DepotItemController {
         }
         return res;
     }
+
+    /**
+     * 清除库存数据缓存
+     */
+    @PostMapping(value = "/clearStockCache")
+    public BaseResponseInfo clearStockCache(HttpServletRequest request) throws Exception {
+        BaseResponseInfo res = new BaseResponseInfo();
+        try {
+            // 调用清除缓存的方法
+            depotItemOptimizedService.clearAllCache();
+
+            res.code = 200;
+            res.data = "缓存清除成功";
+            logger.info("库存数据缓存已清除");
+
+        } catch (Exception e) {
+            logger.error("清除缓存失败", e);
+            res.code = 500;
+            res.data = "清除缓存失败：" + e.getMessage();
+        }
+        return res;
+    }
 }

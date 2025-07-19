@@ -45,6 +45,13 @@
                     :loading="calculatingAlert">
             库存预警校验
           </a-button>
+          <a-button @click="clearStockCache"
+                    type="default"
+                    icon="delete"
+                    style="margin-left: 8px;"
+                    :loading="clearingCache">
+            清除缓存
+          </a-button>
           <a-button icon="reload" @click="refreshData">刷新数据</a-button>
 
           <!-- 暂时隐藏展示所有数据按钮 -->
@@ -244,6 +251,7 @@
         dateColumns: [],
         hasAutoRefreshed: false, // 防止自动刷新无限循环
         calculatingAlert: false, // 库存预警校验加载状态
+        clearingCache: false, // 清除缓存加载状态
         // 展示所有商品控制
         showAllProducts: false,
         // 页面样式
@@ -846,6 +854,26 @@
         } catch (error) {
           console.error('批量校验操作失败:', error)
           this.$message.error('操作失败')
+        }
+      },
+
+      // 清除缓存
+      async clearStockCache() {
+        try {
+          this.clearingCache = true
+          const res = await this.$http.post('/depotItem/clearStockCache')
+          if (res.code === 200) {
+            this.$message.success('缓存清除成功')
+            // 刷新数据
+            this.loadStockData()
+          } else {
+            this.$message.error(res.data || '清除缓存失败')
+          }
+        } catch (error) {
+          console.error('清除缓存失败:', error)
+          this.$message.error('清除缓存失败')
+        } finally {
+          this.clearingCache = false
         }
       },
 
