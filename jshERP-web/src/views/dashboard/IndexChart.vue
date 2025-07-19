@@ -40,6 +40,25 @@
           <a-button @click="handleExport" type="primary" icon="download">导出库存</a-button>
           <a-button icon="reload" @click="refreshData">刷新数据</a-button>
           <a-button icon="warning" @click="showLowStockAlert">低库存预警</a-button>
+          <a-dropdown>
+            <a-menu slot="overlay" @click="handlePerformanceAction">
+              <a-menu-item key="cacheStats">
+                <a-icon type="dashboard" />
+                缓存统计
+              </a-menu-item>
+              <a-menu-item key="clearCache">
+                <a-icon type="delete" />
+                清除缓存
+              </a-menu-item>
+              <a-menu-item key="refreshSummary">
+                <a-icon type="sync" />
+                刷新汇总
+              </a-menu-item>
+            </a-menu>
+            <a-button icon="setting">
+              性能优化 <a-icon type="down" />
+            </a-button>
+          </a-dropdown>
           <a-button 
             :type="showAllProducts ? 'default' : 'primary'" 
             :icon="showAllProducts ? 'table' : 'unordered-list'" 
@@ -130,6 +149,18 @@
               <span v-if="dateColumns.length > 0">，{{ dateColumns.length }} 个日期列</span>
             </span>
           </div>
+
+          <!-- 性能统计信息 -->
+          <div v-if="performanceStats && performanceStats.queryDuration" 
+               style="margin-top: 16px; padding: 12px; background: #f0f9ff; border: 1px solid #91d5ff; border-radius: 6px;">
+            <a-icon type="dashboard" style="color: #1890ff; margin-right: 8px;" />
+            <span style="color: #0050b3;">
+              查询耗时: {{ performanceStats.queryDuration }} | 
+              性能评级: <strong>{{ performanceStats.performanceRating }}</strong> | 
+              数据条数: {{ performanceStats.recordCount }} / {{ performanceStats.totalCount }}
+              <span v-if="performanceStats.cached"> | 🚀 缓存命中</span>
+            </span>
+          </div>
         </div>
       </a-card>
     </a-col>
@@ -138,7 +169,7 @@
 
 <script>
   import moment from 'moment'
-  import { getAction } from '@/api/manage'
+  import { getAction, postAction } from '@/api/manage'
   import JEllipsis from '@/components/jeecg/JEllipsis'
   import Vue from 'vue'
 
@@ -159,6 +190,7 @@
         loadingRequest: null,
         dailyOutData: {},
         dateColumns: [],
+        performanceStats: {},
         // 展示所有商品控制
         showAllProducts: false,
         // 页面样式
@@ -352,7 +384,7 @@
           this.loadingRequest.abort()
         }
 
-        this.loadingRequest = getAction('/depotItem/getMaterialStockWithDailyOut', params)
+        this.loadingRequest = getAction('/depotItem/getMaterialStockWithDailyOutOptimized', params)
         this.loadingRequest.then((res) => {
           if (res.code === 200) {
             this.processDataResponse(res.data)
@@ -462,8 +494,8 @@
           return
         }
 
-        // 使用新的合并API
-        this.loadingRequest = getAction('/depotItem/getMaterialStockWithDailyOut', params)
+        // 使用高性能优化API
+        this.loadingRequest = getAction('/depotItem/getMaterialStockWithDailyOutOptimized', params)
         this.loadingRequest.then((res) => {
           if (res.code === 200) {
             // 缓存结果
@@ -492,6 +524,7 @@
         this.dataSource = data.rows || []
         this.ipagination.total = data.total || 0
         this.dailyOutData = data.dailyOutData || {}
+        this.performanceStats = data.performanceStats || {}
         
         // 合并每日出库数据到商品数据中
         this.mergeDataOptimized()
@@ -568,6 +601,106 @@
       },
       showLowStockAlert() {
         this.$message.info('显示低库存预警')
+      },
+
+      // 处理性能优化菜单点击
+      handlePerformanceAction({ key }) {
+        switch (key) {
+          case 'cacheStats':
+            this.showCacheStats()
+            break
+          case 'clearCache':
+            this.clearCache()
+            break
+          case 'refreshSummary':
+            this.refreshSummaryData()
+            break
+        }
+      },
+
+      // 显示缓存统计
+      showCacheStats() {
+        this.loading = true
+        getAction('/depotItem/getCacheStats').then((res) => {
+          if (res.code === 200) {
+            const stats = res.data
+            this.$info({
+              title: '缓存统计信息',
+              content: h => h('div', [
+                h('p', `缓存状态: ${stats.cacheEnabled ? '已启用' : '未启用'}`),
+                stats.cacheEnabled ? h('p', `缓存条目数: ${stats.cacheCount}`) : null,
+                stats.error ? h('p', { style: { color: 'red' } }, `错误: ${stats.error}`) : null,
+                stats.message ? h('p', stats.message) : null
+              ]),
+              okText: '确定'
+            })
+          } else {
+            this.$message.error('获取缓存统计失败')
+          }
+        }).catch((error) => {
+          console.error('获取缓存统计失败:', error)
+          this.$message.error('获取缓存统计失败')
+        }).finally(() => {
+          this.loading = false
+        })
+      },
+
+      // 清除缓存
+      clearCache() {
+        this.$confirm({
+          title: '确认清除缓存',
+          content: '清除缓存后下次查询可能会稍慢，但会获得最新数据。确定要继续吗？',
+          okText: '确定',
+          cancelText: '取消',
+          onOk: () => {
+            this.loading = true
+            postAction('/depotItem/clearCache').then((res) => {
+              if (res.code === 200) {
+                this.$message.success('缓存清除成功')
+                // 清除本地缓存
+                this.dataCache.clear()
+              } else {
+                this.$message.error('缓存清除失败')
+              }
+            }).catch((error) => {
+              console.error('缓存清除失败:', error)
+              this.$message.error('缓存清除失败')
+            }).finally(() => {
+              this.loading = false
+            })
+          }
+        })
+      },
+
+      // 刷新汇总数据
+      refreshSummaryData() {
+        this.$confirm({
+          title: '刷新汇总数据',
+          content: '刷新汇总数据会重新计算所有统计信息，可能需要较长时间。确定要继续吗？',
+          okText: '确定',
+          cancelText: '取消',
+          onOk: () => {
+            this.loading = true
+            const startTime = Date.now()
+            
+            postAction('/depotItem/refreshSummaryData', { type: 'daily', days: 30 }).then((res) => {
+              if (res.code === 200) {
+                const duration = Date.now() - startTime
+                this.$message.success(`汇总数据刷新完成，耗时: ${duration}ms`)
+                // 清除缓存并重新加载数据
+                this.dataCache.clear()
+                this.refreshData()
+              } else {
+                this.$message.error('汇总数据刷新失败')
+              }
+            }).catch((error) => {
+              console.error('汇总数据刷新失败:', error)
+              this.$message.error('汇总数据刷新失败')
+            }).finally(() => {
+              this.loading = false
+            })
+          }
+        })
       }
     }
   }

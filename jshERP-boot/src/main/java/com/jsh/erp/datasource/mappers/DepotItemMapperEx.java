@@ -274,4 +274,33 @@ public interface DepotItemMapperEx {
             @Param("materialIds") String materialIds,
             @Param("beginTime") String beginTime,
             @Param("endTime") String endTime);
+
+    // ========== 性能优化相关方法 ==========
+    
+    List<MaterialStockPeriodVo> getMaterialPeriodStockOptimized(
+            @Param("materialParam") String materialParam,
+            @Param("offset") Integer offset,
+            @Param("rows") Integer rows,
+            @Param("tenantId") Long tenantId);
+
+    int getMaterialPeriodStockCountOptimized(
+            @Param("materialParam") String materialParam,
+            @Param("tenantId") Long tenantId);
+
+    List<java.util.Map<String, Object>> getDailyOutStockFromSummary(
+            @Param("materialIds") List<Long> materialIds,
+            @Param("beginTime") String beginTime,
+            @Param("endTime") String endTime,
+            @Param("tenantId") Long tenantId);
+
+    void refreshMaterialPeriodSummary(@Param("tenantId") Long tenantId);
+
+    void updateDailyOutSummary(
+            @Param("materialId") Long materialId,
+            @Param("targetDate") String targetDate,
+            @Param("tenantId") Long tenantId);
+
+    void refreshDailySummaryForRecentDays(
+            @Param("days") Integer days,
+            @Param("tenantId") Long tenantId);
 }

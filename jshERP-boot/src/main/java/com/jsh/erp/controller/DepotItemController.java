@@ -9,6 +9,7 @@ import com.jsh.erp.datasource.vo.DepotItemStockWarningCount;
 import com.jsh.erp.datasource.vo.DepotItemVoBatchNumberList;
 import com.jsh.erp.datasource.vo.InOutPriceVo;
 import com.jsh.erp.datasource.vo.MaterialStockPeriodVo;
+import com.jsh.erp.datasource.entities.User;
 import com.jsh.erp.exception.BusinessRunTimeException;
 import com.jsh.erp.service.DepotService;
 import com.jsh.erp.service.DepotHeadService;
@@ -72,6 +73,9 @@ public class DepotItemController {
 
     @Resource
     private SystemConfigService systemConfigService;
+    
+    @Resource
+    private DepotItemOptimizedService depotItemOptimizedService;
 
     @Value(value = "${file.uploadType}")
     private Long fileUploadType;
@@ -1162,6 +1166,160 @@ public class DepotItemController {
             res.data = "获取数据失败";
         }
         return res;
+    }
+
+    /**
+     * 获取商品库存统计与每日出库数据（高性能优化版本）
+     * 适用于查询多于修改的场景，使用预聚合表和多级缓存
+     * @param currentPage
+     * @param pageSize
+     * @param materialParam
+     * @param beginTime
+     * @param endTime
+     * @param request
+     * @return
+     * @throws Exception
+     */
+    @GetMapping(value = "/getMaterialStockWithDailyOutOptimized")
+    @ApiOperation(value = "获取商品库存统计与每日出库数据（高性能版本）")
+    public BaseResponseInfo getMaterialStockWithDailyOutOptimized(
+            @RequestParam(value = "currentPage", required = false) Integer currentPage,
+            @RequestParam(value = "pageSize", required = false) Integer pageSize,
+            @RequestParam(value = "materialParam", required = false) String materialParam,
+            @RequestParam(value = "beginTime", required = false) String beginTime,
+            @RequestParam(value = "endTime", required = false) String endTime,
+            HttpServletRequest request) throws Exception {
+        BaseResponseInfo res = new BaseResponseInfo();
+        try {
+            long startTime = System.currentTimeMillis();
+            
+            Map<String, Object> resultMap = depotItemOptimizedService.getOptimizedMaterialStockWithDailyOut(
+                    currentPage, pageSize, materialParam, beginTime, endTime, request);
+            
+            long endTime_ms = System.currentTimeMillis();
+            long duration = endTime_ms - startTime;
+            
+            // 添加性能指标到响应中
+            resultMap.put("performanceStats", createPerformanceStats(duration, resultMap));
+            
+            res.code = 200;
+            res.data = resultMap;
+            
+            logger.info("高性能API调用完成，耗时: {}ms, 商品数: {}", 
+                       duration, 
+                       resultMap.get("rows") != null ? ((List<?>) resultMap.get("rows")).size() : 0);
+            
+        } catch (Exception e) {
+            logger.error("高性能API调用失败", e);
+            res.code = 500;
+            res.data = "获取数据失败: " + e.getMessage();
+        }
+        return res;
+    }
+
+    /**
+     * 刷新汇总数据接口
+     */
+    @PostMapping(value = "/refreshSummaryData")
+    @ApiOperation(value = "刷新汇总数据")
+    public BaseResponseInfo refreshSummaryData(
+            @RequestParam(value = "type", required = false, defaultValue = "period") String type,
+            @RequestParam(value = "days", required = false, defaultValue = "7") Integer days,
+            HttpServletRequest request) throws Exception {
+        BaseResponseInfo res = new BaseResponseInfo();
+        try {
+            long startTime = System.currentTimeMillis();
+            
+            if ("period".equals(type)) {
+                // 刷新期间汇总数据
+                User currentUser = userService.getCurrentUser();
+                Long tenantId = currentUser != null ? currentUser.getTenantId() : null;
+                depotItemOptimizedService.refreshMaterialPeriodSummary(tenantId);
+            } else if ("daily".equals(type)) {
+                // 刷新最近N天的每日汇总数据
+                depotItemOptimizedService.refreshDailySummaryForRecentDays(days);
+            }
+            
+            long endTime = System.currentTimeMillis();
+            
+            res.code = 200;
+            res.data = Map.of(
+                "message", "汇总数据刷新完成",
+                "type", type,
+                "duration", endTime - startTime + "ms"
+            );
+            
+        } catch (Exception e) {
+            logger.error("刷新汇总数据失败", e);
+            res.code = 500;
+            res.data = "刷新失败: " + e.getMessage();
+        }
+        return res;
+    }
+
+    /**
+     * 获取缓存统计信息
+     */
+    @GetMapping(value = "/getCacheStats")
+    @ApiOperation(value = "获取缓存统计信息")
+    public BaseResponseInfo getCacheStats(HttpServletRequest request) throws Exception {
+        BaseResponseInfo res = new BaseResponseInfo();
+        try {
+            Map<String, Object> stats = depotItemOptimizedService.getCacheStats();
+            res.code = 200;
+            res.data = stats;
+        } catch (Exception e) {
+            logger.error("获取缓存统计失败", e);
+            res.code = 500;
+            res.data = "获取统计失败: " + e.getMessage();
+        }
+        return res;
+    }
+
+    /**
+     * 清除所有缓存
+     */
+    @PostMapping(value = "/clearCache")
+    @ApiOperation(value = "清除所有缓存")
+    public BaseResponseInfo clearCache(HttpServletRequest request) throws Exception {
+        BaseResponseInfo res = new BaseResponseInfo();
+        try {
+            depotItemOptimizedService.clearAllCache();
+            res.code = 200;
+            res.data = Map.of("message", "缓存清除完成");
+        } catch (Exception e) {
+            logger.error("清除缓存失败", e);
+            res.code = 500;
+            res.data = "清除缓存失败: " + e.getMessage();
+        }
+        return res;
+    }
+
+    /**
+     * 创建性能统计信息
+     */
+    private Map<String, Object> createPerformanceStats(long duration, Map<String, Object> resultMap) {
+        Map<String, Object> stats = new HashMap<>();
+        stats.put("queryDuration", duration + "ms");
+        stats.put("recordCount", resultMap.get("rows") != null ? ((List<?>) resultMap.get("rows")).size() : 0);
+        stats.put("totalCount", resultMap.get("total"));
+        stats.put("cached", resultMap.get("cached"));
+        stats.put("hasDateRange", resultMap.get("beginTime") != null && resultMap.get("endTime") != null);
+        
+        // 性能评级
+        String performance;
+        if (duration < 200) {
+            performance = "优秀";
+        } else if (duration < 500) {
+            performance = "良好";
+        } else if (duration < 1000) {
+            performance = "一般";
+        } else {
+            performance = "需要优化";
+        }
+        stats.put("performanceRating", performance);
+        
+        return stats;
     }
 
     /**
