@@ -147,22 +147,44 @@ public class DepotItemOptimizedService {
      */
     private Map<String, Object> getOptimizedDataWithoutDateRange(
             Integer currentPage, Integer pageSize, String materialParam, Long tenantId) throws Exception {
-        
+
         Map<String, Object> resultMap = new HashMap<>();
-        
-        // 直接从期间汇总表获取数据
-        List<MaterialStockPeriodVo> stockList = depotItemMapperEx.getMaterialPeriodStockOptimized(
-                materialParam, (currentPage - 1) * pageSize, pageSize, tenantId);
-        int total = depotItemMapperEx.getMaterialPeriodStockCountOptimized(materialParam, tenantId);
-        
-        resultMap.put("rows", stockList);
-        resultMap.put("total", total);
-        resultMap.put("dailyOutData", new HashMap<>());
-        resultMap.put("cached", false);
-        
-        logger.info("无日期范围查询完成，商品数：{}", stockList.size());
-        
+
+        try {
+            // 确保期间汇总数据是最新的
+            refreshMaterialPeriodSummary(tenantId);
+
+            // 从期间汇总表获取数据
+            List<MaterialStockPeriodVo> stockList = depotItemMapperEx.getMaterialPeriodStockOptimized(
+                    materialParam, (currentPage - 1) * pageSize, pageSize, tenantId);
+            int total = depotItemMapperEx.getMaterialPeriodStockCountOptimized(materialParam, tenantId);
+
+            resultMap.put("rows", stockList);
+            resultMap.put("total", total);
+            resultMap.put("dailyOutData", new HashMap<>());
+            resultMap.put("cached", false);
+
+            logger.info("无日期范围查询完成，商品数：{}", stockList.size());
+
+        } catch (Exception e) {
+            logger.error("无日期范围查询失败", e);
+            throw e;
+        }
+
         return resultMap;
+    }
+
+    /**
+     * 刷新商品期间汇总数据
+     */
+    private void refreshMaterialPeriodSummary(Long tenantId) {
+        try {
+            // 调用修复后的存储过程
+            depotItemMapperEx.refreshMaterialPeriodSummaryCorrect(tenantId);
+            logger.info("商品期间汇总数据刷新成功，租户ID：{}", tenantId);
+        } catch (Exception e) {
+            logger.warn("刷新商品期间汇总数据失败，将使用现有数据，租户ID：{}", tenantId, e);
+        }
     }
     
     /**
