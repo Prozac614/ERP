@@ -63,9 +63,8 @@ public class DepotItemOptimizedService {
             User user = userService.getCurrentUser();
             Long tenantId = user != null ? user.getTenantId() : null;
             
-            // 临时禁用缓存读取，用于测试SQL修改
+            // 先尝试从Redis缓存获取
             String cacheKey = generateCacheKey(materialParam, beginTime, endTime, currentPage, pageSize, tenantId);
-            /*
             if (redisTemplate != null) {
                 Object cached = redisTemplate.opsForValue().get(cacheKey);
                 if (cached != null) {
@@ -73,7 +72,6 @@ public class DepotItemOptimizedService {
                     return (Map<String, Object>) cached;
                 }
             }
-            */
             
             // 使用优化的查询方法
             if (StringUtil.isNotEmpty(beginTime) && StringUtil.isNotEmpty(endTime)) {
@@ -398,14 +396,30 @@ public class DepotItemOptimizedService {
     public void clearAllCache() {
         if (redisTemplate != null) {
             try {
-                Set<String> keys = redisTemplate.keys("material_stock:*");
-                if (keys != null && !keys.isEmpty()) {
-                    redisTemplate.delete(keys);
-                    logger.info("手动清除了 {} 个缓存", keys.size());
+                // 清除多种模式的缓存键
+                String[] patterns = {"material_stock:*", "*stock*", "depot_item:*"};
+                int totalCleared = 0;
+
+                for (String pattern : patterns) {
+                    Set<String> keys = redisTemplate.keys(pattern);
+                    if (keys != null && !keys.isEmpty()) {
+                        redisTemplate.delete(keys);
+                        totalCleared += keys.size();
+                        logger.info("清除了{}个匹配'{}'的缓存键", keys.size(), pattern);
+                    }
+                }
+
+                if (totalCleared > 0) {
+                    logger.info("总共清除了{}个缓存键", totalCleared);
+                } else {
+                    logger.info("没有找到需要清除的缓存键");
                 }
             } catch (Exception e) {
                 logger.error("清除缓存失败", e);
+                throw new RuntimeException("清除缓存失败: " + e.getMessage());
             }
+        } else {
+            logger.warn("Redis模板为空，无法清除缓存");
         }
     }
 
@@ -539,27 +553,6 @@ public class DepotItemOptimizedService {
         }
     }
 
-    /**
-     * 清除所有库存相关缓存
-     */
-    public void clearAllCache() {
-        try {
-            if (redisTemplate != null) {
-                // 获取所有包含stock关键词的缓存key
-                Set<String> keys = redisTemplate.keys("*stock*");
-                if (keys != null && !keys.isEmpty()) {
-                    redisTemplate.delete(keys);
-                    logger.info("已清除{}个库存相关缓存", keys.size());
-                } else {
-                    logger.info("没有找到库存相关缓存");
-                }
-            } else {
-                logger.warn("Redis模板为空，无法清除缓存");
-            }
-        } catch (Exception e) {
-            logger.error("清除缓存失败", e);
-            throw new RuntimeException("清除缓存失败: " + e.getMessage());
-        }
-    }
+
 
 }
