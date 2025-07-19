@@ -526,7 +526,7 @@
             Promise.all([processRows(), processColumns()]).then(() => {
               // 输出详细的调试信息
               console.log('🔍 数据处理详情:')
-              console.log('- 原始行数据数量:', data.rows?.length || 0)
+              console.log('- 原始行数据数量:', (data.rows && data.rows.length) || 0)
               console.log('- 轻量级存储行数:', this.lightweightData.rows.length)
               console.log('- dataSource长度:', this.dataSource.length)
               console.log('- 列定义数量:', this.defColumns.length)
