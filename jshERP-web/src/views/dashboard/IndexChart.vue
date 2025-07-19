@@ -93,19 +93,18 @@
         <!-- table区域-begin -->
         <div>
           <!-- 超级优化虚拟滚动表格 (当显示所有商品时) -->
-          <VirtualTableOptimized
+          <VirtualTableUltraOptimized
             v-if="showAllProducts && !loading"
-            ref="virtualTableOptimized"
-            :dataSource="dataSource"
+            ref="virtualTableUltra"
+            :dataGetter="getCellDataOptimized"
+            :totalRows="totalRows"
             :columns="columns"
             :containerHeight="600"
-            :rowHeight="50"
+            :rowHeight="40"
+            :columnWidth="90"
             :fixedColumnCount="3"
-            :columnWidth="100"
-            :overscanRows="2"
-            :overscanColumns="1"
-            rowKey="id"
-            @cell-click="handleCellClick"
+            :bufferSize="2"
+            :showMemoryInfo="false"
           />
           
           <!-- 普通分页表格 (正常分页模式) -->
@@ -163,6 +162,7 @@
   import JEllipsis from '@/components/jeecg/JEllipsis'
   import VirtualTable from '@/components/VirtualTable'
   import VirtualTableOptimized from '@/components/VirtualTableOptimized'
+  import VirtualTableUltraOptimized from '@/components/VirtualTableUltraOptimized'
   import Vue from 'vue'
 
   export default {
@@ -170,7 +170,8 @@
     components: {
       JEllipsis,
       VirtualTable,
-      VirtualTableOptimized
+      VirtualTableOptimized,
+      VirtualTableUltraOptimized
     },
     data () {
       return {
@@ -211,6 +212,12 @@
           showSizeChanger: true,
           total: 0
         },
+        // 轻量级数据存储
+        lightweightData: {
+          rows: [], // 只存储必要的行数据
+          columnMapping: new Map(), // 列名映射
+          cellValueCache: new Map() // 单元格值缓存
+        },
         // 表格滚动
         scroll: { x: 800 },
         // 默认索引
@@ -250,6 +257,11 @@
           return false // 展示所有商品时禁用分页
         }
         return this.ipagination
+      },
+      
+      // 总行数（用于超级虚拟表格）
+      totalRows() {
+        return this.lightweightData.rows.length || this.dataSource.length
       }
     },
     created() {
@@ -265,6 +277,18 @@
         clearTimeout(this.debouncedLoadData)
       }
       this.dataCache.clear()
+      
+      // 🚨 重要：清理超大数据集的内存
+      this.clearMemoryCache()
+      this.lightweightData.rows = []
+      this.lightweightData.columnMapping.clear()
+      this.dataSource = []
+      
+      // 强制垃圾回收（如果可用）
+      if (window.gc) {
+        console.log('🗑️ 触发垃圾回收')
+        window.gc()
+      }
     },
     methods: {
       // 性能优化 - 日期范围验证
@@ -435,28 +459,56 @@
         })
       },
 
-      // 分批处理大量数据
+      // 分批处理大量数据（超级内存优化版）
       async processLargeDataResponse(data) {
         return new Promise((resolve, reject) => {
           try {
-            // 首先快速设置基础数据
+            // 清理旧缓存
+            this.clearMemoryCache()
+            
+            // 设置基础数据
             this.ipagination.total = data.total || 0
             
-            // 分批处理rows数据
+            // 优化：只保存必要的行数据到轻量级存储
             const processRows = async () => {
-              const processedRows = await this.processDataInBatches(data.rows || [], 100)
-              this.dataSource = processedRows
+              const rawRows = data.rows || []
+              
+              // 第一步：只保存基础信息，不保存完整对象
+              this.lightweightData.rows = rawRows.map((row, index) => ({
+                // 只保存必要字段，减少内存占用
+                id: row.id || index,
+                barCode: row.barCode || '',
+                materialName: row.materialName || '',
+                ...row // 保留其他字段，但让虚拟表格按需获取
+              }))
+              
+              // 第二步：清空传统dataSource，只在非虚拟模式下使用
+              this.dataSource = []
             }
             
-            // 分批处理columns数据
+            // 处理列信息
             const processColumns = async () => {
               const allColumns = data.columns || []
-              this.columns = allColumns
+              
+              // 创建列映射以提高查找效率
+              this.lightweightData.columnMapping.clear()
+              allColumns.forEach((col, index) => {
+                this.lightweightData.columnMapping.set(col.dataIndex, index)
+              })
+              
+              // 存储列定义
               this.defColumns = [...allColumns]
+              
+              // 设置日期列
+              const dynamicColumns = allColumns.filter(col => 
+                col.dataIndex && col.dataIndex.startsWith('out_')
+              )
+              this.dateColumns = dynamicColumns
             }
             
-            // 并行处理行和列数据
+            // 并行处理
             Promise.all([processRows(), processColumns()]).then(() => {
+              console.log(`🚀 内存优化完成: ${this.lightweightData.rows.length} 行数据`)
               resolve()
             }).catch(reject)
             
@@ -704,16 +756,60 @@
         })
       },
 
+      // 超轻量级数据获取函数（关键优化）
+      getCellDataOptimized(rowIndex, columnKey) {
+        // 缓存键
+        const cacheKey = `${rowIndex}-${columnKey}`
+        
+        // 优先从缓存获取
+        if (this.lightweightData.cellValueCache.has(cacheKey)) {
+          return this.lightweightData.cellValueCache.get(cacheKey)
+        }
+        
+        // 从轻量级数据获取
+        const row = this.lightweightData.rows[rowIndex] || this.dataSource[rowIndex]
+        if (!row) return '-'
+        
+        let value = row[columnKey]
+        
+        // 数据格式化（最小化处理）
+        if (typeof value === 'number') {
+          if (columnKey.includes('out_') && value === 0) {
+            value = '-'
+          } else if (typeof value === 'number' && value !== 0) {
+            value = value.toFixed(2)
+          }
+        } else if (!value) {
+          value = '-'
+        }
+        
+        // 缓存结果（限制缓存大小防止内存泄漏）
+        if (this.lightweightData.cellValueCache.size < 50000) {
+          this.lightweightData.cellValueCache.set(cacheKey, value)
+        }
+        
+        return value
+      },
+
+      // 清理内存缓存
+      clearMemoryCache() {
+        this.lightweightData.cellValueCache.clear()
+        // 强制垃圾回收
+        if (window.gc) {
+          window.gc()
+        }
+      },
+
       // 虚拟表格滚动控制
       scrollToTop() {
-        if (this.$refs.virtualTableOptimized) {
-          this.$refs.virtualTableOptimized.resetScroll()
+        if (this.$refs.virtualTableUltra) {
+          this.$refs.virtualTableUltra.scrollToRow(0)
         }
       },
 
       scrollToRow(rowIndex) {
-        if (this.$refs.virtualTableOptimized) {
-          this.$refs.virtualTableOptimized.scrollToRow(rowIndex)
+        if (this.$refs.virtualTableUltra) {
+          this.$refs.virtualTableUltra.scrollToRow(rowIndex)
         }
       }
     }
