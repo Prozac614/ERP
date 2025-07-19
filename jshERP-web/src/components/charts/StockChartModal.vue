@@ -2,7 +2,7 @@
   <a-modal
     :title="modalTitle"
     :visible="visible"
-    :width="1000"
+    :width="1200"
     :footer="null"
     @cancel="handleCancel"
     :maskClosable="false"
@@ -25,7 +25,7 @@
       <div class="chart-container">
         <div 
           ref="chartContainer" 
-          :style="{ width: '100%', height: '400px' }"
+          :style="{ width: '100%', height: '600px' }"
           v-show="!loading && !error && hasData"
         ></div>
         
@@ -64,13 +64,9 @@
           <span class="legend-color" style="background-color: #1890ff;"></span>
           <span>库存量</span>
         </div>
-        <div class="legend-item" v-if="chartType === 'history'">
+        <div class="legend-item">
           <span class="legend-color" style="background-color: #52c41a;"></span>
           <span>出库量</span>
-        </div>
-        <div class="legend-item" v-if="chartType === 'flow'">
-          <span class="legend-color" style="background-color: #faad14;"></span>
-          <span>累计出库</span>
         </div>
       </div>
     </div>
@@ -94,11 +90,6 @@ export default {
       type: Object,
       default: () => ({})
     },
-    chartType: {
-      type: String,
-      default: 'history', // 'history' 或 'flow'
-      validator: value => ['history', 'flow'].includes(value)
-    },
     dateRange: {
       type: Array,
       default: () => []
@@ -114,7 +105,7 @@ export default {
   },
   computed: {
     modalTitle() {
-      return this.chartType === 'history' ? '库存历史图表' : '出库流水图表'
+      return '库存图表'
     },
     dateRangeText() {
       if (this.dateRange.length === 2) {
@@ -126,23 +117,18 @@ export default {
       return this.chartData && this.chartData.dates && this.chartData.dates.length > 0
     }
   },
-  watch: {
-    visible(newVal) {
-      if (newVal) {
-        this.$nextTick(() => {
-          this.initChart()
-          this.loadChartData()
-        })
-      } else {
-        this.destroyChart()
+      watch: {
+      visible(newVal) {
+        if (newVal) {
+          this.$nextTick(() => {
+            this.initChart()
+            this.loadChartData()
+          })
+        } else {
+          this.destroyChart()
+        }
       }
     },
-    chartType() {
-      if (this.visible) {
-        this.loadChartData()
-      }
-    }
-  },
   beforeDestroy() {
     this.destroyChart()
   },
@@ -184,14 +170,11 @@ export default {
           materialId: this.materialInfo.id,
           barCode: this.materialInfo.barCode,
           beginDate: this.dateRange[0].format('YYYY-MM-DD'),
-          endDate: this.dateRange[1].format('YYYY-MM-DD'),
-          chartType: this.chartType
+          endDate: this.dateRange[1].format('YYYY-MM-DD')
         }
 
-        // 使用对应的API函数
-        const response = this.chartType === 'history' 
-          ? await getStockHistory(params)
-          : await getOutboundFlow(params)
+        // 使用库存历史API函数
+        const response = await getStockHistory(params)
         
         if (response.code === 200) {
           this.chartData = response.data
@@ -217,11 +200,7 @@ export default {
 
     // 获取图表配置
     getChartOption() {
-      if (this.chartType === 'history') {
-        return this.getHistoryChartOption()
-      } else {
-        return this.getFlowChartOption()
-      }
+      return this.getHistoryChartOption()
     },
 
     // 库存历史图表配置
@@ -253,13 +232,13 @@ export default {
         },
         legend: {
           data: ['库存量', '出库量'],
-          top: 30
+          top: 40
         },
         grid: {
-          left: '50px',
-          right: '50px',
-          bottom: '50px',
-          top: '80px',
+          left: '60px',
+          right: '60px',
+          bottom: '80px',
+          top: '100px',
           containLabel: true
         },
         xAxis: {
@@ -334,106 +313,8 @@ export default {
             type: 'slider',
             start: 0,
             end: 100,
-            height: 20,
-            bottom: 10
-          }
-        ]
-      }
-    },
-
-    // 出库流水图表配置
-    getFlowChartOption() {
-      return {
-        title: {
-          text: '出库流水趋势',
-          left: 'center',
-          textStyle: {
-            fontSize: 16,
-            fontWeight: 'bold'
-          }
-        },
-        tooltip: {
-          trigger: 'axis',
-          axisPointer: {
-            type: 'cross'
-          },
-          formatter: (params) => {
-            let result = `<div style="margin-bottom: 5px;">${params[0].axisValue}</div>`
-            params.forEach(param => {
-              result += `<div style="color: ${param.color};">
-                ${param.seriesName}: ${Math.floor(param.value)} 件
-              </div>`
-            })
-            return result
-          }
-        },
-        legend: {
-          data: ['日出库量', '累计出库'],
-          top: 30
-        },
-        grid: {
-          left: '50px',
-          right: '50px',
-          bottom: '50px',
-          top: '80px',
-          containLabel: true
-        },
-        xAxis: {
-          type: 'category',
-          data: this.chartData.dates || [],
-          axisTick: {
-            alignWithLabel: true
-          },
-          axisLabel: {
-            rotate: 45,
-            formatter: (value) => moment(value).format('MM-DD')
-          }
-        },
-        yAxis: {
-          type: 'value',
-          name: '数量',
-          axisLabel: {
-            formatter: (value) => Math.floor(value)
-          }
-        },
-        series: [
-          {
-            name: '日出库量',
-            type: 'line',
-            data: (this.chartData.outboundData && this.chartData.outboundData.map(val => Math.floor(val || 0))) || [],
-            itemStyle: {
-              color: '#1890ff'
-            },
-            lineStyle: {
-              width: 2
-            },
-            symbol: 'circle',
-            symbolSize: 4,
-            smooth: true
-          },
-          {
-            name: '累计出库',
-            type: 'line',
-            data: (this.chartData.cumulativeData && this.chartData.cumulativeData.map(val => Math.floor(val || 0))) || [],
-            itemStyle: {
-              color: '#faad14'
-            },
-            lineStyle: {
-              width: 2,
-              type: 'dashed'
-            },
-            symbol: 'diamond',
-            symbolSize: 4,
-            smooth: true
-          }
-        ],
-        dataZoom: [
-          {
-            type: 'slider',
-            start: 0,
-            end: 100,
-            height: 20,
-            bottom: 10
+            height: 30,
+            bottom: 20
           }
         ]
       }
@@ -469,6 +350,8 @@ export default {
 <style scoped>
 .stock-chart-modal {
   padding: 0;
+  max-height: 80vh;
+  overflow: hidden;
 }
 
 .chart-header {
@@ -500,7 +383,7 @@ export default {
 
 .chart-container {
   position: relative;
-  min-height: 400px;
+  min-height: 600px;
   border-radius: 6px;
   border: 1px solid #f0f0f0;
 }

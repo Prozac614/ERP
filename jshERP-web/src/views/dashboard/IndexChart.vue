@@ -140,9 +140,7 @@
             :rowSelection="{selectedRowKeys: selectedRowKeys, onChange: onSelectChange}"
             @change="handleTableChange">
             <span slot="action" slot-scope="text, record">
-              <a @click="viewStockHistory(record)">库存历史</a>
-              <a-divider type="vertical" />
-              <a @click="viewStockFlow(record)">查看流水</a>
+              <a @click="viewChart(record)">查看图表</a>
             </span>
             <template slot="customRenderStock" slot-scope="value, record">
               <span style="color:green" v-if="value > 0">{{value || 0}}</span>
@@ -167,7 +165,6 @@
           <!-- 图表弹窗 -->
           <StockChartModal
             :visible="chartModal.visible"
-            :chartType="chartModal.chartType"
             :materialInfo="chartModal.currentMaterial"
             :dateRange="queryParam.createTimeRange"
             @cancel="handleChartModalCancel"
@@ -246,7 +243,6 @@
         // 图表弹窗控制
         chartModal: {
           visible: false,
-          chartType: 'history', // 'history' 或 'flow'
           currentMaterial: {}
         },
         // 表格滚动
@@ -257,10 +253,10 @@
         // 默认列
         defColumns: [
           {
-            title: '图表展示',
+            title: '操作',
             dataIndex: 'action',
             align: "center", 
-            width: 150,
+            width: 120,
             scopedSlots: { customRender: 'action' },
           },
           { title: '商品编码', dataIndex: 'barCode', width: 120 },
@@ -680,17 +676,13 @@
         return {}
       },
       // 操作方法
-      viewStockHistory(record) {
-        this.showChartModal(record, 'history')
-      },
-      
-      viewStockFlow(record) {
-        this.showChartModal(record, 'flow')
+      viewChart(record) {
+        this.showChartModal(record)
       },
 
       // 显示图表弹窗
-      showChartModal(materialRecord, chartType) {
-        this.chartModal.chartType = chartType
+      showChartModal(materialRecord) {
+        this.chartModal.chartType = 'history' // 默认显示库存历史
         this.chartModal.currentMaterial = materialRecord
         this.chartModal.visible = true
       },
