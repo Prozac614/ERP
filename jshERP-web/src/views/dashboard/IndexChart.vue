@@ -677,7 +677,6 @@
       },
       // 操作方法
       viewChart(record) {
-        console.log('点击查看图表按钮，记录数据:', record)
         this.showChartModal(record)
       },
 
@@ -705,9 +704,14 @@
         console.log('传递给图表组件的数据:', materialInfo)
         console.log('日期范围:', this.queryParam.createTimeRange)
 
+        // 先设置数据，再显示弹窗，确保数据传递完整
         this.chartModal.chartType = 'history' // 默认显示库存历史
         this.chartModal.currentMaterial = materialInfo
-        this.chartModal.visible = true
+
+        // 使用$nextTick确保数据更新后再显示弹窗
+        this.$nextTick(() => {
+          this.chartModal.visible = true
+        })
       },
 
       // 关闭图表弹窗

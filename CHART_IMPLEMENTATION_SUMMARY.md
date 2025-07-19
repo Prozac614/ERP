@@ -25,6 +25,16 @@
 - **问题**: 使用了可选链操作符(`?.`)导致Babel编译失败
 - **解决**: 改用兼容的语法 `obj && obj.prop`
 
+### 图表首次加载无数据问题
+- **问题**: 每次首次查看图表时没有数据，需要点击刷新才有数据
+- **原因**: 组件props传递时序问题，图表组件在visible变为true时，dateRange等props可能还未完全传递
+- **解决方案**:
+  1. 在首页`showChartModal`中使用`$nextTick`确保数据设置完成后再显示弹窗
+  2. 在图表组件中添加`mounted`生命周期钩子处理已可见状态
+  3. 添加`dateRange`和`materialInfo`的深度监听，确保数据变化时自动重新加载
+  4. 增加延迟加载机制，确保所有props传递完成
+  5. 完善错误处理和调试信息
+
 ### 后端编译错误
 - **问题**: Lombok相关的getter/setter方法找不到
 - **解决**: 需要清理重新编译 `mvn clean compile -DskipTests`

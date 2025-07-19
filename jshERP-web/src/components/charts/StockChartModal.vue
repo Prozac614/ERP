@@ -131,7 +131,10 @@ export default {
       if (newVal) {
         this.$nextTick(() => {
           this.initChart()
-          this.loadChartData()
+          // 延迟一下确保所有props都已经传递完成
+          setTimeout(() => {
+            this.loadChartData()
+          }, 100)
         })
       } else {
         this.destroyChart()
@@ -141,6 +144,35 @@ export default {
       if (this.visible) {
         this.loadChartData()
       }
+    },
+    // 监听dateRange变化，确保数据及时更新
+    dateRange: {
+      handler(newVal) {
+        if (this.visible && newVal && newVal.length === 2) {
+          this.loadChartData()
+        }
+      },
+      deep: true
+    },
+    // 监听materialInfo变化
+    materialInfo: {
+      handler(newVal) {
+        if (this.visible && newVal && newVal.materialId) {
+          this.loadChartData()
+        }
+      },
+      deep: true
+    }
+  },
+  mounted() {
+    // 如果组件挂载时已经是可见状态，立即加载数据
+    if (this.visible) {
+      this.$nextTick(() => {
+        this.initChart()
+        setTimeout(() => {
+          this.loadChartData()
+        }, 100)
+      })
     }
   },
   beforeDestroy() {
@@ -194,26 +226,43 @@ export default {
 
     // 加载图表数据
     async loadChartData() {
+      console.log('开始加载图表数据...')
+      console.log('materialInfo:', this.materialInfo)
+      console.log('dateRange:', this.dateRange)
+
       this.loading = true
       this.error = null
 
       try {
         // 验证必要参数
         if (!this.materialInfo || !this.materialInfo.materialId) {
+          console.error('商品信息验证失败:', this.materialInfo)
           this.error = '商品信息不完整，无法加载图表数据'
           return
         }
 
         if (!this.dateRange || this.dateRange.length !== 2) {
+          console.error('日期范围验证失败:', this.dateRange)
           this.error = '请先设置统计日期范围'
+          return
+        }
+
+        // 确保日期对象有format方法
+        let beginDate, endDate
+        try {
+          beginDate = this.dateRange[0].format ? this.dateRange[0].format('YYYY-MM-DD') : this.dateRange[0]
+          endDate = this.dateRange[1].format ? this.dateRange[1].format('YYYY-MM-DD') : this.dateRange[1]
+        } catch (dateError) {
+          console.error('日期格式化失败:', dateError)
+          this.error = '日期格式错误'
           return
         }
 
         const params = {
           materialId: this.materialInfo.materialId, // 使用正确的字段名
           barCode: this.materialInfo.barCode,
-          beginDate: this.dateRange[0].format('YYYY-MM-DD'),
-          endDate: this.dateRange[1].format('YYYY-MM-DD'),
+          beginDate: beginDate,
+          endDate: endDate,
           chartType: this.chartType,
           // 传递库存信息用于更准确的图表计算
           currentPeriodStock: this.materialInfo.currentPeriodStock,
