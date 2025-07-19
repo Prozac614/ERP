@@ -40,6 +40,7 @@
           <a-button @click="handleExport" type="primary" icon="download">导出库存</a-button>
           <a-button icon="reload" @click="refreshData">刷新数据</a-button>
           <a-button icon="warning" @click="showLowStockAlert">低库存预警</a-button>
+          <a-button icon="calculator" @click="startStockWarningCalculation" :loading="calculationLoading">库存预警检查</a-button>
 
           <!-- 暂时隐藏展示所有数据按钮 -->
           <!-- 
@@ -179,13 +180,11 @@
 <script>
   import moment from 'moment'
   import { getAction, postAction } from '@/api/manage'
-  import { startStockWarningCalculation, getTaskStatus } from '@/api/stockWarning'
   import JEllipsis from '@/components/jeecg/JEllipsis'
   import VirtualTable from '@/components/VirtualTable'
   import VirtualTableOptimized from '@/components/VirtualTableOptimized'
   import VirtualTableUltraOptimized from '@/components/VirtualTableUltraOptimized'
   import StockChartModal from '@/components/charts/StockChartModal'
-  import StockWarningProgressModal from '@/components/StockWarningProgressModal'
   import Vue from 'vue'
 
   export default {
@@ -195,8 +194,7 @@
       VirtualTable,
       VirtualTableOptimized,
       VirtualTableUltraOptimized,
-      StockChartModal,
-      StockWarningProgressModal
+      StockChartModal
     },
     data () {
       return {
@@ -269,14 +267,6 @@
           { title: '本期出库', dataIndex: 'currentPeriodOut', width: 120, scopedSlots: { customRender: 'customRenderStock' } },
           { title: '上期出库', dataIndex: 'previousPeriodOut', width: 120, scopedSlots: { customRender: 'customRenderStock' } }
         ],
-
-        // 库存预警计算相关
-        calculationLoading: false,
-        calculationTaskId: null,
-        progressModal: {
-          visible: false,
-          taskStatus: {}
-        }
 
       }
     },
