@@ -92,18 +92,20 @@
         </div>
         <!-- table区域-begin -->
         <div>
-          <!-- 虚拟滚动表格 (当显示所有商品时) -->
-          <VirtualTable
+          <!-- 超级优化虚拟滚动表格 (当显示所有商品时) -->
+          <VirtualTableOptimized
             v-if="showAllProducts && !loading"
-            ref="virtualTable"
+            ref="virtualTableOptimized"
             :dataSource="dataSource"
             :columns="columns"
             :containerHeight="600"
-            :rowHeight="54"
-            :showPerformanceInfo="false"
+            :rowHeight="50"
+            :fixedColumnCount="3"
+            :columnWidth="100"
+            :overscanRows="2"
+            :overscanColumns="1"
             rowKey="id"
-            @row-click="handleRowClick"
-            @visible-change="handleVisibleChange"
+            @cell-click="handleCellClick"
           />
           
           <!-- 普通分页表格 (正常分页模式) -->
@@ -160,13 +162,15 @@
   import { getAction, postAction } from '@/api/manage'
   import JEllipsis from '@/components/jeecg/JEllipsis'
   import VirtualTable from '@/components/VirtualTable'
+  import VirtualTableOptimized from '@/components/VirtualTableOptimized'
   import Vue from 'vue'
 
   export default {
     name: "IndexChart",
     components: {
       JEllipsis,
-      VirtualTable
+      VirtualTable,
+      VirtualTableOptimized
     },
     data () {
       return {
@@ -352,9 +356,29 @@
         }
       },
 
-      // 加载所有商品数据
+      // 加载所有商品数据（优化版）
       loadAllProducts() {
+        // 显示确认对话框，警告用户大数据量加载
+        this.$confirm({
+          title: '加载大量数据',
+          content: '即将加载所有商品数据，数据量较大可能需要一些时间。确定继续吗？',
+          okText: '确定加载',
+          cancelText: '取消',
+          onOk: () => {
+            this.performLoadAllProducts()
+          },
+          onCancel: () => {
+            this.showAllProducts = false
+          }
+        })
+      },
+
+      // 执行加载所有商品数据
+      performLoadAllProducts() {
         this.loading = true
+        
+        // 显示加载进度
+        const loadingMessage = this.$message.loading('正在加载大量数据，请稍候...', 0)
         
         const params = {
           currentPage: 1,
@@ -374,23 +398,71 @@
         }
 
         this.loadingRequest = getAction('/depotItem/getMaterialStockWithDailyOutOptimized', params)
-        this.loadingRequest.then((res) => {
+        this.loadingRequest.then(async (res) => {
           if (res.code === 200) {
-            this.processDataResponse(res.data)
-            this.$message.success(`已加载 ${this.dataSource.length} 个商品`)
+            loadingMessage()
+            
+            // 显示数据处理进度
+            const processingMessage = this.$message.loading('正在处理数据，请稍候...', 0)
+            
+            try {
+              // 分批处理数据，避免阻塞UI
+              await this.processLargeDataResponse(res.data)
+              processingMessage()
+              
+              this.$message.success(`✅ 成功加载 ${this.dataSource.length} 个商品，已启用虚拟滚动优化`)
+            } catch (error) {
+              processingMessage()
+              console.error('数据处理失败:', error)
+              this.$message.error('数据处理失败')
+              this.showAllProducts = false
+            }
           } else {
+            loadingMessage()
             this.$message.error(res.data || '数据加载失败')
-            this.showAllProducts = false // 失败时恢复分页模式
+            this.showAllProducts = false
           }
         }).catch((error) => {
+          loadingMessage()
           if (error.name !== 'AbortError') {
             console.error('获取所有商品数据失败:', error)
             this.$message.error('数据加载失败')
-            this.showAllProducts = false // 失败时恢复分页模式
+            this.showAllProducts = false
           }
         }).finally(() => {
           this.loading = false
           this.loadingRequest = null
+        })
+      },
+
+      // 分批处理大量数据
+      async processLargeDataResponse(data) {
+        return new Promise((resolve, reject) => {
+          try {
+            // 首先快速设置基础数据
+            this.ipagination.total = data.total || 0
+            
+            // 分批处理rows数据
+            const processRows = async () => {
+              const processedRows = await this.processDataInBatches(data.rows || [], 100)
+              this.dataSource = processedRows
+            }
+            
+            // 分批处理columns数据
+            const processColumns = async () => {
+              const allColumns = data.columns || []
+              this.columns = allColumns
+              this.defColumns = [...allColumns]
+            }
+            
+            // 并行处理行和列数据
+            Promise.all([processRows(), processColumns()]).then(() => {
+              resolve()
+            }).catch(reject)
+            
+          } catch (error) {
+            reject(error)
+          }
         })
       },
 
@@ -594,33 +666,54 @@
 
 
 
-      // 虚拟表格相关方法
-      handleRowClick(record, index) {
-        console.log('点击行:', record, index)
-        // 这里可以添加行点击逻辑
+      // 优化虚拟表格相关方法
+      handleCellClick(cellInfo) {
+        // 处理单元格点击事件
+        console.log('单元格点击:', cellInfo)
+        // 这里可以添加单元格点击逻辑，如显示详情等
       },
 
-      handleVisibleChange(visibleInfo) {
-        // 虚拟滚动可见范围变化，静默处理
-        // 这里可以进行一些后台优化，但不向用户显示
+      // 优化数据处理 - 分批加载
+      processDataInBatches(rawData, batchSize = 50) {
+        return new Promise((resolve) => {
+          const result = []
+          let index = 0
+          
+          const processBatch = () => {
+            const endIndex = Math.min(index + batchSize, rawData.length)
+            
+            for (let i = index; i < endIndex; i++) {
+              result.push(rawData[i])
+            }
+            
+            index = endIndex
+            
+            if (index < rawData.length) {
+              // 使用 requestIdleCallback 或 setTimeout 避免阻塞UI
+              if (window.requestIdleCallback) {
+                requestIdleCallback(processBatch)
+              } else {
+                setTimeout(processBatch, 0)
+              }
+            } else {
+              resolve(result)
+            }
+          }
+          
+          processBatch()
+        })
       },
 
       // 虚拟表格滚动控制
       scrollToTop() {
-        if (this.$refs.virtualTable) {
-          this.$refs.virtualTable.scrollToTop()
+        if (this.$refs.virtualTableOptimized) {
+          this.$refs.virtualTableOptimized.resetScroll()
         }
       },
 
-      scrollToBottom() {
-        if (this.$refs.virtualTable) {
-          this.$refs.virtualTable.scrollToBottom()
-        }
-      },
-
-      scrollToIndex(index) {
-        if (this.$refs.virtualTable) {
-          this.$refs.virtualTable.scrollToIndex(index)
+      scrollToRow(rowIndex) {
+        if (this.$refs.virtualTableOptimized) {
+          this.$refs.virtualTableOptimized.scrollToRow(rowIndex)
         }
       }
     }
