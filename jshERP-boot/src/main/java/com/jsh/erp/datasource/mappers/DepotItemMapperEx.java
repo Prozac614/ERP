@@ -294,7 +294,12 @@ public interface DepotItemMapperEx {
             @Param("endTime") String endTime,
             @Param("tenantId") Long tenantId);
 
-
+    /**
+     * 获取商品过去6个月的销量
+     */
+    BigDecimal getSixMonthsSalesByMaterialId(
+            @Param("materialId") Long materialId,
+            @Param("tenantId") Long tenantId);
 
     void refreshMaterialPeriodSummary(@Param("tenantId") Long tenantId);
 

@@ -140,6 +140,18 @@
             @change="handleTableChange">
             <span slot="action" slot-scope="text, record">
               <a @click="viewChart(record)">查看图表</a>
+              <a-divider type="vertical" v-if="record.stockAlertStatus === 'STOCK_ALERT'" />
+              <a v-if="record.stockAlertStatus === 'STOCK_ALERT'"
+                 @click="ignoreStockRisk(record)"
+                 style="color: #fa8c16;">
+                忽略风险
+              </a>
+              <a-divider type="vertical" v-if="record.stockAlertStatus === 'RISK_IGNORED'" />
+              <a v-if="record.stockAlertStatus === 'RISK_IGNORED'"
+                 @click="focusStockRisk(record)"
+                 style="color: #1890ff;">
+                关注风险
+              </a>
             </span>
             <template slot="customRenderStock" slot-scope="value, record">
               <span style="color:green" v-if="value > 0">{{value || 0}}</span>
@@ -149,6 +161,20 @@
             <template slot="dailyOutRender" slot-scope="value, record, index, column">
               <span style="color: #1890ff; font-weight: 500" v-if="value > 0">{{value}}</span>
               <span style="color: #ccc" v-else>-</span>
+            </template>
+            <template slot="stockAlertStatusRender" slot-scope="value, record">
+              <a-tag v-if="value === 'NO_RISK'" color="green">
+                <a-icon type="check-circle" /> 无风险
+              </a-tag>
+              <a-tag v-else-if="value === 'STOCK_ALERT'" color="red">
+                <a-icon type="exclamation-circle" /> 库存告急
+              </a-tag>
+              <a-tag v-else-if="value === 'RISK_IGNORED'" color="orange">
+                <a-icon type="eye-invisible" /> 忽略风险
+              </a-tag>
+              <a-tag v-else color="default">
+                <a-icon type="question-circle" /> 未知状态
+              </a-tag>
             </template>
           </a-table>
           
@@ -179,7 +205,7 @@
 
 <script>
   import moment from 'moment'
-  import { getAction } from '@/api/manage'
+  import { getAction, postAction } from '@/api/manage'
   import JEllipsis from '@/components/jeecg/JEllipsis'
   import VirtualTable from '@/components/VirtualTable'
   import VirtualTableOptimized from '@/components/VirtualTableOptimized'
@@ -247,10 +273,10 @@
         },
 
         // 表格滚动
-        scroll: { x: 800 },
+        scroll: { x: 920 },
         // 默认索引
-        defDataIndex: ['action', 'barCode', 'materialName', 'currentPeriodStock', 'previousPeriodStock', 'currentPeriodOut', 'previousPeriodOut'],
-        settingDataIndex: ['action', 'barCode', 'materialName', 'currentPeriodStock', 'previousPeriodStock', 'currentPeriodOut', 'previousPeriodOut'],
+        defDataIndex: ['action', 'barCode', 'materialName', 'currentPeriodStock', 'previousPeriodStock', 'currentPeriodOut', 'previousPeriodOut', 'stockAlertStatus'],
+        settingDataIndex: ['action', 'barCode', 'materialName', 'currentPeriodStock', 'previousPeriodStock', 'currentPeriodOut', 'previousPeriodOut', 'stockAlertStatus'],
         // 默认列
         defColumns: [
           {
@@ -265,7 +291,8 @@
           { title: '本期结存', dataIndex: 'currentPeriodStock', width: 120, scopedSlots: { customRender: 'customRenderStock' } },
           { title: '上期结存', dataIndex: 'previousPeriodStock', width: 120, scopedSlots: { customRender: 'customRenderStock' } },
           { title: '本期出库', dataIndex: 'currentPeriodOut', width: 120, scopedSlots: { customRender: 'customRenderStock' } },
-          { title: '上期出库', dataIndex: 'previousPeriodOut', width: 120, scopedSlots: { customRender: 'customRenderStock' } }
+          { title: '上期出库', dataIndex: 'previousPeriodOut', width: 120, scopedSlots: { customRender: 'customRenderStock' } },
+          { title: '库存状态', dataIndex: 'stockAlertStatus', width: 120, align: 'center', scopedSlots: { customRender: 'stockAlertStatusRender' } }
         ]
 
       }
@@ -379,7 +406,7 @@
         }))
         
         // 更新滚动宽度
-        this.scroll.x = 800 + (this.dateColumns.length * 80)
+        this.scroll.x = 920 + (this.dateColumns.length * 80)
       },
 
       // 防抖处理的数据加载
@@ -713,7 +740,69 @@
         this.$message.info('显示低库存预警')
       },
 
+      // 库存风险操作方法
+      ignoreStockRisk(record) {
+        this.$confirm({
+          title: '确认忽略风险',
+          content: `确定要忽略商品"${record.materialName}"的库存风险吗？忽略后该商品将不再显示库存告急状态。`,
+          okText: '确定',
+          cancelText: '取消',
+          onOk: () => {
+            this.performIgnoreStockRisk(record)
+          }
+        })
+      },
 
+      focusStockRisk(record) {
+        this.$confirm({
+          title: '确认关注风险',
+          content: `确定要重新关注商品"${record.materialName}"的库存风险吗？系统将重新计算该商品的库存告急状态。`,
+          okText: '确定',
+          cancelText: '取消',
+          onOk: () => {
+            this.performFocusStockRisk(record)
+          }
+        })
+      },
+
+      performIgnoreStockRisk(record) {
+        const loading = this.$message.loading('正在忽略风险...', 0)
+
+        postAction('/depotItem/ignoreStockRisk', { materialId: record.materialId }).then(res => {
+          loading()
+          if (res.code === 200) {
+            this.$message.success('已忽略库存风险')
+            // 更新本地数据
+            record.stockAlertStatus = 'RISK_IGNORED'
+            record.stockAlertIgnoredAt = new Date()
+          } else {
+            this.$message.error(res.data || '操作失败')
+          }
+        }).catch(error => {
+          loading()
+          console.error('忽略库存风险失败:', error)
+          this.$message.error('操作失败，请重试')
+        })
+      },
+
+      performFocusStockRisk(record) {
+        const loading = this.$message.loading('正在重新关注风险...', 0)
+
+        postAction('/depotItem/focusStockRisk', { materialId: record.materialId }).then(res => {
+          loading()
+          if (res.code === 200) {
+            this.$message.success(res.data || '已重新关注库存风险')
+            // 刷新数据以获取最新状态
+            this.refreshData()
+          } else {
+            this.$message.error(res.data || '操作失败')
+          }
+        }).catch(error => {
+          loading()
+          console.error('关注库存风险失败:', error)
+          this.$message.error('操作失败，请重试')
+        })
+      },
 
       // 优化虚拟表格相关方法
       handleCellClick(cellInfo) {

@@ -1,6 +1,7 @@
 package com.jsh.erp.datasource.entities;
 
 import java.math.BigDecimal;
+import java.util.Date;
 
 public class Material {
     private Long id;
@@ -48,6 +49,14 @@ public class Material {
     private String position;
 
     private String attribute;
+
+    private String stockAlertStatus;
+
+    private Date stockAlertIgnoredAt;
+
+    private BigDecimal lastSixMonthsSales;
+
+    private Date stockAlertUpdatedAt;
 
     private Long tenantId;
 
@@ -235,6 +244,38 @@ public class Material {
 
     public void setAttribute(String attribute) {
         this.attribute = attribute == null ? null : attribute.trim();
+    }
+
+    public String getStockAlertStatus() {
+        return stockAlertStatus;
+    }
+
+    public void setStockAlertStatus(String stockAlertStatus) {
+        this.stockAlertStatus = stockAlertStatus == null ? null : stockAlertStatus.trim();
+    }
+
+    public Date getStockAlertIgnoredAt() {
+        return stockAlertIgnoredAt;
+    }
+
+    public void setStockAlertIgnoredAt(Date stockAlertIgnoredAt) {
+        this.stockAlertIgnoredAt = stockAlertIgnoredAt;
+    }
+
+    public BigDecimal getLastSixMonthsSales() {
+        return lastSixMonthsSales;
+    }
+
+    public void setLastSixMonthsSales(BigDecimal lastSixMonthsSales) {
+        this.lastSixMonthsSales = lastSixMonthsSales;
+    }
+
+    public Date getStockAlertUpdatedAt() {
+        return stockAlertUpdatedAt;
+    }
+
+    public void setStockAlertUpdatedAt(Date stockAlertUpdatedAt) {
+        this.stockAlertUpdatedAt = stockAlertUpdatedAt;
     }
 
     public Long getTenantId() {

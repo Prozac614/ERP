@@ -25,6 +25,10 @@
     <result column="enable_batch_number" jdbcType="VARCHAR" property="enableBatchNumber" />
     <result column="position" jdbcType="VARCHAR" property="position" />
     <result column="attribute" jdbcType="VARCHAR" property="attribute" />
+    <result column="stock_alert_status" jdbcType="VARCHAR" property="stockAlertStatus" />
+    <result column="stock_alert_ignored_at" jdbcType="TIMESTAMP" property="stockAlertIgnoredAt" />
+    <result column="last_six_months_sales" jdbcType="DECIMAL" property="lastSixMonthsSales" />
+    <result column="stock_alert_updated_at" jdbcType="TIMESTAMP" property="stockAlertUpdatedAt" />
     <result column="tenant_id" jdbcType="BIGINT" property="tenantId" />
     <result column="delete_flag" jdbcType="VARCHAR" property="deleteFlag" />
   </resultMap>
@@ -87,9 +91,10 @@
     </where>
   </sql>
   <sql id="Base_Column_List">
-    id, category_id, name, mfrs, model, standard, brand, mnemonic, color, unit, remark, 
-    img_name, unit_id, expiry_num, weight, enabled, other_field1, other_field2, other_field3, 
-    enable_serial_number, enable_batch_number, position, attribute, tenant_id, delete_flag
+    id, category_id, name, mfrs, model, standard, brand, mnemonic, color, unit, remark,
+    img_name, unit_id, expiry_num, weight, enabled, other_field1, other_field2, other_field3,
+    enable_serial_number, enable_batch_number, position, attribute, stock_alert_status,
+    stock_alert_ignored_at, last_six_months_sales, stock_alert_updated_at, tenant_id, delete_flag
   </sql>
   <select id="selectByExample" parameterType="com.jsh.erp.datasource.entities.MaterialExample" resultMap="BaseResultMap">
     select
@@ -486,6 +491,18 @@
       </if>
       <if test="attribute != null">
         attribute = #{attribute,jdbcType=VARCHAR},
+      </if>
+      <if test="stockAlertStatus != null">
+        stock_alert_status = #{stockAlertStatus,jdbcType=VARCHAR},
+      </if>
+      <if test="stockAlertIgnoredAt != null">
+        stock_alert_ignored_at = #{stockAlertIgnoredAt,jdbcType=TIMESTAMP},
+      </if>
+      <if test="lastSixMonthsSales != null">
+        last_six_months_sales = #{lastSixMonthsSales,jdbcType=DECIMAL},
+      </if>
+      <if test="stockAlertUpdatedAt != null">
+        stock_alert_updated_at = #{stockAlertUpdatedAt,jdbcType=TIMESTAMP},
       </if>
       <if test="tenantId != null">
         tenant_id = #{tenantId,jdbcType=BIGINT},

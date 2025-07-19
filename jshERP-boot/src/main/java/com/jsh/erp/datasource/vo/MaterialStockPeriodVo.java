@@ -1,6 +1,7 @@
 package com.jsh.erp.datasource.vo;
 
 import java.math.BigDecimal;
+import java.util.Date;
 
 public class MaterialStockPeriodVo {
     private Long materialId;
@@ -10,6 +11,9 @@ public class MaterialStockPeriodVo {
     private BigDecimal currentPeriodStock;   // 本期结存
     private BigDecimal previousPeriodOut;    // 上期出库
     private BigDecimal currentPeriodOut;     // 本期出库
+    private String stockAlertStatus;         // 库存告急状态
+    private BigDecimal lastSixMonthsSales;   // 过去六个月销量
+    private Date stockAlertIgnoredAt;        // 忽略风险时间
     
     // getter和setter方法
     public Long getMaterialId() { 
@@ -64,7 +68,31 @@ public class MaterialStockPeriodVo {
         return currentPeriodOut; 
     }
     
-    public void setCurrentPeriodOut(BigDecimal currentPeriodOut) { 
-        this.currentPeriodOut = currentPeriodOut; 
+    public void setCurrentPeriodOut(BigDecimal currentPeriodOut) {
+        this.currentPeriodOut = currentPeriodOut;
     }
-} 
+
+    public String getStockAlertStatus() {
+        return stockAlertStatus;
+    }
+
+    public void setStockAlertStatus(String stockAlertStatus) {
+        this.stockAlertStatus = stockAlertStatus;
+    }
+
+    public BigDecimal getLastSixMonthsSales() {
+        return lastSixMonthsSales;
+    }
+
+    public void setLastSixMonthsSales(BigDecimal lastSixMonthsSales) {
+        this.lastSixMonthsSales = lastSixMonthsSales;
+    }
+
+    public Date getStockAlertIgnoredAt() {
+        return stockAlertIgnoredAt;
+    }
+
+    public void setStockAlertIgnoredAt(Date stockAlertIgnoredAt) {
+        this.stockAlertIgnoredAt = stockAlertIgnoredAt;
+    }
+}

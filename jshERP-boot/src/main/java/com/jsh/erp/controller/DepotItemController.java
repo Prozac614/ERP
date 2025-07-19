@@ -1597,4 +1597,84 @@ public class DepotItemController {
         }
         return res;
     }
+
+    /**
+     * 忽略库存风险
+     * @param materialId 商品ID
+     * @param request
+     * @return
+     */
+    @PostMapping(value = "/ignoreStockRisk")
+    @ApiOperation(value = "忽略库存风险")
+    public BaseResponseInfo ignoreStockRisk(
+            @RequestParam("materialId") Long materialId,
+            HttpServletRequest request) {
+        BaseResponseInfo res = new BaseResponseInfo();
+        try {
+            // 更新商品的库存告急状态为忽略风险
+            materialService.updateStockAlertStatus(materialId, "RISK_IGNORED", null);
+
+            // 记录忽略风险的时间
+            Material material = new Material();
+            material.setId(materialId);
+            material.setStockAlertIgnoredAt(new Date());
+            materialService.updateMaterial(material, request);
+
+            res.code = 200;
+            res.data = "已忽略库存风险";
+            logger.info("商品{}已忽略库存风险", materialId);
+
+        } catch (Exception e) {
+            logger.error("忽略库存风险失败，materialId: {}", materialId, e);
+            res.code = 500;
+            res.data = "操作失败: " + e.getMessage();
+        }
+        return res;
+    }
+
+    /**
+     * 关注库存风险
+     * @param materialId 商品ID
+     * @param request
+     * @return
+     */
+    @PostMapping(value = "/focusStockRisk")
+    @ApiOperation(value = "关注库存风险")
+    public BaseResponseInfo focusStockRisk(
+            @RequestParam("materialId") Long materialId,
+            HttpServletRequest request) {
+        BaseResponseInfo res = new BaseResponseInfo();
+        try {
+            // 重新计算库存告急状态
+            BigDecimal currentStock = materialService.getCurrentStockByMaterialId(materialId);
+            BigDecimal sixMonthsSales = depotItemMapperEx.getSixMonthsSalesByMaterialId(materialId,
+                userService.getCurrentUser().getTenantId());
+
+            String alertStatus;
+            if (currentStock.compareTo(sixMonthsSales) >= 0) {
+                alertStatus = "NO_RISK";
+            } else {
+                alertStatus = "STOCK_ALERT";
+            }
+
+            // 更新商品的库存告急状态
+            materialService.updateStockAlertStatus(materialId, alertStatus, sixMonthsSales);
+
+            // 清除忽略风险的时间
+            Material material = new Material();
+            material.setId(materialId);
+            material.setStockAlertIgnoredAt(null);
+            materialService.updateMaterial(material, request);
+
+            res.code = 200;
+            res.data = "已重新关注库存风险，当前状态：" + (alertStatus.equals("NO_RISK") ? "无风险" : "库存告急");
+            logger.info("商品{}已重新关注库存风险，状态：{}", materialId, alertStatus);
+
+        } catch (Exception e) {
+            logger.error("关注库存风险失败，materialId: {}", materialId, e);
+            res.code = 500;
+            res.data = "操作失败: " + e.getMessage();
+        }
+        return res;
+    }
 }

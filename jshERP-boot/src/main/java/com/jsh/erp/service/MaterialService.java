@@ -1677,4 +1677,52 @@ public class MaterialService {
             return null;
         }
     }
+
+    /**
+     * 更新商品的库存告急状态
+     * @param materialId 商品ID
+     * @param alertStatus 告急状态
+     * @param sixMonthsSales 六个月销量
+     */
+    public void updateStockAlertStatus(Long materialId, String alertStatus, BigDecimal sixMonthsSales) {
+        try {
+            Material material = new Material();
+            material.setId(materialId);
+            material.setStockAlertStatus(alertStatus);
+            material.setLastSixMonthsSales(sixMonthsSales);
+            material.setStockAlertUpdatedAt(new Date());
+
+            materialMapper.updateByPrimaryKeySelective(material);
+            logger.debug("更新商品{}库存告急状态为：{}", materialId, alertStatus);
+        } catch (Exception e) {
+            logger.error("更新商品{}库存告急状态失败", materialId, e);
+        }
+    }
+
+    /**
+     * 获取商品的当前总库存
+     * @param materialId 商品ID
+     * @return 当前总库存
+     */
+    public BigDecimal getCurrentStockByMaterialId(Long materialId) {
+        try {
+            MaterialCurrentStockExample example = new MaterialCurrentStockExample();
+            example.createCriteria().andMaterialIdEqualTo(materialId)
+                    .andDeleteFlagNotEqualTo(BusinessConstants.DELETE_FLAG_DELETED);
+
+            List<MaterialCurrentStock> stockList = materialCurrentStockMapper.selectByExample(example);
+            BigDecimal totalStock = BigDecimal.ZERO;
+
+            for (MaterialCurrentStock stock : stockList) {
+                if (stock.getCurrentNumber() != null) {
+                    totalStock = totalStock.add(stock.getCurrentNumber());
+                }
+            }
+
+            return totalStock;
+        } catch (Exception e) {
+            logger.error("获取商品{}当前库存失败", materialId, e);
+            return BigDecimal.ZERO;
+        }
+    }
 }

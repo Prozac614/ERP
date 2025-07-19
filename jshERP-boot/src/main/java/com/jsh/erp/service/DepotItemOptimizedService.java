@@ -34,7 +34,10 @@ public class DepotItemOptimizedService {
     
     @Resource
     private UserService userService;
-    
+
+    @Resource
+    private MaterialService materialService;
+
     @Autowired(required = false)
     private RedisTemplate<String, Object> redisTemplate;
 
@@ -129,16 +132,19 @@ public class DepotItemOptimizedService {
                 dailyOutMap.computeIfAbsent(barCode, k -> new HashMap<>()).put(outDate, quantity);
             }
         }
-        
+
+        // 3. 计算和更新库存告急状态
+        calculateAndUpdateStockAlertStatus(stockList, tenantId);
+
         resultMap.put("rows", stockList);
         resultMap.put("total", total);
         resultMap.put("dailyOutData", dailyOutMap);
         resultMap.put("beginTime", beginTime);
         resultMap.put("endTime", endTime);
         resultMap.put("cached", false);
-        
+
         logger.info("有日期范围查询完成，商品数：{}, 日期范围：{} - {}", stockList.size(), beginTime, endTime);
-        
+
         return resultMap;
     }
     
@@ -155,6 +161,9 @@ public class DepotItemOptimizedService {
             List<MaterialStockPeriodVo> stockList = depotItemMapperEx.getMaterialPeriodStockOptimized(
                     materialParam, (currentPage - 1) * pageSize, pageSize, tenantId);
             int total = depotItemMapperEx.getMaterialPeriodStockCountOptimized(materialParam, tenantId);
+
+            // 计算和更新库存告急状态
+            calculateAndUpdateStockAlertStatus(stockList, tenantId);
 
             resultMap.put("rows", stockList);
             resultMap.put("total", total);
@@ -396,5 +405,83 @@ public class DepotItemOptimizedService {
         }
     }
 
+    /**
+     * 计算和更新库存告急状态
+     * @param stockList 商品库存列表
+     * @param tenantId 租户ID
+     */
+    private void calculateAndUpdateStockAlertStatus(List<MaterialStockPeriodVo> stockList, Long tenantId) {
+        if (stockList == null || stockList.isEmpty()) {
+            return;
+        }
+
+        try {
+            for (MaterialStockPeriodVo stock : stockList) {
+                // 如果已经是忽略风险状态，跳过计算
+                if ("RISK_IGNORED".equals(stock.getStockAlertStatus())) {
+                    continue;
+                }
+
+                // 获取当前库存
+                BigDecimal currentStock = stock.getCurrentPeriodStock();
+                if (currentStock == null) {
+                    currentStock = BigDecimal.ZERO;
+                }
+
+                // 计算过去6个月的销量
+                BigDecimal sixMonthsSales = calculateSixMonthsSales(stock.getMaterialId(), tenantId);
+                stock.setLastSixMonthsSales(sixMonthsSales);
+
+                // 计算库存告急状态
+                String alertStatus;
+                if (currentStock.compareTo(sixMonthsSales) >= 0) {
+                    alertStatus = "NO_RISK";  // 无风险
+                } else {
+                    alertStatus = "STOCK_ALERT";  // 库存告急
+                }
+
+                stock.setStockAlertStatus(alertStatus);
+
+                // 异步更新数据库中的状态（避免影响查询性能）
+                updateMaterialStockAlertStatusAsync(stock.getMaterialId(), alertStatus, sixMonthsSales);
+            }
+        } catch (Exception e) {
+            logger.error("计算库存告急状态失败", e);
+            // 不抛出异常，避免影响主要查询功能
+        }
+    }
+
+    /**
+     * 计算过去6个月的销量
+     * @param materialId 商品ID
+     * @param tenantId 租户ID
+     * @return 过去6个月销量
+     */
+    private BigDecimal calculateSixMonthsSales(Long materialId, Long tenantId) {
+        try {
+            // 这里可以调用已有的查询方法或者创建新的查询
+            // 暂时返回一个模拟值，实际应该查询数据库
+            return depotItemMapperEx.getSixMonthsSalesByMaterialId(materialId, tenantId);
+        } catch (Exception e) {
+            logger.error("计算六个月销量失败，materialId: {}", materialId, e);
+            return BigDecimal.ZERO;
+        }
+    }
+
+    /**
+     * 异步更新商品的库存告急状态
+     * @param materialId 商品ID
+     * @param alertStatus 告急状态
+     * @param sixMonthsSales 六个月销量
+     */
+    private void updateMaterialStockAlertStatusAsync(Long materialId, String alertStatus, BigDecimal sixMonthsSales) {
+        // 使用异步方式更新，避免影响查询性能
+        // 这里可以使用线程池或者消息队列来处理
+        try {
+            materialService.updateStockAlertStatus(materialId, alertStatus, sixMonthsSales);
+        } catch (Exception e) {
+            logger.error("异步更新库存告急状态失败，materialId: {}", materialId, e);
+        }
+    }
 
 }

@@ -1294,16 +1294,22 @@
 
     <!-- 优化的商品期间库存统计查询 -->
     <select id="getMaterialPeriodStockOptimized" resultType="com.jsh.erp.datasource.vo.MaterialStockPeriodVo">
-        select 
+        select
             mps.material_id as materialId,
             mps.bar_code as barCode,
             mps.material_name as materialName,
             mps.current_period_stock as currentPeriodStock,
             mps.previous_period_stock as previousPeriodStock,
             mps.current_period_out as currentPeriodOut,
-            mps.previous_period_out as previousPeriodOut
+            mps.previous_period_out as previousPeriodOut,
+            -- 库存告急状态计算
+            m.stock_alert_status as stockAlertStatus,
+            m.last_six_months_sales as lastSixMonthsSales,
+            m.stock_alert_ignored_at as stockAlertIgnoredAt
         from jsh_material_period_summary mps
+        left join jsh_material m on mps.material_id = m.id
         where ifnull(mps.delete_flag,'0') != '1'
+        and ifnull(m.delete_flag,'0') != '1'
         <if test="tenantId != null">
             and mps.tenant_id = #{tenantId}
         </if>
@@ -1471,6 +1477,22 @@
         WHERE delete_flag = '0'
         ORDER BY ABS(current_period_stock - (previous_period_stock + current_period_in - current_period_out)) DESC
         LIMIT 100
+    </select>
+
+    <!-- 获取商品过去6个月的销量 -->
+    <select id="getSixMonthsSalesByMaterialId" resultType="java.math.BigDecimal">
+        SELECT IFNULL(SUM(di.basic_number), 0)
+        FROM jsh_depot_item di
+        LEFT JOIN jsh_depot_head dh ON dh.id = di.header_id
+        WHERE di.material_id = #{materialId}
+        AND dh.type = '出库'
+        AND dh.status = '1'
+        AND IFNULL(di.delete_flag, '0') != '1'
+        AND IFNULL(dh.delete_flag, '0') != '1'
+        AND dh.oper_time >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
+        <if test="tenantId != null">
+            AND dh.tenant_id = #{tenantId}
+        </if>
     </select>
 
 </mapper>
