@@ -39,12 +39,9 @@ public class StockWarningCalculationService {
 
     @Resource
     private DepotItemService depotItemService;
-    
+
     @Resource
     private DepotMapper depotMapper;
-    
-    @Resource
-    private DepotItemService depotItemService;
     
     @Resource
     private MaterialService materialService;
