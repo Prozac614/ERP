@@ -34,6 +34,7 @@ import org.springframework.web.multipart.MultipartFile;
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import java.io.File;
 import java.io.UnsupportedEncodingException;
 import java.math.BigDecimal;
 import java.net.URLEncoder;
@@ -1244,17 +1245,53 @@ public class DepotItemController {
             HttpServletRequest request,
             HttpServletResponse response) throws Exception {
         try {
-            // 设置响应头
-            response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-            response.setCharacterEncoding("UTF-8");
+            // 获取所有数据（不分页）
+            Map<String, Object> params = new HashMap<>();
+            params.put("currentPage", 1);
+            params.put("pageSize", Integer.MAX_VALUE); // 获取所有数据
+            params.put("materialParam", materialParam);
+            params.put("beginTime", beginTime);
+            params.put("endTime", endTime);
 
-            // 生成文件名
-            String fileName = "商品库存数据_" + new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date()) + ".xlsx";
-            response.setHeader("Content-Disposition", "attachment; filename=" + URLEncoder.encode(fileName, "UTF-8"));
+            Map<String, Object> result = depotItemOptimizedService.getMaterialStockWithDailyOutOptimized(params, request);
+            List<MaterialStockPeriodVo> dataList = (List<MaterialStockPeriodVo>) result.get("rows");
 
-            // 调用服务导出数据
-            depotItemOptimizedService.exportMaterialStockToExcel(
-                currentPage, pageSize, materialParam, beginTime, endTime, request, response.getOutputStream());
+            // 准备导出数据
+            List<Object[]> objects = new ArrayList<>();
+            if (dataList != null) {
+                for (MaterialStockPeriodVo item : dataList) {
+                    Object[] row = new Object[10];
+                    row[0] = item.getBarCode() != null ? item.getBarCode() : "";
+                    row[1] = item.getMaterialName() != null ? item.getMaterialName() : "";
+                    row[2] = item.getMaterialModel() != null ? item.getMaterialModel() : "";
+                    row[3] = item.getMaterialUnit() != null ? item.getMaterialUnit() : "";
+                    row[4] = item.getCurrentPeriodStock() != null ? item.getCurrentPeriodStock() : BigDecimal.ZERO;
+                    row[5] = item.getPreviousPeriodStock() != null ? item.getPreviousPeriodStock() : BigDecimal.ZERO;
+                    row[6] = item.getCurrentPeriodOut() != null ? item.getCurrentPeriodOut() : BigDecimal.ZERO;
+                    row[7] = item.getPreviousPeriodOut() != null ? item.getPreviousPeriodOut() : BigDecimal.ZERO;
+                    row[8] = item.getCurrentPeriodIn() != null ? item.getCurrentPeriodIn() : BigDecimal.ZERO;
+                    row[9] = item.getPreviousPeriodIn() != null ? item.getPreviousPeriodIn() : BigDecimal.ZERO;
+                    objects.add(row);
+                }
+            }
+
+            // 使用现有的ExcelUtils导出
+            String[] names = {"商品编码", "商品名称", "规格型号", "单位", "本期结存", "上期结存", "本期出库", "上期出库", "本期入库", "上期入库"};
+            String fileName = "商品库存数据_" + new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+            String tip = "导出时间：" + new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date());
+            if (beginTime != null && endTime != null) {
+                tip += " 时间范围：" + beginTime + " ~ " + endTime;
+            }
+
+            File excelFile = ExcelUtils.exportObjectsOneSheet(fileName + ".xls", tip, names, "商品库存数据", objects);
+            ExcelUtils.downloadExcel(excelFile, fileName, response);
+
+            // 删除临时文件
+            if (excelFile.exists()) {
+                excelFile.delete();
+            }
+
+            logger.info("商品库存数据导出成功，共导出 {} 条记录", dataList != null ? dataList.size() : 0);
 
         } catch (Exception e) {
             logger.error("导出商品库存数据失败", e);

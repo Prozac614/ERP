@@ -12,12 +12,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
 
-import org.apache.poi.ss.usermodel.*;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
-import java.io.OutputStream;
 import java.math.BigDecimal;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
@@ -398,84 +394,5 @@ public class DepotItemOptimizedService {
         }
     }
 
-    /**
-     * 导出商品库存数据到Excel
-     */
-    public void exportMaterialStockToExcel(Integer currentPage, Integer pageSize, String materialParam,
-                                          String beginTime, String endTime, HttpServletRequest request,
-                                          OutputStream outputStream) throws Exception {
-        try {
-            // 获取所有数据（不分页）
-            Map<String, Object> params = new HashMap<>();
-            params.put("currentPage", 1);
-            params.put("pageSize", Integer.MAX_VALUE); // 获取所有数据
-            params.put("materialParam", materialParam);
-            params.put("beginTime", beginTime);
-            params.put("endTime", endTime);
 
-            Map<String, Object> result = getMaterialStockWithDailyOutOptimized(params, request);
-            List<MaterialStockPeriodVo> dataList = (List<MaterialStockPeriodVo>) result.get("rows");
-
-            // 创建工作簿
-            Workbook workbook = new XSSFWorkbook();
-            Sheet sheet = workbook.createSheet("商品库存数据");
-
-            // 创建标题行
-            Row headerRow = sheet.createRow(0);
-            String[] headers = {
-                "商品编码", "商品名称", "规格型号", "单位",
-                "本期结存", "上期结存", "本期出库", "上期出库",
-                "本期入库", "上期入库"
-            };
-
-            // 设置标题样式
-            CellStyle headerStyle = workbook.createCellStyle();
-            Font headerFont = workbook.createFont();
-            headerFont.setBold(true);
-            headerStyle.setFont(headerFont);
-            headerStyle.setAlignment(HorizontalAlignment.CENTER);
-            headerStyle.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
-            headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
-
-            for (int i = 0; i < headers.length; i++) {
-                Cell cell = headerRow.createCell(i);
-                cell.setCellValue(headers[i]);
-                cell.setCellStyle(headerStyle);
-            }
-
-            // 填充数据
-            if (dataList != null) {
-                for (int i = 0; i < dataList.size(); i++) {
-                    MaterialStockPeriodVo item = dataList.get(i);
-                    Row row = sheet.createRow(i + 1);
-
-                    row.createCell(0).setCellValue(item.getBarCode() != null ? item.getBarCode() : "");
-                    row.createCell(1).setCellValue(item.getMaterialName() != null ? item.getMaterialName() : "");
-                    row.createCell(2).setCellValue(item.getMaterialModel() != null ? item.getMaterialModel() : "");
-                    row.createCell(3).setCellValue(item.getMaterialUnit() != null ? item.getMaterialUnit() : "");
-                    row.createCell(4).setCellValue(item.getCurrentPeriodStock() != null ? item.getCurrentPeriodStock().doubleValue() : 0);
-                    row.createCell(5).setCellValue(item.getPreviousPeriodStock() != null ? item.getPreviousPeriodStock().doubleValue() : 0);
-                    row.createCell(6).setCellValue(item.getCurrentPeriodOut() != null ? item.getCurrentPeriodOut().doubleValue() : 0);
-                    row.createCell(7).setCellValue(item.getPreviousPeriodOut() != null ? item.getPreviousPeriodOut().doubleValue() : 0);
-                    row.createCell(8).setCellValue(item.getCurrentPeriodIn() != null ? item.getCurrentPeriodIn().doubleValue() : 0);
-                    row.createCell(9).setCellValue(item.getPreviousPeriodIn() != null ? item.getPreviousPeriodIn().doubleValue() : 0);
-                }
-            }
-
-            // 自动调整列宽
-            for (int i = 0; i < headers.length; i++) {
-                sheet.autoSizeColumn(i);
-            }
-
-            // 写入输出流
-            workbook.write(outputStream);
-            workbook.close();
-
-            logger.info("商品库存数据导出成功，共导出 {} 条记录", dataList != null ? dataList.size() : 0);
-
-        } catch (Exception e) {
-            logger.error("导出商品库存数据失败", e);
-            throw e;
-        }
-    }
 }
