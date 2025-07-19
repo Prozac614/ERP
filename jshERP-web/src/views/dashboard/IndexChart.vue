@@ -102,7 +102,7 @@
             :containerHeight="600"
             :rowHeight="40"
             :columnWidth="90"
-            :fixedColumnCount="3"
+            :fixedColumnCount="Math.min(2, columns.length)"
             :bufferSize="2"
             :showMemoryInfo="true"
           />
@@ -504,22 +504,34 @@
             
             // 处理列信息
             const processColumns = async () => {
-              const allColumns = data.columns || []
+              const serverColumns = data.columns || []
               
               // 创建列映射以提高查找效率
               this.lightweightData.columnMapping.clear()
-              allColumns.forEach((col, index) => {
+              serverColumns.forEach((col, index) => {
                 this.lightweightData.columnMapping.set(col.dataIndex, index)
               })
               
-              // 存储列定义
-              this.defColumns = [...allColumns]
-              
-              // 设置日期列
-              const dynamicColumns = allColumns.filter(col => 
-                col.dataIndex && col.dataIndex.startsWith('out_')
-              )
-              this.dateColumns = dynamicColumns
+              // 🔧 关键修复：不要覆盖基础列定义，只更新日期列
+              if (serverColumns.length > 0) {
+                // 从服务器列中提取日期列（以'out_'开头的列）
+                const dynamicColumns = serverColumns.filter(col => 
+                  col.dataIndex && col.dataIndex.startsWith('out_')
+                )
+                this.dateColumns = dynamicColumns
+                
+                // 如果服务器返回了基础列定义，则更新
+                const baseServerColumns = serverColumns.filter(col => 
+                  col.dataIndex && !col.dataIndex.startsWith('out_')
+                )
+                if (baseServerColumns.length > 0) {
+                  // 合并基础列定义
+                  this.defColumns = [...baseServerColumns]
+                }
+              } else {
+                // 如果没有服务器列数据，保持原来的基础列定义
+                this.dateColumns = []
+              }
             }
             
             // 并行处理
@@ -529,8 +541,11 @@
               console.log('- 原始行数据数量:', (data.rows && data.rows.length) || 0)
               console.log('- 轻量级存储行数:', this.lightweightData.rows.length)
               console.log('- dataSource长度:', this.dataSource.length)
-              console.log('- 列定义数量:', this.defColumns.length)
-              console.log('- 日期列数量:', this.dateColumns.length)
+              console.log('- 服务器返回列数量:', (data.columns && data.columns.length) || 0)
+              console.log('- defColumns数量:', this.defColumns.length)
+              console.log('- dateColumns数量:', this.dateColumns.length)
+              console.log('- 计算后的columns数量:', this.columns.length)
+              console.log('- settingDataIndex:', this.settingDataIndex)
               console.log('- 每日出库数据Keys:', Object.keys(data.dailyOutData || {}).length)
               
               // 重要：处理每日出库数据合并
