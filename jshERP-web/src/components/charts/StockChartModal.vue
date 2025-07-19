@@ -268,7 +268,7 @@ export default {
         },
         xAxis: {
           type: 'category',
-          data: this.chartData.dates,
+          data: this.chartData.dates || [],
           axisTick: {
             alignWithLabel: true
           },
@@ -306,7 +306,7 @@ export default {
             name: '库存量',
             type: 'line',
             yAxisIndex: 0,
-            data: this.chartData.stockData?.map(val => Math.floor(val || 0)) || [],
+            data: (this.chartData.stockData && this.chartData.stockData.map(val => Math.floor(val || 0))) || [],
             itemStyle: {
               color: '#1890ff'
             },
@@ -321,7 +321,7 @@ export default {
             name: '出库量',
             type: 'line',
             yAxisIndex: 1,
-            data: this.chartData.dailyOutData?.map(val => Math.floor(val || 0)) || [],
+            data: (this.chartData.dailyOutData && this.chartData.dailyOutData.map(val => Math.floor(val || 0))) || [],
             itemStyle: {
               color: '#52c41a'
             },
@@ -384,7 +384,7 @@ export default {
         },
         xAxis: {
           type: 'category',
-          data: this.chartData.dates,
+          data: this.chartData.dates || [],
           axisTick: {
             alignWithLabel: true
           },
@@ -404,7 +404,7 @@ export default {
           {
             name: '日出库量',
             type: 'line',
-            data: this.chartData.outboundData?.map(val => Math.floor(val || 0)) || [],
+            data: (this.chartData.outboundData && this.chartData.outboundData.map(val => Math.floor(val || 0))) || [],
             itemStyle: {
               color: '#1890ff'
             },
@@ -418,7 +418,7 @@ export default {
           {
             name: '累计出库',
             type: 'line',
-            data: this.chartData.cumulativeData?.map(val => Math.floor(val || 0)) || [],
+            data: (this.chartData.cumulativeData && this.chartData.cumulativeData.map(val => Math.floor(val || 0))) || [],
             itemStyle: {
               color: '#faad14'
             },
