@@ -38,7 +38,11 @@
         <!-- 操作按钮区域 -->
         <div class="table-operator"  style="margin-top: 5px">
           <a-button @click="handleExport" type="primary" icon="download">导出库存</a-button>
-          <a-button icon="reload" @click="refreshData">刷新数据</a-button>
+          <a-tooltip title="清除缓存并刷新数据，解决数据显示不一致问题">
+            <a-button icon="reload" @click="refreshData" :loading="loading">
+              {{ loading ? '刷新中...' : '刷新数据' }}
+            </a-button>
+          </a-tooltip>
           <a-button icon="warning" @click="showLowStockAlert">低库存预警</a-button>
 
           <!-- 暂时隐藏展示所有数据按钮 -->
@@ -524,14 +528,45 @@
       },
 
       // 刷新数据
-      refreshData() {
-        // 清除缓存
-        this.dataCache.clear()
-        
-        if (this.showAllProducts) {
-          this.loadAllProducts()
-        } else {
-          this.loadStockData(1)
+      async refreshData() {
+        this.loading = true
+
+        try {
+          // 1. 清除前端缓存
+          this.dataCache.clear()
+
+          // 2. 清除服务器端缓存
+          console.log('正在清除服务器端缓存...')
+          const clearCacheResponse = await postAction('/depotItem/clearAllCache', {})
+
+          if (clearCacheResponse.code === 200) {
+            console.log('服务器端缓存清除成功')
+            this.$message.success('缓存已清除，正在刷新数据...')
+          } else {
+            console.warn('清除服务器端缓存失败:', clearCacheResponse.data)
+            this.$message.warning('清除缓存失败，但仍会刷新数据')
+          }
+
+        } catch (error) {
+          console.error('清除服务器端缓存出错:', error)
+          this.$message.warning('清除缓存出错，但仍会刷新数据')
+        }
+
+        // 3. 重新加载数据
+        try {
+          if (this.showAllProducts) {
+            await this.loadAllProducts()
+          } else {
+            await this.loadStockData(1)
+          }
+
+          this.$message.success('数据刷新完成')
+
+        } catch (error) {
+          console.error('刷新数据失败:', error)
+          this.$message.error('刷新数据失败: ' + (error.message || '未知错误'))
+        } finally {
+          this.loading = false
         }
       },
 
