@@ -1369,10 +1369,16 @@ public class MaterialService {
             logger.info("开始计算商品{}的平均日销量，时间范围：{} - {}", materialId, beginTime, endTime);
 
             // 获取该商品的每日出库数据
-            List<Map<String, Object>> dailyOutList = depotItemService.getDailyOutStock(
-                    materialId.toString(), beginTime, endTime);
-
-            logger.info("商品{}获取到{}条每日出库记录", materialId, dailyOutList != null ? dailyOutList.size() : 0);
+            List<Map<String, Object>> dailyOutList = null;
+            try {
+                dailyOutList = depotItemService.getDailyOutStock(materialId.toString(), beginTime, endTime);
+                logger.info("商品{}获取到{}条每日出库记录", materialId, dailyOutList != null ? dailyOutList.size() : 0);
+            } catch (Exception e) {
+                logger.warn("获取商品{}的每日出库数据失败，尝试直接查询原始数据", materialId, e);
+                // 如果汇总表查询失败，直接查询原始数据
+                dailyOutList = getDirectDailyOutStock(materialId, beginTime, endTime);
+                logger.info("商品{}直接查询获取到{}条每日出库记录", materialId, dailyOutList != null ? dailyOutList.size() : 0);
+            }
 
             if (dailyOutList == null || dailyOutList.isEmpty()) {
                 logger.info("商品{}没有出库记录，平均日销量设为0", materialId);
@@ -1425,6 +1431,24 @@ public class MaterialService {
         BigDecimal lowSafeStock = averageDailySales.multiply(new BigDecimal(180)).setScale(0, RoundingMode.HALF_UP);
         logger.info("根据平均日销量{}计算出最低安全库存：{}", averageDailySales, lowSafeStock);
         return lowSafeStock;
+    }
+
+    /**
+     * 直接从原始表查询每日出库数据（当汇总表查询失败时使用）
+     *
+     * @param materialId 商品ID
+     * @param beginTime 开始时间
+     * @param endTime 结束时间
+     * @return 每日出库数据列表
+     */
+    private List<Map<String, Object>> getDirectDailyOutStock(Long materialId, String beginTime, String endTime) {
+        try {
+            // 直接查询原始数据
+            return materialMapperEx.getDirectDailyOutStock(materialId, beginTime, endTime);
+        } catch (Exception e) {
+            logger.error("直接查询商品{}的每日出库数据失败", materialId, e);
+            return new ArrayList<>();
+        }
     }
 
     public List<MaterialVo4Unit> getMaterialByMeId(Long meId) {

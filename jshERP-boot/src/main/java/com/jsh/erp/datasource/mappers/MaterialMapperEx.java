@@ -113,6 +113,11 @@ public interface MaterialMapperEx {
 
     List<String> getMaterialNameList();
 
+    List<java.util.Map<String, Object>> getDirectDailyOutStock(
+            @Param("materialId") Long materialId,
+            @Param("beginTime") String beginTime,
+            @Param("endTime") String endTime);
+
     int setUnitIdToNull(@Param("id") Long id);
 
     int setExpiryNumToNull(@Param("id") Long id);

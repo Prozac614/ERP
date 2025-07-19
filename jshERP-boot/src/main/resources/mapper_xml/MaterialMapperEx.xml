@@ -827,4 +827,31 @@
         limit 0,1
     </select>
 
+    <!-- 直接查询每日出库数据（备用方案） -->
+    <select id="getDirectDailyOutStock" resultType="java.util.Map">
+        select
+            me.bar_code as barCode,
+            m.name as materialName,
+            date_format(dh.oper_time, '%Y-%m-%d') as outDate,
+            sum(ifnull(di.basic_number, 0)) as outQuantity
+        from jsh_depot_item di
+        left join jsh_depot_head dh on dh.id = di.header_id
+        left join jsh_material m on m.id = di.material_id
+        left join jsh_material_extend me on me.material_id = m.id and ifnull(me.delete_flag,'0') !='1' and me.default_flag = 1
+        where dh.type = '出库'
+        and ifnull(di.delete_flag,'0') !='1'
+        and ifnull(dh.delete_flag,'0') !='1'
+        and ifnull(m.delete_flag,'0') !='1'
+        and dh.status = '1'
+        and di.material_id = #{materialId}
+        <if test="beginTime != null and beginTime !=''">
+            and dh.oper_time >= #{beginTime}
+        </if>
+        <if test="endTime != null and endTime !=''">
+            and dh.oper_time &lt;= #{endTime}
+        </if>
+        group by date_format(dh.oper_time, '%Y-%m-%d')
+        order by date_format(dh.oper_time, '%Y-%m-%d') asc
+    </select>
+
 </mapper>

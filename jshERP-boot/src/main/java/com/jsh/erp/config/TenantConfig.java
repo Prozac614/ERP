@@ -86,6 +86,12 @@ public class TenantConfig {
                     return true;
                 } else if ("com.jsh.erp.datasource.mappers.UserBusinessMapperEx.getBasicDataByKeyIdAndType".equals(ms.getId())) {
                     return true;
+                } else if ("com.jsh.erp.datasource.mappers.DepotItemMapperEx.refreshDailySummaryForRecentDays".equals(ms.getId())) {
+                    return true; // 排除复杂的INSERT...SELECT...ON DUPLICATE KEY UPDATE语句
+                } else if ("com.jsh.erp.datasource.mappers.DepotItemMapperEx.updateDailyOutSummary".equals(ms.getId())) {
+                    return true; // 排除存储过程调用
+                } else if ("com.jsh.erp.datasource.mappers.DepotItemMapperEx.refreshMaterialPeriodSummary".equals(ms.getId())) {
+                    return true; // 排除存储过程调用
                 }
                 return false;
             }
