@@ -41,12 +41,15 @@
           <a-button icon="reload" @click="refreshData">刷新数据</a-button>
           <a-button icon="warning" @click="showLowStockAlert">低库存预警</a-button>
 
+          <!-- 暂时隐藏展示所有数据按钮 -->
+          <!-- 
           <a-button 
             :type="showAllProducts ? 'default' : 'primary'" 
             :icon="showAllProducts ? 'table' : 'unordered-list'" 
             @click="toggleShowAllProducts">
             {{ showAllProducts ? '分页显示' : '展示所有商品' }}
           </a-button>
+          -->
           <a-popover trigger="click" placement="right">
             <template slot="content">
               <a-checkbox-group @change="onColChange" v-model="settingDataIndex" :defaultValue="settingDataIndex">
@@ -137,11 +140,9 @@
             :rowSelection="{selectedRowKeys: selectedRowKeys, onChange: onSelectChange}"
             @change="handleTableChange">
             <span slot="action" slot-scope="text, record">
-              <a @click="viewStockDetail(record)">查看详情</a>
-              <a-divider type="vertical" />
               <a @click="viewStockHistory(record)">库存历史</a>
               <a-divider type="vertical" />
-              <a @click="adjustStock(record)">库存调整</a>
+              <a @click="viewStockFlow(record)">查看流水</a>
             </span>
             <template slot="customRenderStock" slot-scope="value, record">
               <span style="color:green" v-if="value > 0">{{value || 0}}</span>
@@ -240,7 +241,7 @@
         // 默认列
         defColumns: [
           {
-            title: '操作',
+            title: '图表展示',
             dataIndex: 'action',
             align: "center", 
             width: 150,
@@ -663,14 +664,16 @@
         return {}
       },
       // 操作方法
-      viewStockDetail(record) {
-        this.$message.info('查看商品库存详情：' + record.materialName)
-      },
       viewStockHistory(record) {
-        this.$message.info('查看库存历史：' + record.materialName)
+        this.$message.info('库存历史：' + record.materialName)
+        // 这里可以添加跳转到库存历史页面的逻辑
+        // 例如：this.$router.push({ name: 'StockHistory', params: { materialId: record.id } })
       },
-      adjustStock(record) {
-        this.$message.info('库存调整：' + record.materialName)
+      
+      viewStockFlow(record) {
+        this.$message.info('查看流水：' + record.materialName)
+        // 这里可以添加跳转到流水页面的逻辑
+        // 例如：this.$router.push({ name: 'StockFlow', params: { materialId: record.id } })
       },
       handleExport() {
         this.$message.info('导出库存数据功能')
