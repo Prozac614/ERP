@@ -156,17 +156,24 @@ export default {
       // 确保容器有正确的尺寸
       const container = this.$refs.chartContainer
       if (container.offsetWidth === 0) {
-        // 如果容器宽度为0，等待下一帧再初始化
-        this.$nextTick(() => {
-          this.initChart()
-        })
+        // 如果容器宽度为0，延迟初始化，避免无限递归
+        setTimeout(() => {
+          if (this.$refs.chartContainer && this.$refs.chartContainer.offsetWidth > 0) {
+            this.initChart()
+          }
+        }, 100)
         return
       }
       
-      this.chartInstance = echarts.init(container)
-      
-      // 监听窗口大小变化
-      window.addEventListener('resize', this.handleResize)
+      try {
+        this.chartInstance = echarts.init(container)
+        
+        // 监听窗口大小变化
+        window.addEventListener('resize', this.handleResize)
+      } catch (error) {
+        console.error('图表初始化失败:', error)
+        this.error = '图表初始化失败，请刷新页面重试'
+      }
     },
 
     // 销毁图表
@@ -191,19 +198,46 @@ export default {
       this.error = null
 
       try {
+        // 验证必要参数
+        if (!this.materialInfo || !this.materialInfo.materialId) {
+          this.error = '商品信息不完整，无法加载图表数据'
+          return
+        }
+
+        if (!this.dateRange || this.dateRange.length !== 2) {
+          this.error = '请先设置统计日期范围'
+          return
+        }
+
         const params = {
-          materialId: this.materialInfo.id,
+          materialId: this.materialInfo.materialId, // 使用正确的字段名
           barCode: this.materialInfo.barCode,
           beginDate: this.dateRange[0].format('YYYY-MM-DD'),
           endDate: this.dateRange[1].format('YYYY-MM-DD'),
-          chartType: this.chartType
+          chartType: this.chartType,
+          // 传递库存信息用于更准确的图表计算
+          currentPeriodStock: this.materialInfo.currentPeriodStock,
+          previousPeriodStock: this.materialInfo.previousPeriodStock,
+          currentPeriodOut: this.materialInfo.currentPeriodOut,
+          previousPeriodOut: this.materialInfo.previousPeriodOut
         }
 
+        console.log('图表数据请求参数:', params)
+
+        // 添加超时保护
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('请求超时')), 30000) // 30秒超时
+        })
+
         // 使用对应的API函数
-        const response = this.chartType === 'history' 
-          ? await getStockHistory(params)
-          : await getOutboundFlow(params)
-        
+        const apiPromise = this.chartType === 'history'
+          ? getStockHistory(params)
+          : getOutboundFlow(params)
+
+        const response = await Promise.race([apiPromise, timeoutPromise])
+
+        console.log('图表数据响应:', response)
+
         if (response.code === 200) {
           this.chartData = response.data
           this.renderChart()
@@ -212,7 +246,11 @@ export default {
         }
       } catch (error) {
         console.error('加载图表数据失败:', error)
-        this.error = '网络请求失败，请检查网络连接'
+        if (error.message === '请求超时') {
+          this.error = '数据加载超时，请检查网络连接或减少日期范围'
+        } else {
+          this.error = '网络请求失败，请检查网络连接'
+        }
       } finally {
         this.loading = false
       }
@@ -242,11 +280,11 @@ export default {
       }
     },
 
-    // 库存历史图表配置
+    // 库存历史图表配置（双纵坐标）
     getHistoryChartOption() {
       return {
         title: {
-          text: '库存变化趋势',
+          text: `${this.materialInfo.materialName || '商品'} - 库存与出库趋势`,
           left: 'center',
           textStyle: {
             fontSize: 16,
@@ -256,14 +294,19 @@ export default {
         tooltip: {
           trigger: 'axis',
           axisPointer: {
-            type: 'cross'
+            type: 'cross',
+            crossStyle: {
+              color: '#999'
+            }
           },
           formatter: (params) => {
-            let result = `<div style="margin-bottom: 5px;">${params[0].axisValue}</div>`
+            let result = `<div style="margin-bottom: 8px; font-weight: bold;">${params[0].axisValue}</div>`
             params.forEach(param => {
-              result += `<div style="color: ${param.color};">
-                ${param.seriesName}: ${Math.floor(param.value)} 
-                ${param.seriesName === '库存量' ? '件' : '件'}
+              const unit = param.seriesName === '库存量' ? '件' : '件'
+              const value = param.value !== null && param.value !== undefined ? Math.floor(param.value) : 0
+              result += `<div style="color: ${param.color}; margin: 4px 0;">
+                <span style="display: inline-block; width: 10px; height: 10px; background: ${param.color}; border-radius: 50%; margin-right: 8px;"></span>
+                ${param.seriesName}: <strong>${value} ${unit}</strong>
               </div>`
             })
             return result
@@ -271,13 +314,16 @@ export default {
         },
         legend: {
           data: ['库存量', '出库量'],
-          top: 30
+          top: 35,
+          textStyle: {
+            fontSize: 12
+          }
         },
         grid: {
-          left: '50px',
-          right: '50px',
-          bottom: '50px',
-          top: '80px',
+          left: '60px',
+          right: '60px',
+          bottom: '80px',
+          top: '90px',
           containLabel: true
         },
         xAxis: {
@@ -288,27 +334,53 @@ export default {
           },
           axisLabel: {
             rotate: 45,
-            formatter: (value) => moment(value).format('MM-DD')
+            formatter: (value) => moment(value).format('MM-DD'),
+            fontSize: 11
+          },
+          axisLine: {
+            lineStyle: {
+              color: '#666'
+            }
           }
         },
         yAxis: [
           {
             type: 'value',
-            name: '库存量',
+            name: '库存量(件)',
+            nameLocation: 'middle',
+            nameGap: 40,
             position: 'left',
             axisLabel: {
-              formatter: (value) => Math.floor(value)
+              formatter: (value) => Math.floor(value),
+              color: '#1890ff'
+            },
+            axisLine: {
+              lineStyle: {
+                color: '#1890ff'
+              }
             },
             splitLine: {
-              show: true
+              show: true,
+              lineStyle: {
+                color: '#f0f0f0',
+                type: 'dashed'
+              }
             }
           },
           {
             type: 'value',
-            name: '出库量',
+            name: '出库量(件)',
+            nameLocation: 'middle',
+            nameGap: 40,
             position: 'right',
             axisLabel: {
-              formatter: (value) => Math.floor(value)
+              formatter: (value) => Math.floor(value),
+              color: '#52c41a'
+            },
+            axisLine: {
+              lineStyle: {
+                color: '#52c41a'
+              }
             },
             splitLine: {
               show: false
@@ -325,26 +397,45 @@ export default {
               color: '#1890ff'
             },
             lineStyle: {
-              width: 2
+              width: 3,
+              color: '#1890ff'
             },
             symbol: 'circle',
-            symbolSize: 4,
-            smooth: true
+            symbolSize: 6,
+            smooth: true,
+            emphasis: {
+              focus: 'series'
+            },
+            markLine: {
+              silent: true,
+              lineStyle: {
+                color: '#ff4d4f',
+                type: 'dashed'
+              },
+              data: [
+                {
+                  name: '低库存警戒线',
+                  yAxis: 20
+                }
+              ]
+            }
           },
           {
             name: '出库量',
-            type: 'line',
+            type: 'bar',
             yAxisIndex: 1,
             data: (this.chartData.dailyOutData && this.chartData.dailyOutData.map(val => Math.floor(val || 0))) || [],
             itemStyle: {
-              color: '#52c41a'
+              color: '#52c41a',
+              opacity: 0.8
             },
-            lineStyle: {
-              width: 2
-            },
-            symbol: 'circle',
-            symbolSize: 4,
-            smooth: true
+            barWidth: '60%',
+            emphasis: {
+              focus: 'series',
+              itemStyle: {
+                opacity: 1
+              }
+            }
           }
         ],
         dataZoom: [
@@ -352,10 +443,35 @@ export default {
             type: 'slider',
             start: 0,
             end: 100,
-            height: 20,
-            bottom: 10
+            height: 25,
+            bottom: 15,
+            textStyle: {
+              fontSize: 11
+            },
+            handleStyle: {
+              color: '#1890ff'
+            },
+            fillerColor: 'rgba(24, 144, 255, 0.2)'
+          },
+          {
+            type: 'inside',
+            start: 0,
+            end: 100
           }
-        ]
+        ],
+        toolbox: {
+          feature: {
+            dataZoom: {
+              yAxisIndex: 'none'
+            },
+            restore: {},
+            saveAsImage: {
+              name: `${this.materialInfo.barCode || 'material'}_stock_chart`
+            }
+          },
+          right: 20,
+          top: 20
+        }
       }
     },
 
@@ -459,20 +575,30 @@ export default {
 
     // 刷新图表
     refreshChart() {
+      this.error = null
+      this.chartData = null
       this.loadChartData()
     },
 
     // 导出图表
     exportChart() {
-      if (this.chartInstance) {
-        const url = this.chartInstance.getDataURL({
-          pixelRatio: 2,
-          backgroundColor: '#fff'
-        })
-        const link = document.createElement('a')
-        link.href = url
-        link.download = `${this.materialInfo.materialName}_${this.modalTitle}_${moment().format('YYYYMMDD')}.png`
-        link.click()
+      if (this.chartInstance && this.hasData) {
+        try {
+          const url = this.chartInstance.getDataURL({
+            pixelRatio: 2,
+            backgroundColor: '#fff'
+          })
+          const link = document.createElement('a')
+          link.href = url
+          link.download = `${this.materialInfo.barCode || 'material'}_stock_chart_${moment().format('YYYYMMDD_HHmmss')}.png`
+          link.click()
+          this.$message.success('图表导出成功')
+        } catch (error) {
+          console.error('导出图表失败:', error)
+          this.$message.error('图表导出失败')
+        }
+      } else {
+        this.$message.warning('图表未加载完成或无数据，无法导出')
       }
     },
 
@@ -518,16 +644,19 @@ export default {
 
 .chart-container {
   position: relative;
-  min-height: 400px;
-  border-radius: 6px;
-  border: 1px solid #f0f0f0;
+  min-height: 450px;
+  border-radius: 8px;
+  border: 1px solid #e8e8e8;
   width: 100%;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
 .chart-wrapper {
   width: 100% !important;
-  height: 400px !important;
+  height: 450px !important;
   min-width: 100%;
+  border-radius: 8px;
 }
 
 .chart-loading,

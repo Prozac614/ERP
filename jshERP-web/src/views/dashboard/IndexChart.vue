@@ -677,13 +677,36 @@
       },
       // 操作方法
       viewChart(record) {
+        console.log('点击查看图表按钮，记录数据:', record)
         this.showChartModal(record)
       },
 
       // 显示图表弹窗
       showChartModal(materialRecord) {
+        console.log('显示图表弹窗，商品记录:', materialRecord)
+
+        // 检查是否设置了统计日期范围
+        if (!this.queryParam.createTimeRange || this.queryParam.createTimeRange.length !== 2) {
+          this.$message.warning('请先设置统计日期范围')
+          return
+        }
+
+        // 确保传递正确的数据结构给图表组件
+        const materialInfo = {
+          materialId: materialRecord.materialId,
+          barCode: materialRecord.barCode,
+          materialName: materialRecord.materialName,
+          currentPeriodStock: materialRecord.currentPeriodStock,
+          previousPeriodStock: materialRecord.previousPeriodStock,
+          currentPeriodOut: materialRecord.currentPeriodOut,
+          previousPeriodOut: materialRecord.previousPeriodOut
+        }
+
+        console.log('传递给图表组件的数据:', materialInfo)
+        console.log('日期范围:', this.queryParam.createTimeRange)
+
         this.chartModal.chartType = 'history' // 默认显示库存历史
-        this.chartModal.currentMaterial = materialRecord
+        this.chartModal.currentMaterial = materialInfo
         this.chartModal.visible = true
       },
 
