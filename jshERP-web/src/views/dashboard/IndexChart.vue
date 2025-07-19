@@ -164,6 +164,14 @@
             </span>
           </div>
 
+          <!-- 图表弹窗 -->
+          <StockChartModal
+            :visible="chartModal.visible"
+            :chartType="chartModal.chartType"
+            :materialInfo="chartModal.currentMaterial"
+            :dateRange="queryParam.createTimeRange"
+            @cancel="handleChartModalCancel"
+          />
 
         </div>
       </a-card>
@@ -178,6 +186,7 @@
   import VirtualTable from '@/components/VirtualTable'
   import VirtualTableOptimized from '@/components/VirtualTableOptimized'
   import VirtualTableUltraOptimized from '@/components/VirtualTableUltraOptimized'
+  import StockChartModal from '@/components/charts/StockChartModal'
   import Vue from 'vue'
 
   export default {
@@ -186,7 +195,8 @@
       JEllipsis,
       VirtualTable,
       VirtualTableOptimized,
-      VirtualTableUltraOptimized
+      VirtualTableUltraOptimized,
+      StockChartModal
     },
     data () {
       return {
@@ -232,6 +242,12 @@
           rows: [], // 只存储必要的行数据
           columnMapping: new Map(), // 列名映射
           cellValueCache: new Map() // 单元格值缓存
+        },
+        // 图表弹窗控制
+        chartModal: {
+          visible: false,
+          chartType: 'history', // 'history' 或 'flow'
+          currentMaterial: {}
         },
         // 表格滚动
         scroll: { x: 800 },
@@ -665,15 +681,41 @@
       },
       // 操作方法
       viewStockHistory(record) {
-        this.$message.info('库存历史：' + record.materialName)
-        // 这里可以添加跳转到库存历史页面的逻辑
-        // 例如：this.$router.push({ name: 'StockHistory', params: { materialId: record.id } })
+        this.showChartModal(record, 'history')
       },
       
       viewStockFlow(record) {
-        this.$message.info('查看流水：' + record.materialName)
-        // 这里可以添加跳转到流水页面的逻辑
-        // 例如：this.$router.push({ name: 'StockFlow', params: { materialId: record.id } })
+        this.showChartModal(record, 'flow')
+      },
+
+      // 显示图表弹窗
+      showChartModal(materialRecord, chartType) {
+        // 检查是否有日期范围
+        if (!this.queryParam.createTimeRange || this.queryParam.createTimeRange.length !== 2) {
+          this.$message.warning('请先选择统计时间范围')
+          return
+        }
+
+        // 设置弹窗参数
+        this.chartModal.chartType = chartType
+        this.chartModal.currentMaterial = {
+          id: materialRecord.id,
+          materialName: materialRecord.materialName,
+          barCode: materialRecord.barCode
+        }
+        this.chartModal.visible = true
+
+        console.log('打开图表弹窗:', {
+          materialName: materialRecord.materialName,
+          chartType: chartType,
+          dateRange: this.queryParam.createTimeRange
+        })
+      },
+
+      // 关闭图表弹窗
+      handleChartModalCancel() {
+        this.chartModal.visible = false
+        this.chartModal.currentMaterial = {}
       },
       handleExport() {
         this.$message.info('导出库存数据功能')
