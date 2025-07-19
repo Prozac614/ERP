@@ -171,6 +171,13 @@
             @cancel="handleChartModalCancel"
           />
 
+          <!-- 库存预警计算进度弹窗 -->
+          <StockWarningProgressModal
+            :visible="progressModal.visible"
+            :taskStatus="progressModal.taskStatus"
+            @cancel="handleProgressModalCancel"
+          />
+
         </div>
       </a-card>
     </a-col>
@@ -180,11 +187,13 @@
 <script>
   import moment from 'moment'
   import { getAction, postAction } from '@/api/manage'
+  import { startStockWarningCalculation, getTaskStatus } from '@/api/stockWarning'
   import JEllipsis from '@/components/jeecg/JEllipsis'
   import VirtualTable from '@/components/VirtualTable'
   import VirtualTableOptimized from '@/components/VirtualTableOptimized'
   import VirtualTableUltraOptimized from '@/components/VirtualTableUltraOptimized'
   import StockChartModal from '@/components/charts/StockChartModal'
+  import StockWarningProgressModal from '@/components/StockWarningProgressModal'
   import Vue from 'vue'
 
   export default {
@@ -194,7 +203,8 @@
       VirtualTable,
       VirtualTableOptimized,
       VirtualTableUltraOptimized,
-      StockChartModal
+      StockChartModal,
+      StockWarningProgressModal
     },
     data () {
       return {
@@ -267,6 +277,14 @@
           { title: '本期出库', dataIndex: 'currentPeriodOut', width: 120, scopedSlots: { customRender: 'customRenderStock' } },
           { title: '上期出库', dataIndex: 'previousPeriodOut', width: 120, scopedSlots: { customRender: 'customRenderStock' } }
         ],
+
+        // 库存预警计算相关
+        calculationLoading: false,
+        calculationTaskId: null,
+        progressModal: {
+          visible: false,
+          taskStatus: {}
+        }
 
       }
     },
@@ -713,7 +731,86 @@
         this.$message.info('显示低库存预警')
       },
 
+      // 开始库存预警计算
+      startStockWarningCalculation() {
+        this.$confirm({
+          title: '库存预警检查',
+          content: '系统将自动计算所有商品过去6个月的平均日销量，并设置最低安全库存阈值。此过程可能需要几分钟时间，是否继续？',
+          onOk: () => {
+            this.executeStockWarningCalculation()
+          }
+        })
+      },
 
+      // 执行库存预警计算
+      async executeStockWarningCalculation() {
+        this.calculationLoading = true
+        try {
+          // 启动计算任务
+          const response = await startStockWarningCalculation()
+          if (response.code === 200) {
+            this.calculationTaskId = response.data.taskId
+            this.$message.success('库存预警计算任务已启动')
+
+            // 显示进度弹窗
+            this.showCalculationProgress()
+          } else {
+            this.$message.error('启动计算任务失败: ' + response.data)
+          }
+        } catch (error) {
+          console.error('启动库存预警计算失败:', error)
+          this.$message.error('启动计算任务失败: ' + error.message)
+        } finally {
+          this.calculationLoading = false
+        }
+      },
+
+      // 显示计算进度
+      showCalculationProgress() {
+        // 显示进度弹窗
+        this.progressModal.visible = true
+        this.progressModal.taskStatus = {
+          status: 'RUNNING',
+          totalCount: 0,
+          processedCount: 0,
+          successCount: 0,
+          failedCount: 0,
+          progress: 0
+        }
+
+        // 定时查询进度
+        this.checkProgress()
+      },
+
+      // 查询计算进度
+      async checkProgress() {
+        try {
+          const response = await getTaskStatus(this.calculationTaskId)
+          if (response.code === 200) {
+            const taskStatus = response.data
+            this.progressModal.taskStatus = taskStatus
+
+            if (taskStatus.status === 'COMPLETED') {
+              this.$message.success(`库存预警计算完成！成功处理 ${taskStatus.successCount} 个商品`)
+              return
+            } else if (taskStatus.status === 'FAILED') {
+              this.$message.error('库存预警计算失败: ' + taskStatus.errorMessage)
+              return
+            }
+
+            // 继续查询进度
+            setTimeout(() => this.checkProgress(), 2000)
+          }
+        } catch (error) {
+          console.error('查询计算进度失败:', error)
+          this.$message.error('查询计算进度失败: ' + error.message)
+        }
+      },
+
+      // 关闭进度弹窗
+      handleProgressModalCancel() {
+        this.progressModal.visible = false
+      },
 
       // 优化虚拟表格相关方法
       handleCellClick(cellInfo) {
