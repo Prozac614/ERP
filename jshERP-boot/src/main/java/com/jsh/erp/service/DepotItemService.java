@@ -24,6 +24,9 @@ import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
 import java.math.BigDecimal;
 import java.util.*;
+import com.jsh.erp.service.DepotItemOptimizedService;
+import java.time.format.DateTimeFormatter;
+import java.time.LocalDate;
 
 @Service
 public class DepotItemService {
@@ -64,6 +67,8 @@ public class DepotItemService {
     private MaterialCurrentStockMapperEx materialCurrentStockMapperEx;
     @Resource
     private LogService logService;
+    @Resource
+    private DepotItemOptimizedService depotItemOptimizedService;
 
     public DepotItem getDepotItem(long id)throws Exception {
         DepotItem result=null;
@@ -701,6 +706,10 @@ public class DepotItemService {
                     changeBillStatus(depotHead.getLinkApply(), billStatus);
                 }
             }
+            
+            // 🎯 新增：自动更新汇总表和清除缓存（替代数据库触发器）
+            updateSummaryDataAfterOperation(depotHead);
+            
         } else {
             throw new BusinessRunTimeException(ExceptionConstants.DEPOT_HEAD_ROW_FAILED_CODE,
                     String.format(ExceptionConstants.DEPOT_HEAD_ROW_FAILED_MSG));
@@ -1456,5 +1465,64 @@ public class DepotItemService {
     public List<Map<String, Object>> getDailyOutStock(String materialIds, String beginTime, String endTime) throws Exception {
         List<Map<String, Object>> list = depotItemMapperEx.getDailyOutStock(materialIds, beginTime, endTime);
         return list;
+    }
+    
+    /**
+     * 出入库操作后自动更新汇总表和清除缓存
+     * 这个方法替代了原本应该由数据库触发器完成的工作
+     * 
+     * @param depotHead 单据主表信息
+     */
+    @Transactional(value = "transactionManager", rollbackFor = Exception.class)
+    private void updateSummaryDataAfterOperation(DepotHead depotHead) {
+        try {
+            // 只处理已审核的出库单（符合原触发器逻辑）
+            if ("出库".equals(depotHead.getType()) && "1".equals(depotHead.getStatus()) && depotHead.getOperTime() != null) {
+                
+                logger.info("开始更新汇总数据，单据号：{}，操作时间：{}", depotHead.getNumber(), depotHead.getOperTime());
+                
+                // 获取当前单据的所有明细
+                List<DepotItem> itemList = getListByHeaderId(depotHead.getId());
+                
+                // 获取操作日期
+                String targetDate = LocalDate.parse(depotHead.getOperTime().toString().substring(0, 10)).toString();
+                
+                // 用于记录更新的商品，避免重复更新
+                Set<Long> updatedMaterials = new HashSet<>();
+                
+                // 更新每个涉及商品的每日出库汇总
+                for (DepotItem item : itemList) {
+                    if (item.getMaterialId() != null && !updatedMaterials.contains(item.getMaterialId())) {
+                        try {
+                            // 更新单个商品的每日出库汇总
+                            depotItemOptimizedService.updateDailyOutSummary(
+                                item.getMaterialId(), 
+                                targetDate, 
+                                depotHead.getTenantId()
+                            );
+                            
+                            updatedMaterials.add(item.getMaterialId());
+                            logger.debug("已更新商品 {} 的汇总数据", item.getMaterialId());
+                            
+                        } catch (Exception e) {
+                            logger.warn("更新商品 {} 的汇总数据失败：{}", item.getMaterialId(), e.getMessage());
+                        }
+                    }
+                }
+                
+                // 清除相关缓存，确保前端立即显示最新数据
+                depotItemOptimizedService.clearAllCache();
+                
+                logger.info("汇总数据更新完成，单据号：{}，涉及商品数：{}", depotHead.getNumber(), updatedMaterials.size());
+                
+            } else {
+                logger.debug("单据不符合汇总更新条件：类型={}，状态={}，操作时间={}", 
+                    depotHead.getType(), depotHead.getStatus(), depotHead.getOperTime());
+            }
+            
+        } catch (Exception e) {
+            logger.error("更新汇总数据失败，单据号：{}", depotHead.getNumber(), e);
+            // 不抛出异常，避免影响主业务流程
+        }
     }
 }
