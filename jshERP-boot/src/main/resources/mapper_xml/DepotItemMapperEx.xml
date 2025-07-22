@@ -1389,14 +1389,14 @@
             m.id as material_id,
             me.bar_code,
             m.name as material_name,
-            -- 当前库存（从current_stock表）
+            <!-- 当前库存（从current_stock表） -->
             IFNULL((
                 SELECT SUM(IFNULL(current_number, 0))
                 FROM jsh_material_current_stock mcs
                 WHERE mcs.material_id = m.id 
                 AND IFNULL(mcs.delete_flag,'0') != '1'
             ), 0) as current_period_stock,
-            -- 上期结存 = 本期结存 - 本期入库 + 本期出库
+            <!-- 上期结存 = 本期结存 - 本期入库 + 本期出库 -->
             GREATEST(0,
                 IFNULL((
                     SELECT SUM(IFNULL(current_number, 0))
@@ -1407,13 +1407,13 @@
                 IFNULL(current_in.total_in, 0) +
                 IFNULL(current_out.total_out, 0)
             ) as previous_period_stock,
-            -- 当前期间出库
+            <!-- 当前期间出库 -->
             IFNULL(current_out.total_out, 0) as current_period_out,
-            -- 上期间出库
+            <!-- 上期间出库 -->
             IFNULL(previous_out.total_out, 0) as previous_period_out,
-            -- 当前期间入库
+            <!-- 当前期间入库 -->
             IFNULL(current_in.total_in, 0) as current_period_in,
-            -- 上期间入库
+            <!-- 上期间入库 -->
             IFNULL(previous_in.total_in, 0) as previous_period_in,
             #{tenantId} as tenant_id,
             NOW() as last_calculation_time
