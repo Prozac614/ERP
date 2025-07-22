@@ -23,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
 import java.math.BigDecimal;
+import java.text.SimpleDateFormat;
 import java.util.*;
 
 @Service
@@ -64,6 +65,8 @@ public class DepotItemService {
     private MaterialCurrentStockMapperEx materialCurrentStockMapperEx;
     @Resource
     private LogService logService;
+    @Resource
+    private DepotItemOptimizedService depotItemOptimizedService;
 
     public DepotItem getDepotItem(long id)throws Exception {
         DepotItem result=null;
@@ -1153,6 +1156,14 @@ public class DepotItemService {
             } else {
                 materialCurrentStockMapper.insertSelective(materialCurrentStock);
             }
+            
+            // 新增：更新汇总表和清除缓存
+            try {
+                updateSummaryTablesAfterStockChange(mId, dId);
+            } catch (Exception e) {
+                logger.warn("更新汇总表失败，但不影响库存更新: materialId={}, depotId={}, error={}", 
+                           mId, dId, e.getMessage());
+            }
         }
     }
 
@@ -1456,5 +1467,83 @@ public class DepotItemService {
     public List<Map<String, Object>> getDailyOutStock(String materialIds, String beginTime, String endTime) throws Exception {
         List<Map<String, Object>> list = depotItemMapperEx.getDailyOutStock(materialIds, beginTime, endTime);
         return list;
+    }
+
+    /**
+     * 库存变化后更新汇总表和清除缓存
+     * @param materialId 商品ID
+     * @param depotId 仓库ID
+     */
+    private void updateSummaryTablesAfterStockChange(Long materialId, Long depotId) {
+        logger.debug("开始更新汇总表，materialId={}, depotId={}", materialId, depotId);
+        
+        // 获取当前用户的租户ID
+        Long tenantId = null;
+        try {
+            User currentUser = userService.getCurrentUser();
+            tenantId = currentUser != null ? currentUser.getTenantId() : null;
+        } catch (Exception e) {
+            logger.debug("获取当前用户失败，使用null作为tenantId");
+        }
+        
+        // 1. 更新当天的每日出库汇总
+        updateDailyOutSummaryForMaterial(materialId, tenantId);
+        
+        // 2. 更新商品期间汇总
+        updatePeriodSummaryForMaterial(tenantId);
+        
+        // 3. 清除相关缓存
+        clearRelatedCache();
+        
+        logger.debug("汇总表更新完成，materialId={}, depotId={}", materialId, depotId);
+    }
+
+    /**
+     * 更新指定商品的每日出库汇总
+     * @param materialId 商品ID
+     * @param tenantId 租户ID
+     */
+    private void updateDailyOutSummaryForMaterial(Long materialId, Long tenantId) {
+        try {
+            // 获取当前日期
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+            String currentDate = sdf.format(new Date());
+            
+            // 调用存储过程更新每日出库汇总
+            depotItemMapperEx.updateDailyOutSummary(materialId, currentDate, tenantId);
+            logger.debug("每日出库汇总更新成功，materialId={}, date={}", materialId, currentDate);
+        } catch (Exception e) {
+            logger.warn("更新每日出库汇总失败，materialId={}, error={}", materialId, e.getMessage());
+        }
+    }
+
+    /**
+     * 更新商品期间汇总
+     * @param tenantId 租户ID
+     */
+    private void updatePeriodSummaryForMaterial(Long tenantId) {
+        try {
+            // 调用存储过程更新期间汇总
+            depotItemMapperEx.refreshMaterialPeriodSummary(tenantId);
+            logger.debug("商品期间汇总更新成功，tenantId={}", tenantId);
+        } catch (Exception e) {
+            logger.warn("更新商品期间汇总失败，tenantId={}, error={}", tenantId, e.getMessage());
+        }
+    }
+
+    /**
+     * 清除相关缓存
+     */
+    private void clearRelatedCache() {
+        try {
+            if (depotItemOptimizedService != null) {
+                depotItemOptimizedService.clearAllCache();
+                logger.debug("相关缓存清除成功");
+            } else {
+                logger.warn("DepotItemOptimizedService为空，无法清除缓存");
+            }
+        } catch (Exception e) {
+            logger.warn("清除缓存失败，error={}", e.getMessage());
+        }
     }
 }
