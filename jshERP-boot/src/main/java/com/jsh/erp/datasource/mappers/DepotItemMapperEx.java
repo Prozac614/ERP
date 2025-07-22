@@ -353,4 +353,54 @@ public interface DepotItemMapperEx {
     List<String> getRecentOutDates(
             @Param("materialId") Long materialId,
             @Param("days") Integer days);
+
+    // ========== Java实现期间汇总相关方法 ==========
+    
+    /**
+     * 获取租户下所有商品ID
+     */
+    List<Long> getMaterialIdsByTenant(@Param("tenantId") Long tenantId);
+    
+    /**
+     * 获取商品基础信息
+     */
+    Map<String, Object> getMaterialBasicInfo(@Param("materialId") Long materialId);
+    
+    /**
+     * 计算期间出库量
+     */
+    BigDecimal calculatePeriodOut(
+            @Param("materialId") Long materialId,
+            @Param("startDate") String startDate,
+            @Param("endDate") String endDate,
+            @Param("tenantId") Long tenantId);
+    
+    /**
+     * 计算期间入库量
+     */
+    BigDecimal calculatePeriodIn(
+            @Param("materialId") Long materialId,
+            @Param("startDate") String startDate,
+            @Param("endDate") String endDate,
+            @Param("tenantId") Long tenantId);
+    
+    /**
+     * 获取当前库存
+     */
+    BigDecimal getCurrentStock(@Param("materialId") Long materialId);
+    
+    /**
+     * 插入或更新期间汇总数据
+     */
+    void insertOrUpdatePeriodSummary(
+            @Param("materialId") Long materialId,
+            @Param("barCode") String barCode,
+            @Param("materialName") String materialName,
+            @Param("currentStock") BigDecimal currentStock,
+            @Param("previousStock") BigDecimal previousStock,
+            @Param("currentPeriodOut") BigDecimal currentPeriodOut,
+            @Param("previousPeriodOut") BigDecimal previousPeriodOut,
+            @Param("currentPeriodIn") BigDecimal currentPeriodIn,
+            @Param("previousPeriodIn") BigDecimal previousPeriodIn,
+            @Param("tenantId") Long tenantId);
 }

@@ -15,6 +15,7 @@ import org.springframework.data.redis.core.RedisTemplate;
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -189,26 +190,113 @@ public class DepotItemOptimizedService {
     }
     
     /**
-     * 刷新商品期间汇总数据
+     * 刷新商品期间汇总数据（Java实现，避免XML复杂语法）
      */
     public void refreshMaterialPeriodSummary(Long tenantId) {
         try {
-            // 暂时简化实现，避免调用不存在的方法
-            logger.info("商品期间汇总数据刷新请求，租户ID：{}", tenantId);
+            logger.info("🔄 开始刷新商品期间汇总数据，租户ID：{}", tenantId);
 
-            // 清除相关缓存
-            if (redisTemplate != null) {
-                Set<String> keys = redisTemplate.keys("material_stock:*");
-                if (keys != null && !keys.isEmpty()) {
-                    redisTemplate.delete(keys);
-                    logger.info("清除了 {} 个相关缓存", keys.size());
+            // 获取当前月的第一天和最后一天
+            String currentMonthStart = getCurrentMonthStart();
+            String currentMonthEnd = getCurrentMonthEnd();
+            String previousMonthStart = getPreviousMonthStart();
+            String previousMonthEnd = getPreviousMonthEnd();
+            
+            logger.info("当前期间：{} 至 {}", currentMonthStart, currentMonthEnd);
+            logger.info("上期间：{} 至 {}", previousMonthStart, previousMonthEnd);
+
+            // 获取所有商品ID
+            List<Long> materialIds = getMaterialIdsByTenant(tenantId);
+            logger.info("需要更新 {} 个商品的期间汇总", materialIds.size());
+
+            int updatedCount = 0;
+            for (Long materialId : materialIds) {
+                try {
+                    updateSingleMaterialPeriodSummary(materialId, tenantId, 
+                        currentMonthStart, currentMonthEnd, previousMonthStart, previousMonthEnd);
+                    updatedCount++;
+                    
+                    if (updatedCount % 50 == 0) {
+                        logger.info("已处理 {} / {} 个商品", updatedCount, materialIds.size());
+                    }
+                } catch (Exception e) {
+                    logger.warn("更新商品 {} 的期间汇总失败：{}", materialId, e.getMessage());
                 }
             }
 
-            logger.info("商品期间汇总数据刷新完成，租户ID：{}", tenantId);
+            logger.info("✅ 商品期间汇总数据刷新完成，租户ID：{}，成功更新：{} / {}", 
+                       tenantId, updatedCount, materialIds.size());
         } catch (Exception e) {
-            logger.error("刷新商品期间汇总数据失败", e);
+            logger.error("❌ 刷新商品期间汇总数据失败", e);
         }
+    }
+    
+    /**
+     * 更新单个商品的期间汇总数据
+     */
+    private void updateSingleMaterialPeriodSummary(Long materialId, Long tenantId, 
+            String currentMonthStart, String currentMonthEnd, 
+            String previousMonthStart, String previousMonthEnd) {
+        
+        // 1. 获取商品基础信息
+        MaterialBasicInfo materialInfo = getMaterialBasicInfo(materialId);
+        if (materialInfo == null) {
+            return;
+        }
+        
+        // 2. 计算当前期间出入库
+        BigDecimal currentPeriodOut = calculatePeriodOut(materialId, currentMonthStart, currentMonthEnd, tenantId);
+        BigDecimal currentPeriodIn = calculatePeriodIn(materialId, currentMonthStart, currentMonthEnd, tenantId);
+        
+        // 3. 计算上期间出入库  
+        BigDecimal previousPeriodOut = calculatePeriodOut(materialId, previousMonthStart, previousMonthEnd, tenantId);
+        BigDecimal previousPeriodIn = calculatePeriodIn(materialId, previousMonthStart, previousMonthEnd, tenantId);
+        
+        // 4. 获取当前库存
+        BigDecimal currentStock = getCurrentStock(materialId);
+        
+        // 5. 计算上期结存 = 本期结存 - 本期入库 + 本期出库
+        BigDecimal previousStock = currentStock.subtract(currentPeriodIn).add(currentPeriodOut);
+        if (previousStock.compareTo(BigDecimal.ZERO) < 0) {
+            previousStock = BigDecimal.ZERO;
+        }
+        
+        // 6. 更新或插入期间汇总数据
+        insertOrUpdatePeriodSummary(materialId, materialInfo.getBarCode(), materialInfo.getName(),
+            currentStock, previousStock, currentPeriodOut, previousPeriodOut, 
+            currentPeriodIn, previousPeriodIn, tenantId);
+    }
+    
+    /**
+     * 获取当前月开始日期
+     */
+    private String getCurrentMonthStart() {
+        LocalDate now = LocalDate.now();
+        return now.withDayOfMonth(1).toString();
+    }
+    
+    /**
+     * 获取当前月结束日期  
+     */
+    private String getCurrentMonthEnd() {
+        LocalDate now = LocalDate.now();
+        return now.withDayOfMonth(now.lengthOfMonth()).toString();
+    }
+    
+    /**
+     * 获取上月开始日期
+     */
+    private String getPreviousMonthStart() {
+        LocalDate now = LocalDate.now().minusMonths(1);
+        return now.withDayOfMonth(1).toString();
+    }
+    
+    /**
+     * 获取上月结束日期
+     */
+    private String getPreviousMonthEnd() {
+        LocalDate now = LocalDate.now().minusMonths(1);
+        return now.withDayOfMonth(now.lengthOfMonth()).toString();
     }
     
     /**
@@ -552,7 +640,107 @@ public class DepotItemOptimizedService {
             logger.error("异步更新库存告急状态失败，materialId: {}", materialId, e);
         }
     }
+    
+    /**
+     * 获取租户下所有商品ID
+     */
+    private List<Long> getMaterialIdsByTenant(Long tenantId) {
+        try {
+            return depotItemMapperEx.getMaterialIdsByTenant(tenantId);
+        } catch (Exception e) {
+            logger.error("获取商品ID列表失败", e);
+            return new ArrayList<>();
+        }
+    }
+    
+    /**
+     * 获取商品基础信息
+     */
+    private MaterialBasicInfo getMaterialBasicInfo(Long materialId) {
+        try {
+            Map<String, Object> info = depotItemMapperEx.getMaterialBasicInfo(materialId);
+            if (info != null) {
+                return new MaterialBasicInfo(
+                    (String) info.get("barCode"),
+                    (String) info.get("materialName")
+                );
+            }
+            return null;
+        } catch (Exception e) {
+            logger.error("获取商品基础信息失败，materialId: {}", materialId, e);
+            return null;
+        }
+    }
+    
+    /**
+     * 计算期间出库量
+     */
+    private BigDecimal calculatePeriodOut(Long materialId, String startDate, String endDate, Long tenantId) {
+        try {
+            BigDecimal result = depotItemMapperEx.calculatePeriodOut(materialId, startDate, endDate, tenantId);
+            return result != null ? result : BigDecimal.ZERO;
+        } catch (Exception e) {
+            logger.error("计算期间出库失败，materialId: {}, 期间: {} - {}", materialId, startDate, endDate, e);
+            return BigDecimal.ZERO;
+        }
+    }
+    
+    /**
+     * 计算期间入库量
+     */
+    private BigDecimal calculatePeriodIn(Long materialId, String startDate, String endDate, Long tenantId) {
+        try {
+            BigDecimal result = depotItemMapperEx.calculatePeriodIn(materialId, startDate, endDate, tenantId);
+            return result != null ? result : BigDecimal.ZERO;
+        } catch (Exception e) {
+            logger.error("计算期间入库失败，materialId: {}, 期间: {} - {}", materialId, startDate, endDate, e);
+            return BigDecimal.ZERO;
+        }
+    }
+    
+    /**
+     * 获取当前库存
+     */
+    private BigDecimal getCurrentStock(Long materialId) {
+        try {
+            BigDecimal result = depotItemMapperEx.getCurrentStock(materialId);
+            return result != null ? result : BigDecimal.ZERO;
+        } catch (Exception e) {
+            logger.error("获取当前库存失败，materialId: {}", materialId, e);
+            return BigDecimal.ZERO;
+        }
+    }
+    
+    /**
+     * 插入或更新期间汇总数据
+     */
+    private void insertOrUpdatePeriodSummary(Long materialId, String barCode, String materialName,
+            BigDecimal currentStock, BigDecimal previousStock, 
+            BigDecimal currentPeriodOut, BigDecimal previousPeriodOut, 
+            BigDecimal currentPeriodIn, BigDecimal previousPeriodIn, Long tenantId) {
+        try {
+            depotItemMapperEx.insertOrUpdatePeriodSummary(
+                materialId, barCode, materialName, currentStock, previousStock,
+                currentPeriodOut, previousPeriodOut, currentPeriodIn, previousPeriodIn, tenantId
+            );
+        } catch (Exception e) {
+            logger.error("插入或更新期间汇总失败，materialId: {}", materialId, e);
+        }
+    }
+}
 
-
-
+/**
+ * 商品基础信息类
+ */
+class MaterialBasicInfo {
+    private String barCode;
+    private String name;
+    
+    public MaterialBasicInfo(String barCode, String name) {
+        this.barCode = barCode;
+        this.name = name;
+    }
+    
+    public String getBarCode() { return barCode; }
+    public String getName() { return name; }
 }
