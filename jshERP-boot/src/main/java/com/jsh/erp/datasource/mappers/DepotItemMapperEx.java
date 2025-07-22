@@ -333,4 +333,24 @@ public interface DepotItemMapperEx {
      * 验证期间库存计算结果
      */
     List<Map<String, Object>> validatePeriodStockBalance();
+
+    /**
+     * 检查每日汇总表数据
+     */
+    List<Map<String, Object>> checkDailySummaryData(
+            @Param("materialId") Long materialId,
+            @Param("targetDate") String targetDate);
+
+    /**
+     * 检查期间汇总表数据
+     */
+    List<Map<String, Object>> checkPeriodSummaryData(
+            @Param("materialId") Long materialId);
+
+    /**
+     * 获取最近N天的出库日期
+     */
+    List<String> getRecentOutDates(
+            @Param("materialId") Long materialId,
+            @Param("days") Integer days);
 }

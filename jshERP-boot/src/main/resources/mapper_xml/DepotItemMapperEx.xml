@@ -1538,4 +1538,53 @@
         </if>
     </select>
 
+    <!-- 检查每日汇总表数据 -->
+    <select id="checkDailySummaryData" resultType="java.util.Map">
+        SELECT 
+            material_id,
+            material_name,
+            out_date,
+            total_out_quantity,
+            depot_count,
+            bill_count,
+            last_update_time,
+            tenant_id
+        FROM jsh_daily_out_summary 
+        WHERE material_id = #{materialId}
+            AND out_date = #{targetDate}
+            AND delete_flag = '0'
+    </select>
+
+    <!-- 检查期间汇总表数据 -->
+    <select id="checkPeriodSummaryData" resultType="java.util.Map">
+        SELECT 
+            material_id,
+            material_name,
+            current_period_stock,
+            previous_period_stock,
+            current_period_out,
+            previous_period_out,
+            current_period_in,
+            previous_period_in,
+            last_calculation_time,
+            tenant_id
+        FROM jsh_material_period_summary 
+        WHERE material_id = #{materialId}
+            AND delete_flag = '0'
+    </select>
+
+    <!-- 获取最近N天的出库日期 -->
+    <select id="getRecentOutDates" resultType="java.lang.String">
+        SELECT DISTINCT DATE(dh.oper_time) as out_date
+        FROM jsh_depot_item di
+        LEFT JOIN jsh_depot_head dh ON dh.id = di.header_id
+        WHERE di.material_id = #{materialId}
+            AND dh.type = '出库'
+            AND dh.status = '1'
+            AND IFNULL(di.delete_flag,'0') != '1'
+            AND IFNULL(dh.delete_flag,'0') != '1'
+            AND dh.oper_time >= DATE_SUB(CURDATE(), INTERVAL #{days} DAY)
+        ORDER BY out_date DESC
+    </select>
+
 </mapper>

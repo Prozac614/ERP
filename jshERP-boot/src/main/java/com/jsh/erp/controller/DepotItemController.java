@@ -1735,4 +1735,150 @@ public class DepotItemController {
         }
         return res;
     }
+
+    /**
+     * 测试汇总表更新功能
+     * 直接验证应用层代码是否正确执行
+     */
+    @PostMapping(value = "/testSummaryUpdate")
+    @ApiOperation(value = "测试汇总表更新功能")
+    public BaseResponseInfo testSummaryUpdate(
+            @RequestParam(value = "materialId", required = true) Long materialId,
+            @RequestParam(value = "targetDate", required = false) String targetDate,
+            HttpServletRequest request) throws Exception {
+        BaseResponseInfo res = new BaseResponseInfo();
+        try {
+            // 获取当前用户
+            User currentUser = userService.getCurrentUser();
+            Long tenantId = currentUser != null ? currentUser.getTenantId() : null;
+            
+            // 如果没有指定日期，使用今天
+            if (StringUtil.isEmpty(targetDate)) {
+                targetDate = java.time.LocalDate.now().toString();
+            }
+            
+            logger.info("开始测试汇总表更新功能，商品ID：{}，日期：{}，租户ID：{}", materialId, targetDate, tenantId);
+            
+            // 直接调用updateDailyOutSummary方法
+            depotItemOptimizedService.updateDailyOutSummary(materialId, targetDate, tenantId);
+            
+            logger.info("汇总表更新完成，开始清除缓存");
+            
+            // 清除缓存
+            depotItemOptimizedService.clearAllCache();
+            
+            logger.info("缓存清除完成");
+            
+            // 验证更新结果
+            Map<String, Object> result = new HashMap<>();
+            result.put("message", "汇总表更新测试完成");
+            result.put("materialId", materialId);
+            result.put("targetDate", targetDate);
+            result.put("tenantId", tenantId);
+            result.put("timestamp", new Date());
+            
+            res.code = 200;
+            res.data = result;
+            
+        } catch (Exception e) {
+            logger.error("测试汇总表更新失败", e);
+            res.code = 500;
+            res.data = "测试失败: " + e.getMessage();
+        }
+        return res;
+    }
+
+    /**
+     * 验证汇总表数据
+     * 检查特定商品和日期的汇总数据是否存在
+     */
+    @GetMapping(value = "/verifySummaryData")
+    @ApiOperation(value = "验证汇总表数据")
+    public BaseResponseInfo verifySummaryData(
+            @RequestParam(value = "materialId", required = true) Long materialId,
+            @RequestParam(value = "targetDate", required = false) String targetDate,
+            HttpServletRequest request) throws Exception {
+        BaseResponseInfo res = new BaseResponseInfo();
+        try {
+            // 如果没有指定日期，使用今天
+            if (StringUtil.isEmpty(targetDate)) {
+                targetDate = java.time.LocalDate.now().toString();
+            }
+            
+            // 检查jsh_daily_out_summary表
+            List<Map<String, Object>> dailySummary = depotItemMapperEx.checkDailySummaryData(materialId, targetDate);
+            
+            // 检查jsh_material_period_summary表
+            List<Map<String, Object>> periodSummary = depotItemMapperEx.checkPeriodSummaryData(materialId);
+            
+            Map<String, Object> result = new HashMap<>();
+            result.put("materialId", materialId);
+            result.put("targetDate", targetDate);
+            result.put("dailySummaryExists", dailySummary != null && !dailySummary.isEmpty());
+            result.put("dailySummaryData", dailySummary);
+            result.put("periodSummaryExists", periodSummary != null && !periodSummary.isEmpty());
+            result.put("periodSummaryData", periodSummary);
+            result.put("checkTime", new Date());
+            
+            res.code = 200;
+            res.data = result;
+            
+        } catch (Exception e) {
+            logger.error("验证汇总表数据失败", e);
+            res.code = 500;
+            res.data = "验证失败: " + e.getMessage();
+        }
+        return res;
+    }
+
+    /**
+     * 强制更新指定商品的汇总数据
+     * 用于排查问题和手动修复
+     */
+    @PostMapping(value = "/forceUpdateSummary")
+    @ApiOperation(value = "强制更新汇总数据")
+    public BaseResponseInfo forceUpdateSummary(
+            @RequestParam(value = "materialId", required = true) Long materialId,
+            HttpServletRequest request) throws Exception {
+        BaseResponseInfo res = new BaseResponseInfo();
+        try {
+            User currentUser = userService.getCurrentUser();
+            Long tenantId = currentUser != null ? currentUser.getTenantId() : null;
+            
+            logger.info("开始强制更新商品 {} 的汇总数据", materialId);
+            
+            // 获取该商品最近7天的出库日期
+            List<String> recentDates = depotItemMapperEx.getRecentOutDates(materialId, 7);
+            
+            int updatedDays = 0;
+            for (String date : recentDates) {
+                try {
+                    depotItemOptimizedService.updateDailyOutSummary(materialId, date, tenantId);
+                    updatedDays++;
+                    logger.info("已更新商品 {} 在 {} 的汇总数据", materialId, date);
+                } catch (Exception e) {
+                    logger.warn("更新商品 {} 在 {} 的汇总数据失败：{}", materialId, date, e.getMessage());
+                }
+            }
+            
+            // 清除缓存
+            depotItemOptimizedService.clearAllCache();
+            
+            Map<String, Object> result = new HashMap<>();
+            result.put("message", "强制更新完成");
+            result.put("materialId", materialId);
+            result.put("updatedDays", updatedDays);
+            result.put("totalDays", recentDates.size());
+            result.put("dates", recentDates);
+            
+            res.code = 200;
+            res.data = result;
+            
+        } catch (Exception e) {
+            logger.error("强制更新汇总数据失败", e);
+            res.code = 500;
+            res.data = "强制更新失败: " + e.getMessage();
+        }
+        return res;
+    }
 }
