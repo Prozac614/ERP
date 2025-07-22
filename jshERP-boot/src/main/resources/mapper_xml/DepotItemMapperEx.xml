@@ -1381,10 +1381,44 @@
         {call refresh_material_period_summary(#{tenantId})}
     </select>
 
-    <!-- 调用存储过程更新每日出库汇总 -->
-    <select id="updateDailyOutSummary" statementType="CALLABLE">
-        {call update_daily_out_summary(#{materialId}, #{targetDate}, #{tenantId})}
-    </select>
+    <!-- 直接SQL更新每日出库汇总（避免存储过程权限问题） -->
+    <insert id="updateDailyOutSummary">
+        INSERT INTO jsh_daily_out_summary (
+            material_id, bar_code, material_name, out_date, 
+            total_out_quantity, depot_count, bill_count, tenant_id
+        )
+        SELECT 
+            #{materialId} as material_id,
+            me.bar_code,
+            m.name as material_name,
+            #{targetDate} as out_date,
+            SUM(IFNULL(di.basic_number, 0)) as total_out_quantity,
+            COUNT(DISTINCT di.depot_id) as depot_count,
+            COUNT(DISTINCT dh.id) as bill_count,
+            #{tenantId} as tenant_id
+        FROM jsh_depot_item di
+        LEFT JOIN jsh_depot_head dh ON dh.id = di.header_id
+        LEFT JOIN jsh_material m ON m.id = di.material_id
+        LEFT JOIN jsh_material_extend me ON me.material_id = m.id 
+            AND IFNULL(me.delete_flag,'0') != '1' 
+            AND me.default_flag = 1
+        WHERE di.material_id = #{materialId}
+            AND dh.type = '出库'
+            AND IFNULL(di.delete_flag,'0') != '1'
+            AND IFNULL(dh.delete_flag,'0') != '1'
+            AND IFNULL(m.delete_flag,'0') != '1'
+            AND dh.status = '1'
+            AND DATE(dh.oper_time) = #{targetDate}
+            AND IFNULL(dh.tenant_id, 0) = IFNULL(#{tenantId}, 0)
+        GROUP BY di.material_id
+        ON DUPLICATE KEY UPDATE
+            bar_code = VALUES(bar_code),
+            material_name = VALUES(material_name),
+            total_out_quantity = VALUES(total_out_quantity),
+            depot_count = VALUES(depot_count),
+            bill_count = VALUES(bill_count),
+            last_update_time = CURRENT_TIMESTAMP
+    </insert>
 
     <!-- 刷新最近N天的汇总数据 -->
     <update id="refreshDailySummaryForRecentDays">
