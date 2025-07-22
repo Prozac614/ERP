@@ -1174,8 +1174,8 @@ public class DepotItemController {
     }
 
     /**
-     * 获取商品库存统计与每日出库数据（高性能优化版本）
-     * 适用于查询多于修改的场景，使用预聚合表和多级缓存
+     * 获取商品库存统计与每日出库数据（实时版本）
+     * 无缓存机制，确保绝对实时性，适用于对数据实时性要求极高的场景
      * @param currentPage
      * @param pageSize
      * @param materialParam
@@ -1186,7 +1186,7 @@ public class DepotItemController {
      * @throws Exception
      */
     @GetMapping(value = "/getMaterialStockWithDailyOutOptimized")
-    @ApiOperation(value = "获取商品库存统计与每日出库数据（高性能版本）")
+    @ApiOperation(value = "获取商品库存统计与每日出库数据（实时版本）")
     public BaseResponseInfo getMaterialStockWithDailyOutOptimized(
             @RequestParam(value = "currentPage", required = false) Integer currentPage,
             @RequestParam(value = "pageSize", required = false) Integer pageSize,
@@ -1210,14 +1210,15 @@ public class DepotItemController {
             res.code = 200;
             res.data = resultMap;
             
-            logger.info("高性能API调用完成，耗时: {}ms, 商品数: {}",
+            logger.info("🔥 实时API调用完成，耗时: {}ms, 商品数: {}, 实时标识: {}",
                        duration,
-                       resultMap.get("rows") != null ? ((List<?>) resultMap.get("rows")).size() : 0);
+                       resultMap.get("rows") != null ? ((List<?>) resultMap.get("rows")).size() : 0,
+                       resultMap.get("realtime"));
 
         } catch (Exception e) {
-            logger.error("高性能API调用失败", e);
+            logger.error("🔥 实时API调用失败", e);
             res.code = 500;
-            res.data = "获取数据失败: " + e.getMessage();
+            res.data = "获取实时数据失败: " + e.getMessage();
         }
         return res;
     }

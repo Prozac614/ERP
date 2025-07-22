@@ -244,8 +244,7 @@
           materialParam: "",
           createTimeRange: [moment().subtract(1, 'months'), moment()]
         },
-        // 性能优化相关
-        dataCache: new Map(),
+        // 实时数据相关（无缓存）
         loadingRequest: null,
         dailyOutData: {},
         dateColumns: [],
@@ -352,7 +351,7 @@
       if (this.debouncedLoadData) {
         clearTimeout(this.debouncedLoadData)
       }
-      this.dataCache.clear()
+      // 🔥 无缓存，无需清理
       
       // 🚨 重要：清理超大数据集的内存
       this.clearMemoryCache()
@@ -572,8 +571,8 @@
 
       // 刷新数据
       refreshData() {
-        // 清除缓存
-        this.dataCache.clear()
+        // 🔥 实时刷新，无需清除缓存
+        console.log('🔄 实时刷新库存数据')
         
         if (this.showAllProducts) {
           this.loadAllProducts()
@@ -621,24 +620,15 @@
           params.endTime = this.queryParam.createTimeRange[1].format('YYYY-MM-DD')
         }
 
-        // 检查缓存
-        const cacheKey = JSON.stringify(params)
-        const cached = this.dataCache.get(cacheKey)
-        if (cached && (Date.now() - cached.timestamp < 300000)) { // 5分钟缓存
-          this.processDataResponse(cached.data)
-          this.loading = false
-          return
-        }
+        // 🔥 实时查询，无缓存检查
+        logger.info('实时查询库存数据，参数：', params)
 
         // 使用高性能优化API
         this.loadingRequest = getAction('/depotItem/getMaterialStockWithDailyOutOptimized', params)
         this.loadingRequest.then((res) => {
           if (res.code === 200) {
-            // 缓存结果
-            this.dataCache.set(cacheKey, {
-              data: res.data,
-              timestamp: Date.now()
-            })
+            // 🔥 直接处理实时数据，无缓存
+            console.log('✅ 获取到实时库存数据:', res.data.realtime ? '实时' : '可能缓存')
             
             this.processDataResponse(res.data)
           } else {

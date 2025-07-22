@@ -43,11 +43,9 @@ public class DepotItemOptimizedService {
     private RedisTemplate<String, Object> redisTemplate;
 
     /**
-     * 高性能获取商品库存统计与每日出库数据
-     * 使用预聚合表和多级缓存
+     * 实时获取商品库存统计与每日出库数据
+     * 无缓存，确保绝对实时性
      */
-    @Cacheable(value = "materialStockOptimized", key = "#materialParam + '_' + #beginTime + '_' + #endTime + '_' + #currentPage + '_' + #pageSize", 
-               unless = "#result == null", condition = "#materialParam != null")
     public Map<String, Object> getOptimizedMaterialStockWithDailyOut(
             Integer currentPage, Integer pageSize, String materialParam, 
             String beginTime, String endTime, HttpServletRequest request) throws Exception {
@@ -63,17 +61,9 @@ public class DepotItemOptimizedService {
             User user = userService.getCurrentUser();
             Long tenantId = user != null ? user.getTenantId() : null;
             
-            // 先尝试从Redis缓存获取
-            String cacheKey = generateCacheKey(materialParam, beginTime, endTime, currentPage, pageSize, tenantId);
-            if (redisTemplate != null) {
-                Object cached = redisTemplate.opsForValue().get(cacheKey);
-                if (cached != null) {
-                    logger.info("从Redis缓存获取数据: {}", cacheKey);
-                    return (Map<String, Object>) cached;
-                }
-            }
+            logger.info("🔥 实时查询库存数据，无缓存，租户ID: {}", tenantId);
             
-            // 使用优化的查询方法
+            // 直接查询最新数据，无缓存
             if (StringUtil.isNotEmpty(beginTime) && StringUtil.isNotEmpty(endTime)) {
                 // 有日期范围时，使用汇总表快速查询
                 resultMap = getOptimizedDataWithDateRange(currentPage, pageSize, materialParam, 
@@ -83,10 +73,10 @@ public class DepotItemOptimizedService {
                 resultMap = getOptimizedDataWithoutDateRange(currentPage, pageSize, materialParam, tenantId);
             }
             
-            // 缓存结果到Redis（15分钟过期）
-            if (redisTemplate != null && resultMap != null) {
-                redisTemplate.opsForValue().set(cacheKey, resultMap, 15, TimeUnit.MINUTES);
-                logger.info("数据已缓存到Redis: {}", cacheKey);
+            // 标记为实时数据
+            if (resultMap != null) {
+                resultMap.put("realtime", true);
+                resultMap.put("queryTime", System.currentTimeMillis());
             }
             
         } catch (Exception e) {
@@ -396,8 +386,18 @@ public class DepotItemOptimizedService {
     public void clearAllCache() {
         if (redisTemplate != null) {
             try {
-                // 清除多种模式的缓存键
-                String[] patterns = {"material_stock:*", "*stock*", "depot_item:*"};
+                // 🔥 强制清除所有相关缓存模式，确保数据实时更新
+                String[] patterns = {
+                    "material_stock:*",          // 库存相关缓存
+                    "*stock*",                   // 所有包含stock的缓存
+                    "depot_item:*",              // 单据明细缓存
+                    "materialStockOptimized*",   // Spring @Cacheable 缓存
+                    "materialStockOptimized::*", // Spring Cache Redis键格式
+                    "dailyOutSummary*",          // 每日汇总缓存
+                    "materialPeriodSummary*",    // 期间汇总缓存
+                    "optimizedQuery*",           // 优化查询缓存
+                    "statistics*"                // 统计数据缓存
+                };
                 int totalCleared = 0;
 
                 for (String pattern : patterns) {
@@ -405,17 +405,17 @@ public class DepotItemOptimizedService {
                     if (keys != null && !keys.isEmpty()) {
                         redisTemplate.delete(keys);
                         totalCleared += keys.size();
-                        logger.info("清除了{}个匹配'{}'的缓存键", keys.size(), pattern);
+                        logger.info("🗑️ 清除了{}个匹配'{}'的缓存键", keys.size(), pattern);
                     }
                 }
 
                 if (totalCleared > 0) {
-                    logger.info("总共清除了{}个缓存键", totalCleared);
+                    logger.info("✅ 强制缓存清除完成！总共清除了{}个缓存键", totalCleared);
                 } else {
-                    logger.info("没有找到需要清除的缓存键");
+                    logger.info("⚪ 没有找到需要清除的缓存键");
                 }
             } catch (Exception e) {
-                logger.error("清除缓存失败", e);
+                logger.error("❌ 清除缓存失败", e);
                 throw new RuntimeException("清除缓存失败: " + e.getMessage());
             }
         } else {

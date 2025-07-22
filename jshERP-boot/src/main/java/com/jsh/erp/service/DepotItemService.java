@@ -1510,6 +1510,15 @@ public class DepotItemService {
                     }
                 }
                 
+                // 更新期间汇总数据
+                try {
+                    logger.info("开始更新期间汇总数据，租户ID：{}", depotHead.getTenantId());
+                    depotItemOptimizedService.refreshMaterialPeriodSummary(depotHead.getTenantId());
+                    logger.info("期间汇总数据更新完成");
+                } catch (Exception e) {
+                    logger.warn("更新期间汇总数据失败：{}", e.getMessage());
+                }
+                
                 // 清除相关缓存，确保前端立即显示最新数据
                 depotItemOptimizedService.clearAllCache();
                 

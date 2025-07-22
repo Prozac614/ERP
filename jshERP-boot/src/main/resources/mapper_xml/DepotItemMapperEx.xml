@@ -1376,10 +1376,136 @@
         order by dos.out_date asc, dos.bar_code asc
     </select>
 
-    <!-- 调用存储过程刷新商品期间汇总 -->
-    <select id="refreshMaterialPeriodSummary" statementType="CALLABLE">
-        {call refresh_material_period_summary(#{tenantId})}
-    </select>
+    <!-- 直接SQL更新期间汇总（避免存储过程权限问题） -->
+    <insert id="refreshMaterialPeriodSummary">
+        INSERT INTO jsh_material_period_summary (
+            material_id, bar_code, material_name, 
+            current_period_stock, previous_period_stock,
+            current_period_out, previous_period_out,
+            current_period_in, previous_period_in,
+            tenant_id, last_calculation_time
+        )
+        SELECT 
+            m.id as material_id,
+            me.bar_code,
+            m.name as material_name,
+            -- 当前库存（从current_stock表）
+            IFNULL((
+                SELECT SUM(IFNULL(current_number, 0))
+                FROM jsh_material_current_stock mcs
+                WHERE mcs.material_id = m.id 
+                AND IFNULL(mcs.delete_flag,'0') != '1'
+            ), 0) as current_period_stock,
+            -- 上期结存 = 本期结存 - 本期入库 + 本期出库
+            GREATEST(0,
+                IFNULL((
+                    SELECT SUM(IFNULL(current_number, 0))
+                    FROM jsh_material_current_stock mcs
+                    WHERE mcs.material_id = m.id 
+                    AND IFNULL(mcs.delete_flag,'0') != '1'
+                ), 0) -
+                IFNULL(current_in.total_in, 0) +
+                IFNULL(current_out.total_out, 0)
+            ) as previous_period_stock,
+            -- 当前期间出库
+            IFNULL(current_out.total_out, 0) as current_period_out,
+            -- 上期间出库
+            IFNULL(previous_out.total_out, 0) as previous_period_out,
+            -- 当前期间入库
+            IFNULL(current_in.total_in, 0) as current_period_in,
+            -- 上期间入库
+            IFNULL(previous_in.total_in, 0) as previous_period_in,
+            #{tenantId} as tenant_id,
+            NOW() as last_calculation_time
+        FROM jsh_material m
+        LEFT JOIN jsh_material_extend me ON me.material_id = m.id 
+            AND IFNULL(me.delete_flag,'0') != '1' 
+            AND me.default_flag = 1
+        -- 当前期间出库
+        LEFT JOIN (
+            SELECT 
+                di.material_id,
+                SUM(IFNULL(di.basic_number, 0)) as total_out
+            FROM jsh_depot_item di
+            LEFT JOIN jsh_depot_head dh ON dh.id = di.header_id
+            WHERE dh.type = '出库'
+                AND dh.status = '1'
+                AND IFNULL(di.delete_flag,'0') != '1'
+                AND IFNULL(dh.delete_flag,'0') != '1'
+                AND dh.oper_time >= DATE_FORMAT(CURDATE(), '%Y-%m-01')
+                <if test="tenantId != null">
+                    AND IFNULL(dh.tenant_id, 0) = #{tenantId}
+                </if>
+            GROUP BY di.material_id
+        ) current_out ON current_out.material_id = m.id
+        -- 上期间出库
+        LEFT JOIN (
+            SELECT 
+                di.material_id,
+                SUM(IFNULL(di.basic_number, 0)) as total_out
+            FROM jsh_depot_item di
+            LEFT JOIN jsh_depot_head dh ON dh.id = di.header_id
+            WHERE dh.type = '出库'
+                AND dh.status = '1'
+                AND IFNULL(di.delete_flag,'0') != '1'
+                AND IFNULL(dh.delete_flag,'0') != '1'
+                AND dh.oper_time >= DATE_SUB(DATE_FORMAT(CURDATE(), '%Y-%m-01'), INTERVAL 1 MONTH)
+                AND dh.oper_time < DATE_FORMAT(CURDATE(), '%Y-%m-01')
+                <if test="tenantId != null">
+                    AND IFNULL(dh.tenant_id, 0) = #{tenantId}
+                </if>
+            GROUP BY di.material_id
+        ) previous_out ON previous_out.material_id = m.id
+        -- 当前期间入库
+        LEFT JOIN (
+            SELECT 
+                di.material_id,
+                SUM(IFNULL(di.basic_number, 0)) as total_in
+            FROM jsh_depot_item di
+            LEFT JOIN jsh_depot_head dh ON dh.id = di.header_id
+            WHERE dh.type = '入库'
+                AND dh.status = '1'
+                AND IFNULL(di.delete_flag,'0') != '1'
+                AND IFNULL(dh.delete_flag,'0') != '1'
+                AND dh.oper_time >= DATE_FORMAT(CURDATE(), '%Y-%m-01')
+                <if test="tenantId != null">
+                    AND IFNULL(dh.tenant_id, 0) = #{tenantId}
+                </if>
+            GROUP BY di.material_id
+        ) current_in ON current_in.material_id = m.id
+        -- 上期间入库
+        LEFT JOIN (
+            SELECT 
+                di.material_id,
+                SUM(IFNULL(di.basic_number, 0)) as total_in
+            FROM jsh_depot_item di
+            LEFT JOIN jsh_depot_head dh ON dh.id = di.header_id
+            WHERE dh.type = '入库'
+                AND dh.status = '1'
+                AND IFNULL(di.delete_flag,'0') != '1'
+                AND IFNULL(dh.delete_flag,'0') != '1'
+                AND dh.oper_time >= DATE_SUB(DATE_FORMAT(CURDATE(), '%Y-%m-01'), INTERVAL 1 MONTH)
+                AND dh.oper_time < DATE_FORMAT(CURDATE(), '%Y-%m-01')
+                <if test="tenantId != null">
+                    AND IFNULL(dh.tenant_id, 0) = #{tenantId}
+                </if>
+            GROUP BY di.material_id
+        ) previous_in ON previous_in.material_id = m.id
+        WHERE IFNULL(m.delete_flag,'0') != '1'
+        <if test="tenantId != null">
+            AND IFNULL(m.tenant_id, 0) = #{tenantId}
+        </if>
+        ON DUPLICATE KEY UPDATE
+            bar_code = VALUES(bar_code),
+            material_name = VALUES(material_name),
+            current_period_stock = VALUES(current_period_stock),
+            previous_period_stock = VALUES(previous_period_stock),
+            current_period_out = VALUES(current_period_out),
+            previous_period_out = VALUES(previous_period_out),
+            current_period_in = VALUES(current_period_in),
+            previous_period_in = VALUES(previous_period_in),
+            last_calculation_time = VALUES(last_calculation_time)
+    </insert>
 
     <!-- 直接SQL更新每日出库汇总（避免存储过程权限问题） -->
     <insert id="updateDailyOutSummary">
@@ -1584,7 +1710,7 @@
             AND IFNULL(di.delete_flag,'0') != '1'
             AND IFNULL(dh.delete_flag,'0') != '1'
             AND dh.oper_time >= DATE_SUB(CURDATE(), INTERVAL #{days} DAY)
-        ORDER BY out_date DESC
+        ORDER BY DATE(dh.oper_time) DESC
     </select>
 
 </mapper>
