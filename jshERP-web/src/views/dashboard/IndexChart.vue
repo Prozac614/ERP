@@ -45,14 +45,7 @@
                     :loading="calculatingAlert">
             库存预警校验
           </a-button>
-          <a-button @click="clearStockCache"
-                    type="default"
-                    icon="delete"
-                    style="margin-left: 8px;"
-                    :loading="clearingCache">
-            清除缓存
-          </a-button>
-          <a-button icon="reload" @click="refreshData">刷新数据</a-button>
+
 
           <!-- 暂时隐藏展示所有数据按钮 -->
           <!-- 
@@ -83,8 +76,8 @@
                   </a-col>
                 </a-row>
                 <a-row v-if="dateColumns.length > 0" style="width: 500px; max-height: 120px; overflow-y: auto;">
-                  <template v-for="(dateCol,index) in dateColumns" :key="dateCol.dataIndex">
-                    <a-col :span="6">
+                  <template v-for="(dateCol,index) in dateColumns">
+                    <a-col :span="6" :key="dateCol.dataIndex">
                       <a-checkbox :value="dateCol.dataIndex" disabled>
                         {{dateCol.title}}
                       </a-checkbox>
@@ -108,38 +101,8 @@
         </div>
         <!-- table区域-begin -->
         <div>
-          <!-- 回到可靠的虚拟滚动表格 -->
-          <VirtualTable
-            v-if="showAllProducts && !loading && dataSource.length > 0"
-            ref="virtualTable"
-            :dataSource="dataSource"
-            :columns="columns"
-            :containerHeight="600"
-            :rowHeight="54"
-            :showPerformanceInfo="false"
-            rowKey="id"
-            @row-click="handleRowClick"
-          />
-          
-          <!-- 无数据提示 -->
-          <div v-if="showAllProducts && !loading && dataSource.length === 0" 
-               style="text-align: center; padding: 50px; color: #999;">
-            <a-icon type="inbox" style="font-size: 48px; margin-bottom: 16px;" />
-            <p style="font-size: 16px;">暂无数据</p>
-            <p>请检查查询条件或联系管理员</p>
-          </div>
-          
-          <!-- 简化的状态信息 -->
-          <div v-if="showAllProducts && !loading" style="margin: 10px; padding: 10px; background: #e6f7ff; border: 1px solid #91d5ff; border-radius: 4px;">
-            <p><strong>📊 数据状态:</strong></p>
-            <p>✅ 数据行数: {{ dataSource.length }}</p>
-            <p>✅ 列数: {{ columns.length }} (基础列: {{ defColumns.length }}, 日期列: {{ dateColumns.length }})</p>
-            <p>✅ 日期范围: {{ queryParam.createTimeRange && queryParam.createTimeRange.length === 2 ? queryParam.createTimeRange[0].format('MM-DD') + ' 至 ' + queryParam.createTimeRange[1].format('MM-DD') : '未设置' }}</p>
-          </div>
-          
-          <!-- 普通分页表格 (正常分页模式) -->
+          <!-- 标准分页表格 -->
           <a-table
-            v-else
             ref="table"
             size="middle"
             bordered
@@ -194,15 +157,6 @@
             </template>
           </a-table>
           
-          <!-- 状态提示 -->
-          <div v-if="showAllProducts" style="margin-top: 16px; padding: 12px; background: #f6ffed; border: 1px solid #b7eb8f; border-radius: 6px;">
-            <a-icon type="info-circle" style="color: #52c41a; margin-right: 8px;" />
-            <span style="color: #389e0d;">
-              当前显示所有商品，共 {{ dataSource.length }} 个商品
-              <span v-if="dateColumns.length > 0">，{{ dateColumns.length }} 个日期列</span>
-            </span>
-          </div>
-
           <!-- 图表弹窗 -->
           <StockChartModal
             :visible="chartModal.visible"
@@ -210,6 +164,8 @@
             :dateRange="queryParam.createTimeRange"
             @cancel="handleChartModalCancel"
           />
+          
+
 
 
 
@@ -223,18 +179,12 @@
   import moment from 'moment'
   import { getAction, postAction } from '@/api/manage'
   import JEllipsis from '@/components/jeecg/JEllipsis'
-  import VirtualTable from '@/components/VirtualTable'
-  import VirtualTableOptimized from '@/components/VirtualTableOptimized'
-  import VirtualTableUltraOptimized from '@/components/VirtualTableUltraOptimized'
   import StockChartModal from '@/components/charts/StockChartModal'
 
   export default {
     name: "IndexChart",
     components: {
       JEllipsis,
-      VirtualTable,
-      VirtualTableOptimized,
-      VirtualTableUltraOptimized,
       StockChartModal
     },
     data () {
@@ -244,16 +194,11 @@
           materialParam: "",
           createTimeRange: [moment().subtract(1, 'months'), moment()]
         },
-        // 性能优化相关
-        dataCache: new Map(),
         loadingRequest: null,
         dailyOutData: {},
         dateColumns: [],
-        hasAutoRefreshed: false, // 防止自动刷新无限循环
         calculatingAlert: false, // 库存预警校验加载状态
-        clearingCache: false, // 清除缓存加载状态
-        // 展示所有商品控制
-        showAllProducts: false,
+
         // 页面样式
         cardStyle: 'padding: 0',
         loading: true,
@@ -278,12 +223,6 @@
           showQuickJumper: true,
           showSizeChanger: true,
           total: 0
-        },
-        // 轻量级数据存储
-        lightweightData: {
-          rows: [], // 只存储必要的行数据
-          columnMapping: new Map(), // 列名映射
-          cellValueCache: new Map() // 单元格值缓存
         },
         // 图表弹窗控制
         chartModal: {
@@ -325,19 +264,9 @@
       allDataIndex() {
         return [...this.settingDataIndex, ...this.dateColumns.map(col => col.dataIndex)]
       },
-      // 动态分页配置
+      // 分页配置
       paginationConfig() {
-        if (this.showAllProducts) {
-          return false // 展示所有商品时禁用分页
-        }
         return this.ipagination
-      },
-      
-      // 总行数（用于超级虚拟表格）
-      totalRows() {
-        const count = this.dataSource.length
-        console.log(`总行数: ${count}`)
-        return count
       }
     },
     created() {
@@ -352,12 +281,7 @@
       if (this.debouncedLoadData) {
         clearTimeout(this.debouncedLoadData)
       }
-      this.dataCache.clear()
       
-      // 🚨 重要：清理超大数据集的内存
-      this.clearMemoryCache()
-      this.lightweightData.rows = []
-      this.lightweightData.columnMapping.clear()
       this.dataSource = []
       
       // 强制垃圾回收（如果可用）
@@ -431,124 +355,10 @@
       // 防抖处理的数据加载
       debouncedLoadData: null,
 
-      // 切换展示所有商品模式
-      toggleShowAllProducts() {
-        this.showAllProducts = !this.showAllProducts
-        
-        if (this.showAllProducts) {
-          // 切换到展示所有商品模式时，给出性能警告
-          this.$confirm({
-            title: '性能提示',
-            content: '展示所有商品可能会影响页面性能，特别是在商品数量较多或选择的日期范围较大时。确定要继续吗？',
-            okText: '继续',
-            cancelText: '取消',
-            onOk: () => {
-              this.loadAllProducts()
-            },
-            onCancel: () => {
-              this.showAllProducts = false
-            }
-          })
-        } else {
-          // 切换回分页模式
-          this.ipagination.current = 1
-          this.debouncedLoadStockData()
-        }
-      },
-
-      // 加载所有商品数据（优化版）
-      loadAllProducts() {
-        // 显示确认对话框，警告用户大数据量加载
-        this.$confirm({
-          title: '加载大量数据',
-          content: '即将加载所有商品数据，数据量较大可能需要一些时间。确定继续吗？',
-          okText: '确定加载',
-          cancelText: '取消',
-          onOk: () => {
-            this.performLoadAllProducts()
-          },
-          onCancel: () => {
-            this.showAllProducts = false
-          }
-        })
-      },
-
-      // 执行加载所有商品数据
-      performLoadAllProducts() {
-        this.loading = true
-        
-        // 显示加载进度
-        const loadingMessage = this.$message.loading('正在加载大量数据，请稍候...', 0)
-        
-        const params = {
-          currentPage: 1,
-          pageSize: 10000, // 设置一个很大的pageSize来获取所有数据
-          materialParam: this.queryParam.materialParam || ''
-        }
-        
-        // 如果有日期范围参数，添加到请求中
-        if (this.queryParam.createTimeRange && this.queryParam.createTimeRange.length === 2) {
-          params.beginTime = this.queryParam.createTimeRange[0].format('YYYY-MM-DD')
-          params.endTime = this.queryParam.createTimeRange[1].format('YYYY-MM-DD')
-        }
-
-        // 取消之前的请求
-        if (this.loadingRequest) {
-          this.loadingRequest.abort()
-        }
-
-        this.loadingRequest = getAction('/depotItem/getMaterialStockWithDailyOutOptimized', params)
-        this.loadingRequest.then(async (res) => {
-          if (res.code === 200) {
-            loadingMessage()
-            
-            // 显示数据处理进度
-            const processingMessage = this.$message.loading('正在处理数据，请稍候...', 0)
-            
-            try {
-              // 分批处理数据，避免阻塞UI
-              await this.processLargeDataResponse(res.data)
-              processingMessage()
-              
-              this.$message.success(`✅ 成功加载 ${this.dataSource.length} 个商品，已启用虚拟滚动优化`)
-            } catch (error) {
-              processingMessage()
-              console.error('数据处理失败:', error)
-              this.$message.error('数据处理失败')
-              this.showAllProducts = false
-            }
-          } else {
-            loadingMessage()
-            this.$message.error(res.data || '数据加载失败')
-            this.showAllProducts = false
-          }
-        }).catch((error) => {
-          loadingMessage()
-          if (error.name !== 'AbortError') {
-            console.error('获取所有商品数据失败:', error)
-            this.$message.error('数据加载失败')
-            this.showAllProducts = false
-          }
-        }).finally(() => {
-          this.loading = false
-          this.loadingRequest = null
-        })
-      },
-
-      // 回到可靠的数据处理方法
-      async processLargeDataResponse(data) {
-        // 使用原来可靠的方法，避免过度优化
-        this.processDataResponse(data)
-      },
-
       // 查询方法
       searchQuery() {
-        if (this.showAllProducts) {
-          this.loadAllProducts()
-        } else {
-          this.ipagination.current = 1
-          this.debouncedLoadStockData()
-        }
+        this.ipagination.current = 1
+        this.debouncedLoadStockData()
       },
       // 重置查询
       searchReset() {
@@ -570,28 +380,15 @@
         }, 500)
       },
 
-      // 刷新数据
-      refreshData() {
-        // 清除缓存
-        this.dataCache.clear()
-        
-        if (this.showAllProducts) {
-          this.loadAllProducts()
-        } else {
-          this.loadStockData(1)
-        }
-      },
+
+
 
       // 日期变化处理
       onDateChange(dates, dateStrings) {
         this.queryParam.createTimeRange = dates
         this.generateDateColumns()
         if (dates && dates.length === 2) {
-          if (this.showAllProducts) {
-            this.loadAllProducts()
-          } else {
-            this.debouncedLoadStockData()
-          }
+          this.debouncedLoadStockData()
         }
       },
       onDateOk(dates) {
@@ -621,25 +418,10 @@
           params.endTime = this.queryParam.createTimeRange[1].format('YYYY-MM-DD')
         }
 
-        // 检查缓存
-        const cacheKey = JSON.stringify(params)
-        const cached = this.dataCache.get(cacheKey)
-        if (cached && (Date.now() - cached.timestamp < 300000)) { // 5分钟缓存
-          this.processDataResponse(cached.data)
-          this.loading = false
-          return
-        }
-
-        // 使用高性能优化API
+        // 直接请求实时数据，无缓存机制
         this.loadingRequest = getAction('/depotItem/getMaterialStockWithDailyOutOptimized', params)
         this.loadingRequest.then((res) => {
           if (res.code === 200) {
-            // 缓存结果
-            this.dataCache.set(cacheKey, {
-              data: res.data,
-              timestamp: Date.now()
-            })
-            
             this.processDataResponse(res.data)
           } else {
             this.$message.error(res.data || '数据加载失败')
@@ -660,7 +442,6 @@
         this.dataSource = data.rows || []
         this.ipagination.total = data.total || 0
         this.dailyOutData = data.dailyOutData || {}
-        this.performanceStats = data.performanceStats || {}
 
         // 合并每日出库数据到商品数据中
         this.mergeDataOptimized()
@@ -702,11 +483,8 @@
               
       // 表格操作      
       handleTableChange(pagination, filters, sorter) {
-        if (!this.showAllProducts) {
-          this.ipagination = pagination
-          this.loadStockData()
-        }
-        // 在展示所有商品模式下，不处理分页变化
+        this.ipagination = pagination
+        this.loadStockData()
       },
       onSelectChange(selectedRowKeys) {
         this.selectedRowKeys = selectedRowKeys
@@ -812,7 +590,7 @@
           if (res.code === 200) {
             this.$message.success(res.data || '已重新关注库存风险')
             // 刷新数据以获取最新状态
-            this.refreshData()
+            this.loadStockData()
           } else {
             this.$message.error(res.data || '操作失败')
           }
@@ -856,135 +634,6 @@
           this.$message.error('操作失败')
         }
       },
-
-      // 清除缓存
-      async clearStockCache() {
-        try {
-          this.clearingCache = true
-          const res = await this.$http.post('/depotItem/clearStockCache')
-          if (res.code === 200) {
-            this.$message.success('缓存清除成功')
-            // 刷新数据
-            this.loadStockData()
-          } else {
-            this.$message.error(res.data || '清除缓存失败')
-          }
-        } catch (error) {
-          console.error('清除缓存失败:', error)
-          this.$message.error('清除缓存失败')
-        } finally {
-          this.clearingCache = false
-        }
-      },
-
-      // 优化虚拟表格相关方法
-      handleCellClick(cellInfo) {
-        // 处理单元格点击事件
-        console.log('单元格点击:', cellInfo)
-        // 这里可以添加单元格点击逻辑，如显示详情等
-      },
-
-      // 优化数据处理 - 分批加载
-      processDataInBatches(rawData, batchSize = 50) {
-        return new Promise((resolve) => {
-          const result = []
-          let index = 0
-          
-          const processBatch = () => {
-            const endIndex = Math.min(index + batchSize, rawData.length)
-            
-            for (let i = index; i < endIndex; i++) {
-              result.push(rawData[i])
-            }
-            
-            index = endIndex
-            
-            if (index < rawData.length) {
-              // 使用 requestIdleCallback 或 setTimeout 避免阻塞UI
-              if (window.requestIdleCallback) {
-                requestIdleCallback(processBatch)
-              } else {
-                setTimeout(processBatch, 0)
-              }
-            } else {
-              resolve(result)
-            }
-          }
-          
-          processBatch()
-        })
-      },
-
-      // 超轻量级数据获取函数（关键优化）
-      getCellDataOptimized(rowIndex, columnKey) {
-        // 缓存键
-        const cacheKey = `${rowIndex}-${columnKey}`
-        
-        // 优先从缓存获取
-        if (this.lightweightData.cellValueCache.has(cacheKey)) {
-          return this.lightweightData.cellValueCache.get(cacheKey)
-        }
-        
-        // 从数据源获取（优先使用dataSource，保证兼容性）
-        const row = this.dataSource[rowIndex]
-        if (!row) {
-          console.warn(`❌ 行数据不存在: rowIndex=${rowIndex}, total=${this.dataSource.length}`)
-          return '-'
-        }
-        
-        let value = row[columnKey]
-        
-        // 调试特定行的数据
-        if (rowIndex <= 2) {
-          console.log(`🔍 单元格数据获取 [${rowIndex}, ${columnKey}]:`, value)
-        }
-        
-        // 数据格式化（最小化处理）
-        if (typeof value === 'number') {
-          if (columnKey.includes('out_') && value === 0) {
-            value = '-'
-          } else if (typeof value === 'number' && value !== 0) {
-            value = value.toFixed(2)
-          }
-        } else if (value === null || value === undefined || value === '') {
-          value = '-'
-        }
-        
-        // 缓存结果（限制缓存大小防止内存泄漏）
-        if (this.lightweightData.cellValueCache.size < 50000) {
-          this.lightweightData.cellValueCache.set(cacheKey, value)
-        }
-        
-        return value
-      },
-
-      // 清理内存缓存
-      clearMemoryCache() {
-        this.lightweightData.cellValueCache.clear()
-        // 强制垃圾回收
-        if (window.gc) {
-          window.gc()
-        }
-      },
-
-      // 虚拟表格相关方法
-      handleRowClick(record, index) {
-        console.log('点击行:', record, index)
-        // 可以添加行点击逻辑
-      },
-
-      // 虚拟表格滚动控制
-      scrollToTop() {
-        if (this.$refs.virtualTable) {
-          this.$refs.virtualTable.scrollToTop()
-        }
-      },
-
-      scrollToRow(rowIndex) {
-        if (this.$refs.virtualTable) {
-          this.$refs.virtualTable.scrollToIndex(rowIndex)
-        }
-      }
     }
   }
 </script>

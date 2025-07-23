@@ -20,317 +20,370 @@ import java.util.Map;
  * @Date: 2019/1/24 16:59
  */
 public interface DepotItemMapperEx {
-    List<DepotItem> selectByConditionDepotItem(
-            @Param("name") String name,
-            @Param("type") Integer type,
-            @Param("remark") String remark,
-            @Param("offset") Integer offset,
-            @Param("rows") Integer rows);
+        List<DepotItem> selectByConditionDepotItem(
+                        @Param("name") String name,
+                        @Param("type") Integer type,
+                        @Param("remark") String remark,
+                        @Param("offset") Integer offset,
+                        @Param("rows") Integer rows);
 
-    Long countsByDepotItem(
-            @Param("name") String name,
-            @Param("type") Integer type,
-            @Param("remark") String remark);
+        Long countsByDepotItem(
+                        @Param("name") String name,
+                        @Param("type") Integer type,
+                        @Param("remark") String remark);
 
-    List<DepotItemVo4DetailByTypeAndMId> findDetailByDepotIdsAndMaterialIdList(
-            @Param("depotIdArray") Long[] depotIdArray,
-            @Param("forceFlag") Boolean forceFlag,
-            @Param("inOutManageFlag") Boolean inOutManageFlag,
-            @Param("sku") String sku,
-            @Param("batchNumber") String batchNumber,
-            @Param("number") String number,
-            @Param("beginTime") String beginTime,
-            @Param("endTime") String endTime,
-            @Param("mId") Long mId,
-            @Param("offset") Integer offset,
-            @Param("rows") Integer rows);
+        List<DepotItemVo4DetailByTypeAndMId> findDetailByDepotIdsAndMaterialIdList(
+                        @Param("depotIdArray") Long[] depotIdArray,
+                        @Param("forceFlag") Boolean forceFlag,
+                        @Param("inOutManageFlag") Boolean inOutManageFlag,
+                        @Param("sku") String sku,
+                        @Param("batchNumber") String batchNumber,
+                        @Param("number") String number,
+                        @Param("beginTime") String beginTime,
+                        @Param("endTime") String endTime,
+                        @Param("mId") Long mId,
+                        @Param("offset") Integer offset,
+                        @Param("rows") Integer rows);
 
-    Long findDetailByDepotIdsAndMaterialIdCount(
-            @Param("depotIdArray") Long[] depotIdArray,
-            @Param("forceFlag") Boolean forceFlag,
-            @Param("inOutManageFlag") Boolean inOutManageFlag,
-            @Param("sku") String sku,
-            @Param("batchNumber") String batchNumber,
-            @Param("number") String number,
-            @Param("beginTime") String beginTime,
-            @Param("endTime") String endTime,
-            @Param("mId") Long mId);
+        Long findDetailByDepotIdsAndMaterialIdCount(
+                        @Param("depotIdArray") Long[] depotIdArray,
+                        @Param("forceFlag") Boolean forceFlag,
+                        @Param("inOutManageFlag") Boolean inOutManageFlag,
+                        @Param("sku") String sku,
+                        @Param("batchNumber") String batchNumber,
+                        @Param("number") String number,
+                        @Param("beginTime") String beginTime,
+                        @Param("endTime") String endTime,
+                        @Param("mId") Long mId);
 
-    List<DepotItemVo4WithInfoEx> getDetailList(
-            @Param("headerId") Long headerId);
+        List<DepotItemVo4WithInfoEx> getDetailList(
+                        @Param("headerId") Long headerId);
 
-    List<DepotItemVo4WithInfoEx> getBillDetailListByIds(
-            @Param("idList") List<Long> idList);
+        List<DepotItemVo4WithInfoEx> getBillDetailListByIds(
+                        @Param("idList") List<Long> idList);
 
-    List<DepotItemVo4WithInfoEx> getInOutStock(
-            @Param("materialParam") String materialParam,
-            @Param("categoryIdList") List<Long> categoryIdList,
-            @Param("endTime") String endTime,
-            @Param("offset") Integer offset,
-            @Param("rows") Integer rows);
+        List<DepotItemVo4WithInfoEx> getInOutStock(
+                        @Param("materialParam") String materialParam,
+                        @Param("categoryIdList") List<Long> categoryIdList,
+                        @Param("endTime") String endTime,
+                        @Param("offset") Integer offset,
+                        @Param("rows") Integer rows);
 
-    int getInOutStockCount(
-            @Param("materialParam") String materialParam,
-            @Param("categoryIdList") List<Long> categoryIdList,
-            @Param("endTime") String endTime);
+        int getInOutStockCount(
+                        @Param("materialParam") String materialParam,
+                        @Param("categoryIdList") List<Long> categoryIdList,
+                        @Param("endTime") String endTime);
 
-    List<DepotItemVo4WithInfoEx> getListWithBuyOrSale(
-            @Param("materialParam") String materialParam,
-            @Param("billType") String billType,
-            @Param("beginTime") String beginTime,
-            @Param("endTime") String endTime,
-            @Param("creatorArray") String[] creatorArray,
-            @Param("organId") Long organId,
-            @Param("organArray") String[] organArray,
-            @Param("categoryList") List<Long> categoryList,
-            @Param("depotList") List<Long> depotList,
-            @Param("forceFlag") Boolean forceFlag,
-            @Param("offset") Integer offset,
-            @Param("rows") Integer rows);
+        List<DepotItemVo4WithInfoEx> getListWithBuyOrSale(
+                        @Param("materialParam") String materialParam,
+                        @Param("billType") String billType,
+                        @Param("beginTime") String beginTime,
+                        @Param("endTime") String endTime,
+                        @Param("creatorArray") String[] creatorArray,
+                        @Param("organId") Long organId,
+                        @Param("organArray") String[] organArray,
+                        @Param("categoryList") List<Long> categoryList,
+                        @Param("depotList") List<Long> depotList,
+                        @Param("forceFlag") Boolean forceFlag,
+                        @Param("offset") Integer offset,
+                        @Param("rows") Integer rows);
 
-    int getListWithBuyOrSaleCount(
-            @Param("materialParam") String materialParam,
-            @Param("billType") String billType,
-            @Param("beginTime") String beginTime,
-            @Param("endTime") String endTime,
-            @Param("creatorArray") String[] creatorArray,
-            @Param("organId") Long organId,
-            @Param("organArray") String[] organArray,
-            @Param("categoryList") List<Long> categoryList,
-            @Param("depotList") List<Long> depotList,
-            @Param("forceFlag") Boolean forceFlag);
+        int getListWithBuyOrSaleCount(
+                        @Param("materialParam") String materialParam,
+                        @Param("billType") String billType,
+                        @Param("beginTime") String beginTime,
+                        @Param("endTime") String endTime,
+                        @Param("creatorArray") String[] creatorArray,
+                        @Param("organId") Long organId,
+                        @Param("organArray") String[] organArray,
+                        @Param("categoryList") List<Long> categoryList,
+                        @Param("depotList") List<Long> depotList,
+                        @Param("forceFlag") Boolean forceFlag);
 
-    BigDecimal buyOrSaleNumber(
-            @Param("type") String type,
-            @Param("subType") String subType,
-            @Param("meId") Long meId,
-            @Param("beginTime") String beginTime,
-            @Param("endTime") String endTime,
-            @Param("creatorArray") String[] creatorArray,
-            @Param("organId") Long organId,
-            @Param("organArray") String [] organArray,
-            @Param("depotList") List<Long> depotList,
-            @Param("forceFlag") Boolean forceFlag,
-            @Param("sumType") String sumType);
+        BigDecimal buyOrSaleNumber(
+                        @Param("type") String type,
+                        @Param("subType") String subType,
+                        @Param("meId") Long meId,
+                        @Param("beginTime") String beginTime,
+                        @Param("endTime") String endTime,
+                        @Param("creatorArray") String[] creatorArray,
+                        @Param("organId") Long organId,
+                        @Param("organArray") String[] organArray,
+                        @Param("depotList") List<Long> depotList,
+                        @Param("forceFlag") Boolean forceFlag,
+                        @Param("sumType") String sumType);
 
-    BigDecimal buyOrSalePrice(
-            @Param("type") String type,
-            @Param("subType") String subType,
-            @Param("meId") Long meId,
-            @Param("beginTime") String beginTime,
-            @Param("endTime") String endTime,
-            @Param("creatorArray") String[] creatorArray,
-            @Param("organId") Long organId,
-            @Param("organArray") String [] organArray,
-            @Param("depotList") List<Long> depotList,
-            @Param("forceFlag") Boolean forceFlag,
-            @Param("sumType") String sumType);
+        BigDecimal buyOrSalePrice(
+                        @Param("type") String type,
+                        @Param("subType") String subType,
+                        @Param("meId") Long meId,
+                        @Param("beginTime") String beginTime,
+                        @Param("endTime") String endTime,
+                        @Param("creatorArray") String[] creatorArray,
+                        @Param("organId") Long organId,
+                        @Param("organArray") String[] organArray,
+                        @Param("depotList") List<Long> depotList,
+                        @Param("forceFlag") Boolean forceFlag,
+                        @Param("sumType") String sumType);
 
-    BigDecimal buyOrSalePriceTotal(
-            @Param("type") String type,
-            @Param("subType") String subType,
-            @Param("materialParam") String materialParam,
-            @Param("beginTime") String beginTime,
-            @Param("endTime") String endTime,
-            @Param("creatorArray") String[] creatorArray,
-            @Param("organId") Long organId,
-            @Param("organArray") String [] organArray,
-            @Param("categoryList") List<Long> categoryList,
-            @Param("depotList") List<Long> depotList,
-            @Param("forceFlag") Boolean forceFlag);
+        BigDecimal buyOrSalePriceTotal(
+                        @Param("type") String type,
+                        @Param("subType") String subType,
+                        @Param("materialParam") String materialParam,
+                        @Param("beginTime") String beginTime,
+                        @Param("endTime") String endTime,
+                        @Param("creatorArray") String[] creatorArray,
+                        @Param("organId") Long organId,
+                        @Param("organArray") String[] organArray,
+                        @Param("categoryList") List<Long> categoryList,
+                        @Param("depotList") List<Long> depotList,
+                        @Param("forceFlag") Boolean forceFlag);
 
-    List<InOutPriceVo> inOrOutPriceList(
-            @Param("beginTime") String beginTime,
-            @Param("endTime") String endTime,
-            @Param("creatorArray") String[] creatorArray,
-            @Param("forceFlag") Boolean forceFlag);
+        List<InOutPriceVo> inOrOutPriceList(
+                        @Param("beginTime") String beginTime,
+                        @Param("endTime") String endTime,
+                        @Param("creatorArray") String[] creatorArray,
+                        @Param("forceFlag") Boolean forceFlag);
 
-    BigDecimal getSkuStockCheckSumByDepotList(
-            @Param("depotList") List<Long> depotList,
-            @Param("meId") Long meId,
-            @Param("forceFlag") Boolean forceFlag,
-            @Param("beginTime") String beginTime,
-            @Param("endTime") String endTime);
+        BigDecimal getSkuStockCheckSumByDepotList(
+                        @Param("depotList") List<Long> depotList,
+                        @Param("meId") Long meId,
+                        @Param("forceFlag") Boolean forceFlag,
+                        @Param("beginTime") String beginTime,
+                        @Param("endTime") String endTime);
 
-    BigDecimal getStockCheckSumByDepotList(
-            @Param("depotList") List<Long> depotList,
-            @Param("mId") Long mId,
-            @Param("forceFlag") Boolean forceFlag,
-            @Param("beginTime") String beginTime,
-            @Param("endTime") String endTime);
+        BigDecimal getStockCheckSumByDepotList(
+                        @Param("depotList") List<Long> depotList,
+                        @Param("mId") Long mId,
+                        @Param("forceFlag") Boolean forceFlag,
+                        @Param("beginTime") String beginTime,
+                        @Param("endTime") String endTime);
 
-    DepotItemVo4Stock getSkuStockByParamWithDepotList(
-            @Param("depotList") List<Long> depotList,
-            @Param("meId") Long meId,
-            @Param("forceFlag") Boolean forceFlag,
-            @Param("inOutManageFlag") Boolean inOutManageFlag,
-            @Param("beginTime") String beginTime,
-            @Param("endTime") String endTime);
+        DepotItemVo4Stock getSkuStockByParamWithDepotList(
+                        @Param("depotList") List<Long> depotList,
+                        @Param("meId") Long meId,
+                        @Param("forceFlag") Boolean forceFlag,
+                        @Param("inOutManageFlag") Boolean inOutManageFlag,
+                        @Param("beginTime") String beginTime,
+                        @Param("endTime") String endTime);
 
-    DepotItemVo4Stock getStockByParamWithDepotList(
-            @Param("depotList") List<Long> depotList,
-            @Param("mId") Long mId,
-            @Param("forceFlag") Boolean forceFlag,
-            @Param("inOutManageFlag") Boolean inOutManageFlag,
-            @Param("beginTime") String beginTime,
-            @Param("endTime") String endTime);
+        DepotItemVo4Stock getStockByParamWithDepotList(
+                        @Param("depotList") List<Long> depotList,
+                        @Param("mId") Long mId,
+                        @Param("forceFlag") Boolean forceFlag,
+                        @Param("inOutManageFlag") Boolean inOutManageFlag,
+                        @Param("beginTime") String beginTime,
+                        @Param("endTime") String endTime);
 
-    /**
-     * 通过单据主表id查询所有单据子表数据
-     * @param depotheadId
-     * @param enableSerialNumber
-     * @return
-     */
-     List<DepotItem> findDepotItemListBydepotheadId(@Param("depotheadId")Long depotheadId,
-                                                    @Param("enableSerialNumber")String enableSerialNumber);
-     /**
-      * 根据单据主表id删除单据子表数据
-      * */
-     int batchDeleteDepotItemByDepotHeadIds(@Param("depotheadIds")Long []depotHeadIds);
+        /**
+         * 通过单据主表id查询所有单据子表数据
+         * 
+         * @param depotheadId
+         * @param enableSerialNumber
+         * @return
+         */
+        List<DepotItem> findDepotItemListBydepotheadId(@Param("depotheadId") Long depotheadId,
+                        @Param("enableSerialNumber") String enableSerialNumber);
 
-    int batchDeleteDepotItemByIds(@Param("updateTime") Date updateTime, @Param("updater") Long updater, @Param("ids") String ids[]);
+        /**
+         * 根据单据主表id删除单据子表数据
+         */
+        int batchDeleteDepotItemByDepotHeadIds(@Param("depotheadIds") Long[] depotHeadIds);
 
-    List<DepotItem> getDepotItemListListByDepotIds(@Param("depotIds") String[] depotIds);
+        int batchDeleteDepotItemByIds(@Param("updateTime") Date updateTime, @Param("updater") Long updater,
+                        @Param("ids") String ids[]);
 
-    List<DepotItem> getDepotItemListListByMaterialIds(@Param("materialIds") String[] materialIds);
+        List<DepotItem> getDepotItemListListByDepotIds(@Param("depotIds") String[] depotIds);
 
-    List<DepotItemStockWarningCount> findStockWarningCount(
-            @Param("offset") Integer offset,
-            @Param("rows") Integer rows,
-            @Param("materialParam") String materialParam,
-            @Param("depotList") List<Long> depotList,
-            @Param("categoryList") List<Long> categoryList);
+        List<DepotItem> getDepotItemListListByMaterialIds(@Param("materialIds") String[] materialIds);
 
-    int findStockWarningCountTotal(
-            @Param("materialParam") String materialParam,
-            @Param("depotList") List<Long> depotList,
-            @Param("categoryList") List<Long> categoryList);
+        List<DepotItemStockWarningCount> findStockWarningCount(
+                        @Param("offset") Integer offset,
+                        @Param("rows") Integer rows,
+                        @Param("materialParam") String materialParam,
+                        @Param("depotList") List<Long> depotList,
+                        @Param("categoryList") List<Long> categoryList);
 
-    BigDecimal getFinishNumber(
-            @Param("meId") Long meId,
-            @Param("linkId") Long linkId,
-            @Param("linkStr") String linkStr,
-            @Param("noType") String noType,
-            @Param("goToType") String goToType);
+        int findStockWarningCountTotal(
+                        @Param("materialParam") String materialParam,
+                        @Param("depotList") List<Long> depotList,
+                        @Param("categoryList") List<Long> categoryList);
 
-    BigDecimal getRealFinishNumber(
-            @Param("meId") Long meId,
-            @Param("linkId") Long linkId,
-            @Param("linkStr") String linkStr,
-            @Param("linkType") String linkType,
-            @Param("currentHeaderId") Long currentHeaderId,
-            @Param("goToType") String goToType);
+        BigDecimal getFinishNumber(
+                        @Param("meId") Long meId,
+                        @Param("linkId") Long linkId,
+                        @Param("linkStr") String linkStr,
+                        @Param("noType") String noType,
+                        @Param("goToType") String goToType);
 
-    List<DepotItemVoBatchNumberList> getBatchNumberList(
-            @Param("number") String number,
-            @Param("name") String name,
-            @Param("depotId") Long depotId,
-            @Param("barCode") String barCode,
-            @Param("batchNumber") String batchNumber,
-            @Param("forceFlag") Boolean forceFlag,
-            @Param("inOutManageFlag") Boolean inOutManageFlag);
+        BigDecimal getRealFinishNumber(
+                        @Param("meId") Long meId,
+                        @Param("linkId") Long linkId,
+                        @Param("linkStr") String linkStr,
+                        @Param("linkType") String linkType,
+                        @Param("currentHeaderId") Long currentHeaderId,
+                        @Param("goToType") String goToType);
 
-    Long getCountByMaterialAndDepot(
-            @Param("mId") Long mId,
-            @Param("depotId") Long depotId);
+        List<DepotItemVoBatchNumberList> getBatchNumberList(
+                        @Param("number") String number,
+                        @Param("name") String name,
+                        @Param("depotId") Long depotId,
+                        @Param("barCode") String barCode,
+                        @Param("batchNumber") String batchNumber,
+                        @Param("forceFlag") Boolean forceFlag,
+                        @Param("inOutManageFlag") Boolean inOutManageFlag);
 
-    List<DepotItemVo4MaterialAndSum> getLinkBillDetailMaterialSum(
-            @Param("linkStr") String linkStr);
+        Long getCountByMaterialAndDepot(
+                        @Param("mId") Long mId,
+                        @Param("depotId") Long depotId);
 
-    List<DepotItemVo4MaterialAndSum> getBatchBillDetailMaterialSum(
-            @Param("linkStr") String linkStr,
-            @Param("linkType") String linkType,
-            @Param("type") String type);
+        List<DepotItemVo4MaterialAndSum> getLinkBillDetailMaterialSum(
+                        @Param("linkStr") String linkStr);
 
-    Long getCountByMaterialAndBatchNumber(
-            @Param("meId") Long meId,
-            @Param("batchNumber") String batchNumber);
+        List<DepotItemVo4MaterialAndSum> getBatchBillDetailMaterialSum(
+                        @Param("linkStr") String linkStr,
+                        @Param("linkType") String linkType,
+                        @Param("type") String type);
 
-    List<DepotItem> getDepotItemByBatchNumber(
-            @Param("materialExtendId") Long materialExtendId,
-            @Param("batchNumber") String batchNumber);
+        Long getCountByMaterialAndBatchNumber(
+                        @Param("meId") Long meId,
+                        @Param("batchNumber") String batchNumber);
 
-    List<MaterialVo4Unit> getBillItemByParam(
-            @Param("barCodes") String barCodes);
+        List<DepotItem> getDepotItemByBatchNumber(
+                        @Param("materialExtendId") Long materialExtendId,
+                        @Param("batchNumber") String batchNumber);
 
-    BigDecimal getCurrentStockByParam(
-            @Param("depotId") Long depotId,
-            @Param("mId") Long mId);
+        List<MaterialVo4Unit> getBillItemByParam(
+                        @Param("barCodes") String barCodes);
 
-    BigDecimal getLastUnitPriceByParam(
-            @Param("organId") Long organId,
-            @Param("meId") Long meId,
-            @Param("type") String type,
-            @Param("subType") String subType);
+        BigDecimal getCurrentStockByParam(
+                        @Param("depotId") Long depotId,
+                        @Param("mId") Long mId);
 
-    List<MaterialStockPeriodVo> getMaterialPeriodStock(
-            @Param("materialParam") String materialParam,
-            @Param("offset") Integer offset,
-            @Param("rows") Integer rows);
+        BigDecimal getLastUnitPriceByParam(
+                        @Param("organId") Long organId,
+                        @Param("meId") Long meId,
+                        @Param("type") String type,
+                        @Param("subType") String subType);
 
-    int getMaterialPeriodStockCount(
-            @Param("materialParam") String materialParam);
+        List<MaterialStockPeriodVo> getMaterialPeriodStock(
+                        @Param("materialParam") String materialParam,
+                        @Param("offset") Integer offset,
+                        @Param("rows") Integer rows);
 
-    List<java.util.Map<String, Object>> getDailyOutStock(
-            @Param("materialIds") String materialIds,
-            @Param("beginTime") String beginTime,
-            @Param("endTime") String endTime);
+        int getMaterialPeriodStockCount(
+                        @Param("materialParam") String materialParam);
 
-    // ========== 性能优化相关方法 ==========
-    
-    List<MaterialStockPeriodVo> getMaterialPeriodStockOptimized(
-            @Param("materialParam") String materialParam,
-            @Param("offset") Integer offset,
-            @Param("rows") Integer rows,
-            @Param("tenantId") Long tenantId);
+        List<java.util.Map<String, Object>> getDailyOutStock(
+                        @Param("materialIds") String materialIds,
+                        @Param("beginTime") String beginTime,
+                        @Param("endTime") String endTime);
 
-    int getMaterialPeriodStockCountOptimized(
-            @Param("materialParam") String materialParam,
-            @Param("tenantId") Long tenantId);
+        // ========== 性能优化相关方法 ==========
 
-    List<java.util.Map<String, Object>> getDailyOutStockFromSummary(
-            @Param("materialIds") List<Long> materialIds,
-            @Param("beginTime") String beginTime,
-            @Param("endTime") String endTime,
-            @Param("tenantId") Long tenantId);
+        List<MaterialStockPeriodVo> getMaterialPeriodStockOptimized(
+                        @Param("materialParam") String materialParam,
+                        @Param("offset") Integer offset,
+                        @Param("rows") Integer rows,
+                        @Param("tenantId") Long tenantId);
 
-    /**
-     * 获取商品过去6个月的销量
-     */
-    BigDecimal getSixMonthsSalesByMaterialId(
-            @Param("materialId") Long materialId,
-            @Param("tenantId") Long tenantId);
+        int getMaterialPeriodStockCountOptimized(
+                        @Param("materialParam") String materialParam,
+                        @Param("tenantId") Long tenantId);
 
-    void refreshMaterialPeriodSummary(@Param("tenantId") Long tenantId);
+        List<java.util.Map<String, Object>> getDailyOutStockFromSummary(
+                        @Param("materialIds") List<Long> materialIds,
+                        @Param("beginTime") String beginTime,
+                        @Param("endTime") String endTime,
+                        @Param("tenantId") Long tenantId);
 
-    void updateDailyOutSummary(
-            @Param("materialId") Long materialId,
-            @Param("targetDate") String targetDate,
-            @Param("tenantId") Long tenantId);
+        /**
+         * 获取商品过去6个月的销量
+         */
+        BigDecimal getSixMonthsSalesByMaterialId(
+                        @Param("materialId") Long materialId,
+                        @Param("tenantId") Long tenantId);
 
-    void refreshDailySummaryForRecentDays(
-            @Param("days") Integer days,
-            @Param("tenantId") Long tenantId);
+        void refreshMaterialPeriodSummary(@Param("tenantId") Long tenantId);
 
-    // ========== 数据修复相关方法 ==========
+        void updateDailyOutSummary(
+                        @Param("materialId") Long materialId,
+                        @Param("targetDate") String targetDate,
+                        @Param("tenantId") Long tenantId);
 
-    /**
-     * 统计包含小数的库存记录数量
-     */
-    int countDecimalStockRecords();
+        void refreshDailySummaryForRecentDays(
+                        @Param("days") Integer days,
+                        @Param("tenantId") Long tenantId);
 
-    /**
-     * 修复库存小数数据，将其四舍五入为整数
-     */
-    int fixDecimalStockData();
+        // ========== 数据修复相关方法 ==========
 
-    /**
-     * 使用修复后的逻辑刷新商品期间汇总
-     */
-    void refreshMaterialPeriodSummaryCorrect(@Param("tenantId") Long tenantId);
+        /**
+         * 统计包含小数的库存记录数量
+         */
+        int countDecimalStockRecords();
 
-    /**
-     * 验证期间库存计算结果
-     */
-    List<Map<String, Object>> validatePeriodStockBalance();
+        /**
+         * 修复库存小数数据，将其四舍五入为整数
+         */
+        int fixDecimalStockData();
+
+        /**
+         * 使用修复后的逻辑刷新商品期间汇总
+         */
+        void refreshMaterialPeriodSummaryCorrect(@Param("tenantId") Long tenantId);
+
+        /**
+         * 验证期间库存计算结果
+         */
+        List<Map<String, Object>> validatePeriodStockBalance();
+
+        // ========== 业务层汇总表更新方法（替换存储过程） ==========
+
+        /**
+         * 插入或更新每日出库汇总
+         */
+        void insertOrUpdateDailyOutSummary(
+                        @Param("materialId") Long materialId,
+                        @Param("targetDate") String targetDate,
+                        @Param("tenantId") Long tenantId);
+
+        /**
+         * 简化版每日出库汇总更新（备用方案）
+         */
+        void insertOrUpdateDailyOutSummarySimple(
+                        @Param("materialId") Long materialId,
+                        @Param("targetDate") String targetDate,
+                        @Param("tenantId") Long tenantId);
+
+        /**
+         * 删除指定条件的每日出库汇总记录
+         */
+        void deleteDailyOutSummary(
+                        @Param("materialId") Long materialId,
+                        @Param("targetDate") String targetDate,
+                        @Param("tenantId") Long tenantId);
+
+        /**
+         * 插入或更新商品期间汇总
+         */
+        void insertOrUpdateMaterialPeriodSummary(
+                        @Param("materialId") Long materialId,
+                        @Param("tenantId") Long tenantId);
+
+        /**
+         * 删除指定条件的商品期间汇总记录
+         */
+        void deleteMaterialPeriodSummary(
+                        @Param("materialId") Long materialId,
+                        @Param("tenantId") Long tenantId);
+
+        /**
+         * 批量初始化汇总表数据
+         */
+        void batchInitializeSummaryData(@Param("tenantId") Long tenantId);
+
+        /**
+         * 简化版批量初始化汇总表数据（备用方案）
+         */
+        void batchInitializeSummaryDataSimple(@Param("tenantId") Long tenantId);
 }

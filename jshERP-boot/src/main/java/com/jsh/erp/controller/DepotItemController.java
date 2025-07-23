@@ -9,6 +9,7 @@ import com.jsh.erp.datasource.vo.DepotItemStockWarningCount;
 import com.jsh.erp.datasource.vo.DepotItemVoBatchNumberList;
 import com.jsh.erp.datasource.vo.InOutPriceVo;
 import com.jsh.erp.datasource.vo.MaterialStockPeriodVo;
+import com.jsh.erp.datasource.vo.RefreshTaskStatus;
 import com.jsh.erp.datasource.entities.User;
 import com.jsh.erp.exception.BusinessRunTimeException;
 import com.jsh.erp.service.DepotService;
@@ -17,6 +18,7 @@ import com.jsh.erp.service.DepotItemService;
 import com.jsh.erp.service.DepotItemOptimizedService;
 import com.jsh.erp.service.MaterialService;
 import com.jsh.erp.service.RoleService;
+import com.jsh.erp.service.SummaryRefreshTaskService;
 import com.jsh.erp.service.SystemConfigService;
 import com.jsh.erp.service.UnitService;
 import com.jsh.erp.service.UserService;
@@ -75,9 +77,12 @@ public class DepotItemController {
 
     @Resource
     private SystemConfigService systemConfigService;
-    
+
     @Resource
     private DepotItemOptimizedService depotItemOptimizedService;
+
+    @Resource
+    private SummaryRefreshTaskService summaryRefreshTaskService;
 
     @Resource
     private com.jsh.erp.datasource.mappers.DepotItemMapperEx depotItemMapperEx;
@@ -1018,6 +1023,7 @@ public class DepotItemController {
 
     /**
      * 获取商品期间库存统计
+     * 
      * @param materialParam
      * @param request
      * @return
@@ -1040,11 +1046,11 @@ public class DepotItemController {
             if (pageSize == null) {
                 pageSize = 10;
             }
-            
-            List<MaterialStockPeriodVo> list = depotItemService.getMaterialPeriodStock(materialParam, 
+
+            List<MaterialStockPeriodVo> list = depotItemService.getMaterialPeriodStock(materialParam,
                     (currentPage - 1) * pageSize, pageSize);
             int total = depotItemService.getMaterialPeriodStockCount(materialParam);
-            
+
             objectMap.put("rows", list);
             objectMap.put("total", total);
             res.code = 200;
@@ -1059,6 +1065,7 @@ public class DepotItemController {
 
     /**
      * 获取商品每日出库数据
+     * 
      * @param materialIds
      * @param beginTime
      * @param endTime
@@ -1081,7 +1088,7 @@ public class DepotItemController {
             if (StringUtil.isNotEmpty(endTime)) {
                 endTime = endTime + BusinessConstants.DAY_LAST_TIME;
             }
-            
+
             List<Map<String, Object>> list = depotItemService.getDailyOutStock(materialIds, beginTime, endTime);
             res.code = 200;
             res.data = list;
@@ -1095,6 +1102,7 @@ public class DepotItemController {
 
     /**
      * 获取商品库存统计与每日出库数据合并结果（性能优化版本）
+     * 
      * @param currentPage
      * @param pageSize
      * @param materialParam
@@ -1123,29 +1131,30 @@ public class DepotItemController {
             if (pageSize == null) {
                 pageSize = 10;
             }
-            
+
             // 获取商品库存统计数据
-            List<MaterialStockPeriodVo> stockList = depotItemService.getMaterialPeriodStock(materialParam, 
+            List<MaterialStockPeriodVo> stockList = depotItemService.getMaterialPeriodStock(materialParam,
                     (currentPage - 1) * pageSize, pageSize);
             int total = depotItemService.getMaterialPeriodStockCount(materialParam);
-            
+
             // 如果有日期范围，获取每日出库数据
             Map<String, Map<String, Object>> dailyOutMap = new HashMap<>();
             if (StringUtil.isNotEmpty(beginTime) && StringUtil.isNotEmpty(endTime)) {
                 // 提取商品ID列表
                 StringBuilder materialIds = new StringBuilder();
                 for (int i = 0; i < stockList.size(); i++) {
-                    if (i > 0) materialIds.append(",");
+                    if (i > 0)
+                        materialIds.append(",");
                     materialIds.append(stockList.get(i).getMaterialId());
                 }
-                
+
                 if (materialIds.length() > 0) {
                     String formattedBeginTime = beginTime + BusinessConstants.DAY_FIRST_TIME;
                     String formattedEndTime = endTime + BusinessConstants.DAY_LAST_TIME;
-                    
+
                     List<Map<String, Object>> dailyOutList = depotItemService.getDailyOutStock(
                             materialIds.toString(), formattedBeginTime, formattedEndTime);
-                    
+
                     // 将每日出库数据按商品ID和日期组织
                     for (Map<String, Object> dailyOut : dailyOutList) {
                         String barCode = (String) dailyOut.get("barCode");
@@ -1157,7 +1166,7 @@ public class DepotItemController {
                     }
                 }
             }
-            
+
             objectMap.put("rows", stockList);
             objectMap.put("total", total);
             objectMap.put("dailyOutData", dailyOutMap);
@@ -1176,6 +1185,7 @@ public class DepotItemController {
     /**
      * 获取商品库存统计与每日出库数据（高性能优化版本）
      * 适用于查询多于修改的场景，使用预聚合表和多级缓存
+     * 
      * @param currentPage
      * @param pageSize
      * @param materialParam
@@ -1196,37 +1206,24 @@ public class DepotItemController {
             HttpServletRequest request) throws Exception {
         BaseResponseInfo res = new BaseResponseInfo();
         try {
-            long startTime = System.currentTimeMillis();
-            
             Map<String, Object> resultMap = depotItemOptimizedService.getOptimizedMaterialStockWithDailyOut(
                     currentPage, pageSize, materialParam, beginTime, endTime, request);
-            
-            long endTime_ms = System.currentTimeMillis();
-            long duration = endTime_ms - startTime;
-            
-            // 添加性能指标到响应中
-            resultMap.put("performanceStats", createPerformanceStats(duration, resultMap));
-            
+
             res.code = 200;
             res.data = resultMap;
-            
-            logger.info("高性能API调用完成，耗时: {}ms, 商品数: {}",
-                       duration,
-                       resultMap.get("rows") != null ? ((List<?>) resultMap.get("rows")).size() : 0);
 
         } catch (Exception e) {
-            logger.error("高性能API调用失败", e);
+            logger.error("API调用失败", e);
             res.code = 500;
             res.data = "获取数据失败: " + e.getMessage();
         }
         return res;
     }
 
-
-
     /**
      * 测试图表数据接口
      * 用于验证图表功能是否正常工作
+     * 
      * @param materialId
      * @param beginTime
      * @param endTime
@@ -1278,113 +1275,6 @@ public class DepotItemController {
             res.data = "测试接口调用失败: " + e.getMessage();
         }
         return res;
-    }
-
-    /**
-     * 刷新汇总数据接口
-     */
-    @PostMapping(value = "/refreshSummaryData")
-    @ApiOperation(value = "刷新汇总数据")
-    public BaseResponseInfo refreshSummaryData(
-            @RequestParam(value = "type", required = false, defaultValue = "period") String type,
-            @RequestParam(value = "days", required = false, defaultValue = "7") Integer days,
-            HttpServletRequest request) throws Exception {
-        BaseResponseInfo res = new BaseResponseInfo();
-        try {
-            long startTime = System.currentTimeMillis();
-            
-            if ("period".equals(type)) {
-                // 刷新期间汇总数据
-                User currentUser = userService.getCurrentUser();
-                Long tenantId = currentUser != null ? currentUser.getTenantId() : null;
-                depotItemOptimizedService.refreshMaterialPeriodSummary(tenantId);
-            } else if ("daily".equals(type)) {
-                // 刷新最近N天的每日汇总数据
-                depotItemOptimizedService.refreshDailySummaryForRecentDays(days);
-            }
-            
-            long endTime = System.currentTimeMillis();
-            
-            res.code = 200;
-            Map<String, Object> responseData = new HashMap<>();
-            responseData.put("message", "汇总数据刷新完成");
-            responseData.put("type", type);
-            responseData.put("duration", endTime - startTime + "ms");
-            res.data = responseData;
-            
-        } catch (Exception e) {
-            logger.error("刷新汇总数据失败", e);
-            res.code = 500;
-            res.data = "刷新失败: " + e.getMessage();
-        }
-        return res;
-    }
-
-    /**
-     * 获取缓存统计信息
-     */
-    @GetMapping(value = "/getCacheStats")
-    @ApiOperation(value = "获取缓存统计信息")
-    public BaseResponseInfo getCacheStats(HttpServletRequest request) throws Exception {
-        BaseResponseInfo res = new BaseResponseInfo();
-        try {
-            Map<String, Object> stats = depotItemOptimizedService.getCacheStats();
-            res.code = 200;
-            res.data = stats;
-        } catch (Exception e) {
-            logger.error("获取缓存统计失败", e);
-            res.code = 500;
-            res.data = "获取统计失败: " + e.getMessage();
-        }
-        return res;
-    }
-
-    /**
-     * 清除所有缓存
-     */
-    @PostMapping(value = "/clearCache")
-    @ApiOperation(value = "清除所有缓存")
-    public BaseResponseInfo clearCache(HttpServletRequest request) throws Exception {
-        BaseResponseInfo res = new BaseResponseInfo();
-        try {
-            depotItemOptimizedService.clearAllCache();
-            res.code = 200;
-            Map<String, Object> responseData = new HashMap<>();
-            responseData.put("message", "缓存清除完成");
-            res.data = responseData;
-        } catch (Exception e) {
-            logger.error("清除缓存失败", e);
-            res.code = 500;
-            res.data = "清除缓存失败: " + e.getMessage();
-        }
-        return res;
-    }
-
-    /**
-     * 创建性能统计信息
-     */
-    private Map<String, Object> createPerformanceStats(long duration, Map<String, Object> resultMap) {
-        Map<String, Object> stats = new HashMap<>();
-        stats.put("queryDuration", duration + "ms");
-        stats.put("recordCount", resultMap.get("rows") != null ? ((List<?>) resultMap.get("rows")).size() : 0);
-        stats.put("totalCount", resultMap.get("total"));
-        stats.put("cached", resultMap.get("cached"));
-        stats.put("hasDateRange", resultMap.get("beginTime") != null && resultMap.get("endTime") != null);
-        
-        // 性能评级
-        String performance;
-        if (duration < 200) {
-            performance = "优秀";
-        } else if (duration < 500) {
-            performance = "良好";
-        } else if (duration < 1000) {
-            performance = "一般";
-        } else {
-            performance = "需要优化";
-        }
-        stats.put("performanceRating", performance);
-        
-        return stats;
     }
 
     /**
@@ -1526,6 +1416,7 @@ public class DepotItemController {
 
     /**
      * 修复库存小数点问题
+     * 
      * @param request
      * @return
      * @throws Exception
@@ -1552,6 +1443,7 @@ public class DepotItemController {
 
     /**
      * 修复期间库存计算逻辑
+     * 
      * @param request
      * @return
      * @throws Exception
@@ -1578,21 +1470,22 @@ public class DepotItemController {
 
     /**
      * 验证期间库存计算结果
+     * 
      * @param request
      * @return
      * @throws Exception
      */
-    @GetMapping(value = "/validatePeriodCalculation")
+    @GetMapping(value = "/validatePeriodBalance")
     @ApiOperation(value = "验证期间库存计算结果")
-    public BaseResponseInfo validatePeriodCalculation(HttpServletRequest request) throws Exception {
+    public BaseResponseInfo validatePeriodBalance(HttpServletRequest request) throws Exception {
         BaseResponseInfo res = new BaseResponseInfo();
         try {
-            Map<String, Object> validationResult = depotItemOptimizedService.validatePeriodCalculation();
+            List<Map<String, Object>> validationResults = depotItemMapperEx.validatePeriodStockBalance();
 
             res.code = 200;
-            res.data = validationResult;
+            res.data = validationResults;
 
-            logger.info("期间库存计算结果验证完成");
+            logger.info("期间库存验证完成，发现{}个可能的异常记录", validationResults.size());
 
         } catch (Exception e) {
             logger.error("验证期间库存计算结果失败", e);
@@ -1603,119 +1496,69 @@ public class DepotItemController {
     }
 
     /**
-     * 忽略库存风险
-     * @param obj 包含materialId的JSON对象
+     * 刷新商品期间汇总数据（异步，适合定时任务调用）
+     * 注意：这个方法运行时间较长，建议在业务量少的时候执行
+     * 
      * @param request
      * @return
+     * @throws Exception
      */
-    @PostMapping(value = "/ignoreStockRisk")
-    @ApiOperation(value = "忽略库存风险")
-    public BaseResponseInfo ignoreStockRisk(
-            @RequestBody JSONObject obj,
-            HttpServletRequest request) {
+    @PostMapping(value = "/refreshPeriodSummary")
+    @ApiOperation(value = "刷新商品期间汇总数据")
+    public BaseResponseInfo refreshPeriodSummary(HttpServletRequest request) throws Exception {
         BaseResponseInfo res = new BaseResponseInfo();
-        Long materialId = null;
         try {
-            materialId = obj.getLong("materialId");
-            logger.info("接收到忽略库存风险请求，商品ID：{}", materialId);
-
-            if (materialId == null) {
-                res.code = 400;
-                res.data = "商品ID不能为空";
-                logger.warn("忽略库存风险失败：商品ID为空");
-                return res;
-            }
-
-            // 使用专门的方法忽略库存风险
-            logger.info("开始执行忽略库存风险操作，商品ID：{}", materialId);
-            materialService.ignoreStockRisk(materialId);
-            logger.info("忽略库存风险操作执行成功，商品ID：{}", materialId);
+            depotItemOptimizedService.refreshMaterialPeriodSummary(null);
 
             res.code = 200;
-            res.data = "已忽略库存风险";
-            logger.info("商品{}已忽略库存风险", materialId);
+            res.data = "期间汇总数据刷新完成";
+
+            logger.info("期间汇总数据刷新成功");
 
         } catch (Exception e) {
-            logger.error("忽略库存风险失败，materialId: {}", materialId, e);
+            logger.error("刷新期间汇总数据失败", e);
             res.code = 500;
-            res.data = "操作失败: " + e.getMessage();
+            res.data = "刷新失败: " + e.getMessage();
         }
         return res;
     }
 
     /**
-     * 关注库存风险
-     * @param obj 包含materialId的JSON对象
+     * 刷新最近N天的每日出库汇总数据
+     * 
+     * @param days    天数，默认7天
      * @param request
      * @return
+     * @throws Exception
      */
-    @PostMapping(value = "/focusStockRisk")
-    @ApiOperation(value = "关注库存风险")
-    public BaseResponseInfo focusStockRisk(
-            @RequestBody JSONObject obj,
-            HttpServletRequest request) {
+    @PostMapping(value = "/refreshDailySummary")
+    @ApiOperation(value = "刷新最近N天的每日出库汇总数据")
+    public BaseResponseInfo refreshDailySummary(
+            @RequestParam(value = "days", defaultValue = "7") Integer days,
+            HttpServletRequest request) throws Exception {
         BaseResponseInfo res = new BaseResponseInfo();
-        Long materialId = null;
         try {
-            materialId = obj.getLong("materialId");
-            if (materialId == null) {
-                res.code = 400;
-                res.data = "商品ID不能为空";
-                return res;
-            }
-
-            // 使用专门的方法重新关注库存风险
-            materialService.focusStockRisk(materialId);
+            depotItemOptimizedService.refreshDailySummaryForRecentDays(days);
 
             res.code = 200;
-            res.data = "已重新关注库存风险，系统将重新计算库存状态";
-            logger.info("商品{}已重新关注库存风险", materialId);
+            res.data = "最近" + days + "天的每日出库汇总数据刷新完成";
+
+            logger.info("最近{}天的每日出库汇总数据刷新成功", days);
 
         } catch (Exception e) {
-            logger.error("关注库存风险失败，materialId: {}", materialId, e);
+            logger.error("刷新每日出库汇总数据失败", e);
             res.code = 500;
-            res.data = "操作失败: " + e.getMessage();
+            res.data = "刷新失败: " + e.getMessage();
         }
         return res;
     }
 
     /**
-     * 批量计算所有商品的库存告急状态
-     */
-    @PostMapping(value = "/calculateAllStockAlertStatus")
-    public BaseResponseInfo calculateAllStockAlertStatus(HttpServletRequest request) throws Exception {
-        BaseResponseInfo res = new BaseResponseInfo();
-        try {
-            // 获取当前用户的租户ID
-            User currentUser = userService.getCurrentUser();
-            Long tenantId = currentUser.getTenantId();
-
-            logger.info("开始批量计算库存告急状态，操作用户：{}, 租户ID：{}",
-                       currentUser.getUsername(), tenantId);
-
-            // 调用批量计算服务
-            Map<String, Object> result = depotItemOptimizedService.calculateAllStockAlertStatus(tenantId);
-
-            if ((Boolean) result.get("success")) {
-                res.code = 200;
-                res.data = result.get("message");
-                logger.info("批量计算库存告急状态成功：{}", result.get("message"));
-            } else {
-                res.code = 500;
-                res.data = result.get("message");
-                logger.error("批量计算库存告急状态失败：{}", result.get("message"));
-            }
-
-        } catch (Exception e) {
-            logger.error("批量计算库存告急状态失败", e);
-            res.code = 500;
-            res.data = "计算失败：" + e.getMessage();
-        }
-        return res;
-    }
-
-    /**
-     * 清除库存数据缓存
+     * 清除库存相关缓存
+     * 
+     * @param request
+     * @return
+     * @throws Exception
      */
     @PostMapping(value = "/clearStockCache")
     public BaseResponseInfo clearStockCache(HttpServletRequest request) throws Exception {
@@ -1735,4 +1578,337 @@ public class DepotItemController {
         }
         return res;
     }
+
+    // ========== 业务层汇总表管理接口 ==========
+
+    /**
+     * 初始化汇总表数据（解决汇总表为空的问题）
+     * 
+     * @param request
+     * @return
+     * @throws Exception
+     */
+    @PostMapping(value = "/initializeSummaryData")
+    @ApiOperation(value = "初始化汇总表数据")
+    public BaseResponseInfo initializeSummaryData(HttpServletRequest request) throws Exception {
+        BaseResponseInfo res = new BaseResponseInfo();
+        try {
+            // 获取当前用户的租户ID
+            User currentUser = userService.getCurrentUser();
+            Long tenantId = currentUser != null ? currentUser.getTenantId() : null;
+
+            // 调用业务层初始化方法
+            depotItemService.initializeSummaryData(tenantId);
+
+            res.code = 200;
+            res.data = "汇总表数据初始化完成！这将为首页表格提供数据支持。";
+
+            logger.info("汇总表数据初始化成功，tenantId={}", tenantId);
+
+        } catch (Exception e) {
+            logger.error("初始化汇总表数据失败", e);
+            res.code = 500;
+            res.data = "初始化失败: " + e.getMessage();
+        }
+        return res;
+    }
+
+    /**
+     * 检查强制审核配置状态
+     * 
+     * @param request
+     * @return
+     * @throws Exception
+     */
+    @GetMapping(value = "/checkForceApprovalConfig")
+    @ApiOperation(value = "检查强制审核配置状态")
+    public BaseResponseInfo checkForceApprovalConfig(HttpServletRequest request) throws Exception {
+        BaseResponseInfo res = new BaseResponseInfo();
+        Map<String, Object> result = new HashMap<>();
+
+        try {
+            boolean isEnabled = depotItemService.ensureForceApprovalEnabled();
+            boolean currentFlag = systemConfigService.getForceApprovalFlag();
+
+            result.put("forceApprovalEnabled", currentFlag);
+            result.put("statusMessage", currentFlag ? "强制审核已开启，汇总表将在审核时实时更新" : "强制审核未开启，汇总表不会在审核时更新");
+            result.put("recommendation", currentFlag ? "配置正常" : "建议在系统配置中开启强制审核，确保数据实时性");
+
+            res.code = 200;
+            res.data = result;
+
+            logger.info("强制审核配置检查完成，当前状态: {}", currentFlag);
+
+        } catch (Exception e) {
+            logger.error("检查强制审核配置失败", e);
+            res.code = 500;
+            res.data = "检查失败: " + e.getMessage();
+        }
+        return res;
+    }
+
+    /**
+     * 获取汇总表状态信息
+     * 
+     * @param request
+     * @return
+     * @throws Exception
+     */
+    @GetMapping(value = "/getSummaryTableStatus")
+    @ApiOperation(value = "获取汇总表状态信息")
+    public BaseResponseInfo getSummaryTableStatus(HttpServletRequest request) throws Exception {
+        BaseResponseInfo res = new BaseResponseInfo();
+        Map<String, Object> result = new HashMap<>();
+
+        try {
+            // 获取当前用户的租户ID
+            User currentUser = userService.getCurrentUser();
+            Long tenantId = currentUser != null ? currentUser.getTenantId() : null;
+
+            // 统计商品期间汇总表数据量
+            int periodSummaryCount = depotItemService.getMaterialPeriodStockCount(null);
+
+            // 检查强制审核配置
+            boolean forceApprovalEnabled = systemConfigService.getForceApprovalFlag();
+
+            result.put("tenantId", tenantId);
+            result.put("periodSummaryCount", periodSummaryCount);
+            result.put("forceApprovalEnabled", forceApprovalEnabled);
+            result.put("summaryTableEmpty", periodSummaryCount == 0);
+            result.put("statusMessage",
+                    periodSummaryCount == 0 ? "汇总表为空，建议执行初始化操作" : "汇总表包含 " + periodSummaryCount + " 条记录");
+
+            res.code = 200;
+            res.data = result;
+
+            logger.info("汇总表状态检查完成: periodSummaryCount={}, forceApprovalEnabled={}",
+                    periodSummaryCount, forceApprovalEnabled);
+
+        } catch (Exception e) {
+            logger.error("获取汇总表状态失败", e);
+            res.code = 500;
+            res.data = "获取状态失败: " + e.getMessage();
+        }
+        return res;
+    }
+
+    /**
+     * 测试汇总表更新功能（用于验证修复）
+     * 
+     * @param materialId 商品ID
+     * @param request
+     * @return
+     * @throws Exception
+     */
+    @PostMapping(value = "/testSummaryUpdate")
+    @ApiOperation(value = "测试汇总表更新功能")
+    public BaseResponseInfo testSummaryUpdate(
+            @RequestParam(value = "materialId", required = false) Long materialId,
+            @RequestParam(value = "useSimple", defaultValue = "false") Boolean useSimple,
+            HttpServletRequest request) throws Exception {
+        BaseResponseInfo res = new BaseResponseInfo();
+        Map<String, Object> result = new HashMap<>();
+
+        try {
+            // 获取当前用户的租户ID
+            User currentUser = userService.getCurrentUser();
+            Long tenantId = currentUser != null ? currentUser.getTenantId() : null;
+
+            if (materialId == null) {
+                // 批量初始化测试
+                if (useSimple) {
+                    // 直接使用简化版本
+                    depotItemMapperEx.batchInitializeSummaryDataSimple(tenantId);
+                    result.put("operation", "批量初始化汇总表（简化版本）");
+                    result.put("sqlType", "简化SQL成功");
+                } else {
+                    // 使用带回退的方法
+                    depotItemService.initializeSummaryData(tenantId);
+                    result.put("operation", "批量初始化汇总表（自动回退）");
+                }
+                result.put("tenantId", tenantId);
+            } else {
+                // 单个商品测试
+                java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd");
+                String currentDate = sdf.format(new java.util.Date());
+
+                // 先删除该商品的汇总记录
+                depotItemMapperEx.deleteDailyOutSummary(materialId, currentDate, tenantId);
+
+                // 尝试更新
+                if (useSimple) {
+                    // 直接使用简化版本
+                    depotItemMapperEx.insertOrUpdateDailyOutSummarySimple(materialId, currentDate, tenantId);
+                    result.put("sqlType", "简化SQL成功");
+                } else {
+                    // 使用带回退的方法
+                    try {
+                        depotItemMapperEx.insertOrUpdateDailyOutSummary(materialId, currentDate, tenantId);
+                        result.put("sqlType", "复杂SQL成功");
+                    } catch (Exception e) {
+                        logger.warn("复杂SQL失败，使用简化版本: {}", e.getMessage());
+                        depotItemMapperEx.insertOrUpdateDailyOutSummarySimple(materialId, currentDate, tenantId);
+                        result.put("sqlType", "简化SQL成功（回退）");
+                    }
+                }
+
+                result.put("operation", "单个商品汇总更新");
+                result.put("materialId", materialId);
+                result.put("date", currentDate);
+                result.put("tenantId", tenantId);
+            }
+
+            res.code = 200;
+            res.data = result;
+
+            logger.info("汇总表更新测试成功: {}", result);
+
+        } catch (Exception e) {
+            logger.error("汇总表更新测试失败", e);
+            res.code = 500;
+            res.data = "测试失败: " + e.getMessage();
+        }
+        return res;
+    }
+
+    /**
+     * 启动全量汇总表刷新任务
+     * 
+     * @param request
+     * @return
+     * @throws Exception
+     */
+    @PostMapping(value = "/startFullSummaryRefresh")
+    @ApiOperation(value = "启动全量汇总表刷新任务")
+    public BaseResponseInfo startFullSummaryRefresh(HttpServletRequest request) throws Exception {
+        BaseResponseInfo res = new BaseResponseInfo();
+
+        try {
+            // 获取当前用户的租户ID
+            User currentUser = userService.getCurrentUser();
+            Long tenantId = currentUser != null ? currentUser.getTenantId() : null;
+
+            // 启动刷新任务
+            String taskId = summaryRefreshTaskService.startRefreshTask(tenantId);
+
+            Map<String, Object> result = new HashMap<>();
+            result.put("taskId", taskId);
+            result.put("message", "汇总表刷新任务已启动");
+
+            res.code = 200;
+            res.data = result;
+
+        } catch (Exception e) {
+            logger.error("启动汇总表刷新任务失败", e);
+            res.code = 500;
+            res.data = e.getMessage();
+        }
+
+        return res;
+    }
+
+    /**
+     * 查询汇总表刷新任务进度
+     * 
+     * @param taskId  任务ID
+     * @param request
+     * @return
+     * @throws Exception
+     */
+    @GetMapping(value = "/getSummaryRefreshProgress")
+    @ApiOperation(value = "查询汇总表刷新任务进度")
+    public BaseResponseInfo getSummaryRefreshProgress(
+            @RequestParam("taskId") String taskId,
+            HttpServletRequest request) throws Exception {
+        BaseResponseInfo res = new BaseResponseInfo();
+
+        try {
+            RefreshTaskStatus taskStatus = summaryRefreshTaskService.getTaskStatus(taskId);
+
+            res.code = 200;
+            res.data = taskStatus;
+
+        } catch (Exception e) {
+            logger.error("查询汇总表刷新任务进度失败", e);
+            res.code = 500;
+            res.data = e.getMessage();
+        }
+
+        return res;
+    }
+
+    /**
+     * 测试SQL修复效果
+     * 
+     * @param materialId 商品ID
+     * @param request
+     * @return
+     * @throws Exception
+     */
+    @PostMapping(value = "/testSqlFix")
+    @ApiOperation(value = "测试SQL修复效果")
+    public BaseResponseInfo testSqlFix(
+            @RequestParam(value = "materialId", defaultValue = "4513") Long materialId,
+            HttpServletRequest request) throws Exception {
+        BaseResponseInfo res = new BaseResponseInfo();
+        Map<String, Object> result = new HashMap<>();
+
+        try {
+            // 获取当前用户的租户ID
+            User currentUser = userService.getCurrentUser();
+            Long tenantId = currentUser != null ? currentUser.getTenantId() : null;
+
+            java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd");
+            String currentDate = sdf.format(new java.util.Date());
+
+            // 测试1：删除每日出库汇总
+            try {
+                depotItemMapperEx.deleteDailyOutSummary(materialId, currentDate, tenantId);
+                result.put("step1_delete", "成功");
+            } catch (Exception e) {
+                result.put("step1_delete", "失败: " + e.getMessage());
+            }
+
+            // 测试2：使用新的每日出库汇总SQL
+            try {
+                depotItemMapperEx.insertOrUpdateDailyOutSummary(materialId, currentDate, tenantId);
+                result.put("step2_dailySummary", "成功 - 新SQL有效");
+            } catch (Exception e) {
+                result.put("step2_dailySummary", "失败: " + e.getMessage());
+            }
+
+            // 测试3：删除商品期间汇总
+            try {
+                depotItemMapperEx.deleteMaterialPeriodSummary(materialId, tenantId);
+                result.put("step3_deletePeriod", "成功");
+            } catch (Exception e) {
+                result.put("step3_deletePeriod", "失败: " + e.getMessage());
+            }
+
+            // 测试4：使用新的商品期间汇总SQL
+            try {
+                depotItemMapperEx.insertOrUpdateMaterialPeriodSummary(materialId, tenantId);
+                result.put("step4_periodSummary", "成功 - 新SQL有效");
+            } catch (Exception e) {
+                result.put("step4_periodSummary", "失败: " + e.getMessage());
+            }
+
+            result.put("materialId", materialId);
+            result.put("tenantId", tenantId);
+            result.put("testDate", currentDate);
+            result.put("conclusion", "测试完成");
+
+            res.code = 200;
+            res.data = result;
+
+            logger.info("SQL修复测试完成: {}", result);
+
+        } catch (Exception e) {
+            logger.error("SQL修复测试失败", e);
+            res.code = 500;
+            res.data = "测试失败: " + e.getMessage();
+        }
+        return res;
+    }
+
 }

@@ -7,21 +7,17 @@ import com.jsh.erp.utils.StringUtil;
 import com.jsh.erp.exception.JshException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.redis.core.RedisTemplate;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
 import java.math.BigDecimal;
 import java.util.*;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
- * 商品库存优化服务类
- * 专门处理高性能查询场景（查询多于修改）
+ * 商品库存服务类 - 实时数据版本
+ * 专门处理实时查询场景，无缓存机制
  * 
  * @author jishenghua
  */
@@ -35,82 +31,63 @@ public class DepotItemOptimizedService {
 
     @Resource
     private MaterialService materialService;
-    
+
     @Resource
     private UserService userService;
 
-    @Autowired(required = false)
-    private RedisTemplate<String, Object> redisTemplate;
-
     /**
-     * 高性能获取商品库存统计与每日出库数据
-     * 使用预聚合表和多级缓存
+     * 获取商品库存统计与每日出库数据 - 实时数据版本
+     * 直接查询数据库，无缓存机制
      */
-    @Cacheable(value = "materialStockOptimized", key = "#materialParam + '_' + #beginTime + '_' + #endTime + '_' + #currentPage + '_' + #pageSize", 
-               unless = "#result == null", condition = "#materialParam != null")
     public Map<String, Object> getOptimizedMaterialStockWithDailyOut(
-            Integer currentPage, Integer pageSize, String materialParam, 
+            Integer currentPage, Integer pageSize, String materialParam,
             String beginTime, String endTime, HttpServletRequest request) throws Exception {
-        
+
         Map<String, Object> resultMap = new HashMap<>();
-        
+
         try {
             // 设置默认分页参数
-            if (currentPage == null) currentPage = 1;
-            if (pageSize == null) pageSize = 10;
-            
+            if (currentPage == null)
+                currentPage = 1;
+            if (pageSize == null)
+                pageSize = 10;
+
             // 获取当前用户的租户ID
             User user = userService.getCurrentUser();
             Long tenantId = user != null ? user.getTenantId() : null;
-            
-            // 先尝试从Redis缓存获取
-            String cacheKey = generateCacheKey(materialParam, beginTime, endTime, currentPage, pageSize, tenantId);
-            if (redisTemplate != null) {
-                Object cached = redisTemplate.opsForValue().get(cacheKey);
-                if (cached != null) {
-                    logger.info("从Redis缓存获取数据: {}", cacheKey);
-                    return (Map<String, Object>) cached;
-                }
-            }
-            
+
             // 使用优化的查询方法
             if (StringUtil.isNotEmpty(beginTime) && StringUtil.isNotEmpty(endTime)) {
                 // 有日期范围时，使用汇总表快速查询
-                resultMap = getOptimizedDataWithDateRange(currentPage, pageSize, materialParam, 
-                                                        beginTime, endTime, tenantId);
+                resultMap = getOptimizedDataWithDateRange(currentPage, pageSize, materialParam,
+                        beginTime, endTime, tenantId);
             } else {
                 // 无日期范围时，使用期间汇总表
                 resultMap = getOptimizedDataWithoutDateRange(currentPage, pageSize, materialParam, tenantId);
             }
-            
-            // 缓存结果到Redis（15分钟过期）
-            if (redisTemplate != null && resultMap != null) {
-                redisTemplate.opsForValue().set(cacheKey, resultMap, 15, TimeUnit.MINUTES);
-                logger.info("数据已缓存到Redis: {}", cacheKey);
-            }
-            
+
         } catch (Exception e) {
             logger.error("获取优化库存数据失败", e);
             throw e;
         }
-        
+
         return resultMap;
     }
-    
+
     /**
      * 有日期范围的优化查询
      */
     private Map<String, Object> getOptimizedDataWithDateRange(
             Integer currentPage, Integer pageSize, String materialParam,
             String beginTime, String endTime, Long tenantId) throws Exception {
-        
+
         Map<String, Object> resultMap = new HashMap<>();
-        
+
         // 1. 获取商品基础库存数据（分页）
         List<MaterialStockPeriodVo> stockList = depotItemMapperEx.getMaterialPeriodStockOptimized(
                 materialParam, (currentPage - 1) * pageSize, pageSize, tenantId);
         int total = depotItemMapperEx.getMaterialPeriodStockCountOptimized(materialParam, tenantId);
-        
+
         // 2. 获取每日出库汇总数据
         Map<String, Map<String, BigDecimal>> dailyOutMap = new HashMap<>();
         if (!stockList.isEmpty()) {
@@ -119,17 +96,17 @@ public class DepotItemOptimizedService {
             for (MaterialStockPeriodVo stock : stockList) {
                 materialIds.add(stock.getMaterialId());
             }
-            
+
             // 从汇总表快速获取每日出库数据
             List<Map<String, Object>> dailyOutList = depotItemMapperEx.getDailyOutStockFromSummary(
                     materialIds, beginTime, endTime, tenantId);
-            
+
             // 组织每日出库数据
             for (Map<String, Object> dailyOut : dailyOutList) {
                 String barCode = (String) dailyOut.get("barCode");
                 String outDate = (String) dailyOut.get("outDate");
                 BigDecimal quantity = (BigDecimal) dailyOut.get("totalOutQuantity");
-                
+
                 dailyOutMap.computeIfAbsent(barCode, k -> new HashMap<>()).put(outDate, quantity);
             }
         }
@@ -149,7 +126,7 @@ public class DepotItemOptimizedService {
 
         return resultMap;
     }
-    
+
     /**
      * 无日期范围的优化查询
      */
@@ -182,22 +159,6 @@ public class DepotItemOptimizedService {
         return resultMap;
     }
 
-
-    
-    /**
-     * 生成缓存键
-     */
-    private String generateCacheKey(String materialParam, String beginTime, String endTime, 
-                                  Integer currentPage, Integer pageSize, Long tenantId) {
-        StringBuilder sb = new StringBuilder("material_stock:");
-        sb.append(StringUtil.isEmpty(materialParam) ? "all" : materialParam).append(":");
-        sb.append(StringUtil.isEmpty(beginTime) ? "none" : beginTime).append(":");
-        sb.append(StringUtil.isEmpty(endTime) ? "none" : endTime).append(":");
-        sb.append(currentPage).append(":").append(pageSize).append(":");
-        sb.append(tenantId != null ? tenantId : 0);
-        return sb.toString();
-    }
-    
     /**
      * 刷新商品期间汇总数据
      */
@@ -207,42 +168,42 @@ public class DepotItemOptimizedService {
             logger.info("商品期间汇总数据刷新请求，租户ID：{}", tenantId);
 
             // 清除相关缓存
-            if (redisTemplate != null) {
-                Set<String> keys = redisTemplate.keys("material_stock:*");
-                if (keys != null && !keys.isEmpty()) {
-                    redisTemplate.delete(keys);
-                    logger.info("清除了 {} 个相关缓存", keys.size());
-                }
-            }
+            // if (redisTemplate != null) {
+            // Set<String> keys = redisTemplate.keys("material_stock:*");
+            // if (keys != null && !keys.isEmpty()) {
+            // redisTemplate.delete(keys);
+            // logger.info("清除了 {} 个相关缓存", keys.size());
+            // }
+            // }
 
             logger.info("商品期间汇总数据刷新完成，租户ID：{}", tenantId);
         } catch (Exception e) {
             logger.error("刷新商品期间汇总数据失败", e);
         }
     }
-    
+
     /**
      * 更新单个商品的每日出库汇总
      */
     public void updateDailyOutSummary(Long materialId, String targetDate, Long tenantId) {
         try {
             depotItemMapperEx.updateDailyOutSummary(materialId, targetDate, tenantId);
-            
+
             // 清除相关缓存
-            if (redisTemplate != null) {
-                Set<String> keys = redisTemplate.keys("material_stock:*");
-                if (keys != null && !keys.isEmpty()) {
-                    redisTemplate.delete(keys);
-                    logger.info("清除了 {} 个相关缓存", keys.size());
-                }
-            }
-            
+            // if (redisTemplate != null) {
+            // Set<String> keys = redisTemplate.keys("material_stock:*");
+            // if (keys != null && !keys.isEmpty()) {
+            // redisTemplate.delete(keys);
+            // logger.info("清除了 {} 个相关缓存", keys.size());
+            // }
+            // }
+
             logger.info("每日出库汇总更新完成，商品ID：{}, 日期：{}", materialId, targetDate);
         } catch (Exception e) {
             logger.error("更新每日出库汇总失败", e);
         }
     }
-    
+
     /**
      * 批量更新最近N天的汇总数据
      * 注意：此方法用于定时任务，不依赖当前用户上下文
@@ -257,13 +218,13 @@ public class DepotItemOptimizedService {
             // depotItemMapperEx.refreshDailySummaryForRecentDays(days, tenantId);
 
             // 清除所有相关缓存
-            if (redisTemplate != null) {
-                Set<String> keys = redisTemplate.keys("material_stock:*");
-                if (keys != null && !keys.isEmpty()) {
-                    redisTemplate.delete(keys);
-                    logger.info("批量刷新后清除了 {} 个缓存", keys.size());
-                }
-            }
+            // if (redisTemplate != null) {
+            // Set<String> keys = redisTemplate.keys("material_stock:*");
+            // if (keys != null && !keys.isEmpty()) {
+            // redisTemplate.delete(keys);
+            // logger.info("批量刷新后清除了 {} 个缓存", keys.size());
+            // }
+            // }
 
             logger.info("最近 {} 天的汇总数据刷新已跳过", days);
         } catch (Exception e) {
@@ -289,7 +250,7 @@ public class DepotItemOptimizedService {
                 logger.info("已修复 {} 条库存记录的小数问题", updatedRecords);
 
                 // 3. 清除相关缓存
-                clearAllCache();
+                // clearAllCache();
 
                 logger.info("库存小数点问题修复完成");
             } else {
@@ -318,7 +279,7 @@ public class DepotItemOptimizedService {
             logger.info("期间库存计算逻辑修复请求，租户ID：{}", tenantId);
 
             // 3. 清除所有相关缓存
-            clearAllCache();
+            // clearAllCache();
 
             logger.info("期间库存计算逻辑修复完成，租户ID：{}", tenantId);
 
@@ -353,11 +314,13 @@ public class DepotItemOptimizedService {
             Map<String, Object> summary = new HashMap<>();
             summary.put("totalRecords", totalRecords);
             summary.put("errorRecords", errorRecords);
-            summary.put("successRate", totalRecords > 0 ? (double)(totalRecords - errorRecords) / totalRecords * 100 : 100);
-            summary.put("validationDetails", validationResults.size() > 10 ? validationResults.subList(0, 10) : validationResults);
+            summary.put("successRate",
+                    totalRecords > 0 ? (double) (totalRecords - errorRecords) / totalRecords * 100 : 100);
+            summary.put("validationDetails",
+                    validationResults.size() > 10 ? validationResults.subList(0, 10) : validationResults);
 
             logger.info("验证完成，总记录数：{}，错误记录数：{}，成功率：{}%",
-                       totalRecords, errorRecords, summary.get("successRate"));
+                    totalRecords, errorRecords, summary.get("successRate"));
 
             return summary;
 
@@ -372,60 +335,61 @@ public class DepotItemOptimizedService {
      */
     public Map<String, Object> getCacheStats() {
         Map<String, Object> stats = new HashMap<>();
-        
-        if (redisTemplate != null) {
-            try {
-                Set<String> keys = redisTemplate.keys("material_stock:*");
-                stats.put("cacheCount", keys != null ? keys.size() : 0);
-                stats.put("cacheEnabled", true);
-            } catch (Exception e) {
-                stats.put("cacheEnabled", false);
-                stats.put("error", e.getMessage());
-            }
-        } else {
-            stats.put("cacheEnabled", false);
-            stats.put("message", "Redis未配置");
-        }
-        
+
+        // if (redisTemplate != null) {
+        // try {
+        // Set<String> keys = redisTemplate.keys("material_stock:*");
+        // stats.put("cacheCount", keys != null ? keys.size() : 0);
+        // stats.put("cacheEnabled", true);
+        // } catch (Exception e) {
+        // stats.put("cacheEnabled", false);
+        // stats.put("error", e.getMessage());
+        // }
+        // } else {
+        stats.put("cacheEnabled", false);
+        stats.put("message", "Redis未配置");
+        // }
+
         return stats;
     }
-    
+
     /**
      * 清除所有相关缓存
      */
     public void clearAllCache() {
-        if (redisTemplate != null) {
-            try {
-                // 清除多种模式的缓存键
-                String[] patterns = {"material_stock:*", "*stock*", "depot_item:*"};
-                int totalCleared = 0;
+        // if (redisTemplate != null) {
+        // try {
+        // // 清除多种模式的缓存键
+        // String[] patterns = { "material_stock:*", "*stock*", "depot_item:*" };
+        // int totalCleared = 0;
 
-                for (String pattern : patterns) {
-                    Set<String> keys = redisTemplate.keys(pattern);
-                    if (keys != null && !keys.isEmpty()) {
-                        redisTemplate.delete(keys);
-                        totalCleared += keys.size();
-                        logger.info("清除了{}个匹配'{}'的缓存键", keys.size(), pattern);
-                    }
-                }
+        // for (String pattern : patterns) {
+        // Set<String> keys = redisTemplate.keys(pattern);
+        // if (keys != null && !keys.isEmpty()) {
+        // redisTemplate.delete(keys);
+        // totalCleared += keys.size();
+        // logger.info("清除了{}个匹配'{}'的缓存键", keys.size(), pattern);
+        // }
+        // }
 
-                if (totalCleared > 0) {
-                    logger.info("总共清除了{}个缓存键", totalCleared);
-                } else {
-                    logger.info("没有找到需要清除的缓存键");
-                }
-            } catch (Exception e) {
-                logger.error("清除缓存失败", e);
-                throw new RuntimeException("清除缓存失败: " + e.getMessage());
-            }
-        } else {
-            logger.warn("Redis模板为空，无法清除缓存");
-        }
+        // if (totalCleared > 0) {
+        // logger.info("总共清除了{}个缓存键", totalCleared);
+        // } else {
+        // logger.info("没有找到需要清除的缓存键");
+        // }
+        // } catch (Exception e) {
+        // logger.error("清除缓存失败", e);
+        // throw new RuntimeException("清除缓存失败: " + e.getMessage());
+        // }
+        // } else {
+        logger.warn("Redis模板为空，无法清除缓存");
+        // }
     }
 
     /**
      * 确保每个商品都有默认状态（仅用于空状态的情况）
      * 表格显示直接读取数据库状态，不进行任何计算
+     * 
      * @param stockList 商品库存列表
      */
     private void ensureDefaultStatus(List<MaterialStockPeriodVo> stockList) {
@@ -439,7 +403,7 @@ public class DepotItemOptimizedService {
 
                 // 只有当状态为空时，才设置默认状态，避免前端显示空白
                 if (currentStatus == null || currentStatus.trim().isEmpty()) {
-                    stock.setStockAlertStatus("NO_RISK");  // 设置默认显示状态
+                    stock.setStockAlertStatus("NO_RISK"); // 设置默认显示状态
                     logger.debug("商品{}状态为空，设置默认显示状态：NO_RISK", stock.getMaterialId());
                 }
                 // 其他情况直接使用数据库中的状态，不做任何修改
@@ -453,6 +417,7 @@ public class DepotItemOptimizedService {
      * 批量计算和更新所有商品的库存告急状态（手动触发）
      * 校验逻辑：当前库存 >= 过去六个月总出库量 则无风险，否则库存告急
      * 校验结果直接覆盖原有状态（包括忽略风险状态）
+     * 
      * @param tenantId 租户ID
      * @return 更新结果
      */
@@ -484,10 +449,10 @@ public class DepotItemOptimizedService {
                 // 校验逻辑：当前库存 >= 过去六个月总出库量 则无风险，否则库存告急
                 String newStatus;
                 if (currentStock.compareTo(sixMonthsSales) >= 0) {
-                    newStatus = "NO_RISK";  // 无风险
+                    newStatus = "NO_RISK"; // 无风险
                     noRiskCount++;
                 } else {
-                    newStatus = "STOCK_ALERT";  // 库存告急
+                    newStatus = "STOCK_ALERT"; // 库存告急
                     alertCount++;
                 }
 
@@ -506,10 +471,10 @@ public class DepotItemOptimizedService {
             result.put("noRiskCount", noRiskCount);
             result.put("alertCount", alertCount);
             result.put("message", String.format("成功校验%d个商品：无风险%d个，库存告急%d个",
-                                               updatedCount, noRiskCount, alertCount));
+                    updatedCount, noRiskCount, alertCount));
 
             logger.info("批量计算库存告急状态完成：总数={}, 更新={}, 无风险={}, 告急={}",
-                       totalCount, updatedCount, noRiskCount, alertCount);
+                    totalCount, updatedCount, noRiskCount, alertCount);
 
         } catch (Exception e) {
             logger.error("批量计算库存告急状态失败", e);
@@ -522,8 +487,9 @@ public class DepotItemOptimizedService {
 
     /**
      * 计算过去6个月的销量
+     * 
      * @param materialId 商品ID
-     * @param tenantId 租户ID
+     * @param tenantId   租户ID
      * @return 过去6个月销量
      */
     private BigDecimal calculateSixMonthsSales(Long materialId, Long tenantId) {
@@ -539,8 +505,9 @@ public class DepotItemOptimizedService {
 
     /**
      * 异步更新商品的库存告急状态
-     * @param materialId 商品ID
-     * @param alertStatus 告急状态
+     * 
+     * @param materialId     商品ID
+     * @param alertStatus    告急状态
      * @param sixMonthsSales 六个月销量
      */
     private void updateMaterialStockAlertStatusAsync(Long materialId, String alertStatus, BigDecimal sixMonthsSales) {
@@ -552,7 +519,5 @@ public class DepotItemOptimizedService {
             logger.error("异步更新库存告急状态失败，materialId: {}", materialId, e);
         }
     }
-
-
 
 }
