@@ -386,4 +386,45 @@ public interface DepotItemMapperEx {
          * 简化版批量初始化汇总表数据（备用方案）
          */
         void batchInitializeSummaryDataSimple(@Param("tenantId") Long tenantId);
+
+        /**
+         * 根据时间范围查询商品出库总量
+         */
+        BigDecimal getMaterialOutQuantityByPeriod(
+                        @Param("materialId") Long materialId,
+                        @Param("startDate") String startDate,
+                        @Param("endDate") String endDate,
+                        @Param("tenantId") Long tenantId);
+
+        /**
+         * 根据时间范围查询商品入库总量
+         */
+        BigDecimal getMaterialInQuantityByPeriod(
+                        @Param("materialId") Long materialId,
+                        @Param("startDate") String startDate,
+                        @Param("endDate") String endDate,
+                        @Param("tenantId") Long tenantId);
+
+        /**
+         * 查询商品当前库存总量
+         */
+        BigDecimal getMaterialCurrentStock(
+                        @Param("materialId") Long materialId,
+                        @Param("tenantId") Long tenantId);
+
+        /**
+         * 简化版插入或更新商品期间汇总（只插入计算好的数据）
+         */
+        void insertOrUpdateMaterialPeriodSummarySimple(
+                        @Param("materialId") Long materialId,
+                        @Param("barCode") String barCode,
+                        @Param("materialName") String materialName,
+                        @Param("materialModel") String materialModel,
+                        @Param("materialUnit") String materialUnit,
+                        @Param("currentPeriodStock") BigDecimal currentPeriodStock,
+                        @Param("previousPeriodStock") BigDecimal previousPeriodStock,
+                        @Param("currentPeriodOut") BigDecimal currentPeriodOut,
+                        @Param("previousPeriodOut") BigDecimal previousPeriodOut,
+                        @Param("currentPeriodIn") BigDecimal currentPeriodIn,
+                        @Param("previousPeriodIn") BigDecimal previousPeriodIn);
 }

@@ -1673,17 +1673,90 @@ public class DepotItemService {
      */
     private void updatePeriodSummaryForMaterialBusinessLogic(Long materialId, Long tenantId) {
         try {
-            // 删除指定商品的期间汇总记录
-            if (materialId != null) {
-                depotItemMapperEx.deleteMaterialPeriodSummary(materialId, tenantId);
+            logger.debug("开始计算商品期间汇总，materialId={}, tenantId={}", materialId, tenantId);
+
+            // 1. 获取当前期间和上期的时间范围
+            String[] currentPeriodToNow = com.jsh.erp.utils.PeriodUtil.getCurrentPeriodToNow();
+            String[] previousPeriod = com.jsh.erp.utils.PeriodUtil.getPreviousPeriod();
+
+            String currentStartDate = currentPeriodToNow[0];
+            String currentEndDate = currentPeriodToNow[1];
+            String previousStartDate = previousPeriod[0];
+            String previousEndDate = previousPeriod[1];
+
+            logger.debug("本期时间范围: {} - {}, 上期时间范围: {} - {}",
+                    currentStartDate, currentEndDate, previousStartDate, previousEndDate);
+
+            // 2. 查询商品基本信息
+            Material material = materialService.getMaterial(materialId);
+            String barCode = null;
+            try {
+                // 获取默认的MaterialExtend ID，然后获取MaterialExtend对象
+                Long meId = materialExtendService.selectIdByMaterialIdAndDefaultFlag(materialId, "1");
+                if (meId != null && meId > 0) {
+                    MaterialExtend materialExtend = materialExtendService.getMaterialExtend(meId);
+                    if (materialExtend != null) {
+                        barCode = materialExtend.getBarCode();
+                    }
+                }
+            } catch (Exception e) {
+                logger.debug("获取商品条码失败，materialId={}", materialId);
             }
 
-            // 重新插入或更新期间汇总数据
-            depotItemMapperEx.insertOrUpdateMaterialPeriodSummary(materialId, tenantId);
+            // 3. 获取当前库存（本期结存）
+            BigDecimal currentStock = depotItemMapperEx.getMaterialCurrentStock(materialId, tenantId);
+            if (currentStock == null) {
+                currentStock = BigDecimal.ZERO;
+            }
+
+            // 4. 分别计算本期和上期的出库、入库数据
+            BigDecimal currentPeriodOut = depotItemMapperEx.getMaterialOutQuantityByPeriod(
+                    materialId, currentStartDate, currentEndDate, tenantId);
+            BigDecimal currentPeriodIn = depotItemMapperEx.getMaterialInQuantityByPeriod(
+                    materialId, currentStartDate, currentEndDate, tenantId);
+            BigDecimal previousPeriodOut = depotItemMapperEx.getMaterialOutQuantityByPeriod(
+                    materialId, previousStartDate, previousEndDate, tenantId);
+            BigDecimal previousPeriodIn = depotItemMapperEx.getMaterialInQuantityByPeriod(
+                    materialId, previousStartDate, previousEndDate, tenantId);
+
+            // 确保不为null
+            if (currentPeriodOut == null)
+                currentPeriodOut = BigDecimal.ZERO;
+            if (currentPeriodIn == null)
+                currentPeriodIn = BigDecimal.ZERO;
+            if (previousPeriodOut == null)
+                previousPeriodOut = BigDecimal.ZERO;
+            if (previousPeriodIn == null)
+                previousPeriodIn = BigDecimal.ZERO;
+
+            // 5. 计算上期结存：上期结存 = 当前库存 + 本期出库 - 本期入库
+            BigDecimal previousStock = currentStock.add(currentPeriodOut).subtract(currentPeriodIn);
+
+            logger.debug("商品{}数据计算完成 - 当前库存:{}, 本期出库:{}, 本期入库:{}, 上期出库:{}, 上期入库:{}, 上期结存:{}",
+                    materialId, currentStock, currentPeriodOut, currentPeriodIn,
+                    previousPeriodOut, previousPeriodIn, previousStock);
+
+            // 6. 删除旧记录并插入新数据
+            depotItemMapperEx.deleteMaterialPeriodSummary(materialId, tenantId);
+
+            depotItemMapperEx.insertOrUpdateMaterialPeriodSummarySimple(
+                    materialId,
+                    barCode,
+                    material != null ? material.getName() : null,
+                    material != null ? material.getModel() : null,
+                    material != null ? material.getUnit() : null,
+                    currentStock, // 本期结存
+                    previousStock, // 上期结存
+                    currentPeriodOut, // 本期出库
+                    previousPeriodOut, // 上期出库
+                    currentPeriodIn, // 本期入库
+                    previousPeriodIn // 上期入库
+            );
 
             logger.debug("商品期间汇总更新成功（业务层），materialId={}, tenantId={}", materialId, tenantId);
         } catch (Exception e) {
-            logger.warn("更新商品期间汇总失败（业务层），materialId={}, tenantId={}, error={}", materialId, tenantId, e.getMessage());
+            logger.warn("更新商品期间汇总失败（业务层），materialId={}, tenantId={}, error={}",
+                    materialId, tenantId, e.getMessage(), e);
         }
     }
 

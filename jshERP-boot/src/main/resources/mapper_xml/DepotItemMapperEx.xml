@@ -1662,6 +1662,86 @@
         </if>
     </delete>
 
+    <!-- 根据时间范围查询商品出库总量 -->
+    <select id="getMaterialOutQuantityByPeriod" resultType="java.math.BigDecimal">
+        SELECT IFNULL(SUM(di.basic_number), 0)
+        FROM jsh_depot_item di 
+        INNER JOIN jsh_depot_head dh ON dh.id = di.header_id 
+        WHERE di.material_id = #{materialId} 
+          AND dh.type = '出库' 
+          AND dh.status = '1'
+          AND IFNULL(di.delete_flag, '0') != '1'
+          AND IFNULL(dh.delete_flag, '0') != '1'
+          AND DATE(dh.oper_time) >= #{startDate}
+          AND DATE(dh.oper_time) &lt;= #{endDate}
+          <if test="tenantId != null">
+              AND dh.tenant_id = #{tenantId}
+          </if>
+    </select>
+
+    <!-- 根据时间范围查询商品入库总量 -->
+    <select id="getMaterialInQuantityByPeriod" resultType="java.math.BigDecimal">
+        SELECT IFNULL(SUM(di.basic_number), 0)
+        FROM jsh_depot_item di 
+        INNER JOIN jsh_depot_head dh ON dh.id = di.header_id 
+        WHERE di.material_id = #{materialId} 
+          AND dh.type = '入库' 
+          AND dh.status = '1'
+          AND IFNULL(di.delete_flag, '0') != '1'
+          AND IFNULL(dh.delete_flag, '0') != '1'
+          AND DATE(dh.oper_time) >= #{startDate}
+          AND DATE(dh.oper_time) &lt;= #{endDate}
+          <if test="tenantId != null">
+              AND dh.tenant_id = #{tenantId}
+          </if>
+    </select>
+
+    <!-- 查询商品当前库存总量 -->
+    <select id="getMaterialCurrentStock" resultType="java.math.BigDecimal">
+        SELECT IFNULL(SUM(mcs.current_number), 0)
+        FROM jsh_material_current_stock mcs 
+        WHERE mcs.material_id = #{materialId} 
+          AND mcs.delete_flag = '0'
+          <if test="tenantId != null">
+              AND mcs.tenant_id = #{tenantId}
+          </if>
+    </select>
+
+    <!-- 简化版插入或更新商品期间汇总（只插入计算好的数据） -->
+    <insert id="insertOrUpdateMaterialPeriodSummarySimple">
+        INSERT INTO jsh_material_period_summary (
+            material_id, bar_code, material_name, material_model, material_unit,
+            current_period_stock, previous_period_stock,
+            current_period_out, previous_period_out,
+            current_period_in, previous_period_in
+        )
+        VALUES (
+            #{materialId},
+            #{barCode},
+            #{materialName},
+            #{materialModel},
+            #{materialUnit},
+            #{currentPeriodStock},
+            #{previousPeriodStock},
+            #{currentPeriodOut},
+            #{previousPeriodOut},
+            #{currentPeriodIn},
+            #{previousPeriodIn}
+        )
+        ON DUPLICATE KEY UPDATE
+            bar_code = VALUES(bar_code),
+            material_name = VALUES(material_name),
+            material_model = VALUES(material_model),
+            material_unit = VALUES(material_unit),
+            current_period_stock = VALUES(current_period_stock),
+            previous_period_stock = VALUES(previous_period_stock),
+            current_period_out = VALUES(current_period_out),
+            previous_period_out = VALUES(previous_period_out),
+            current_period_in = VALUES(current_period_in),
+            previous_period_in = VALUES(previous_period_in),
+            last_calculation_time = CURRENT_TIMESTAMP
+    </insert>
+
     <!-- 批量初始化汇总表数据 -->
     <insert id="batchInitializeSummaryData">
         -- 先初始化商品期间汇总表

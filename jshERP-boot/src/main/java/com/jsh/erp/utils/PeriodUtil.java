@@ -3,101 +3,90 @@ package com.jsh.erp.utils;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 
+/**
+ * 业务期间工具类
+ * 业务期间定义：
+ * - 本期：2月1日 - 7月31日
+ * - 上期：8月1日 - 次年1月31日
+ */
 public class PeriodUtil {
-    
+
+    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
     /**
-     * 获取当前期间的开始和结束时间
-     * 期间定义：2月1日-7月31日为一期，8月1日-次年1月31日为一期
+     * 获取当前期间的时间范围
+     * 
+     * @return [开始日期, 结束日期] 格式：yyyy-MM-dd
      */
     public static String[] getCurrentPeriod() {
         LocalDate now = LocalDate.now();
-        int year = now.getYear();
-        int month = now.getMonthValue();
-        
-        if (month >= 2 && month <= 7) {
-            // 2-7月期间
-            return new String[]{
-                year + "-02-01 00:00:00",
-                year + "-07-31 23:59:59"
+        int currentYear = now.getYear();
+        int currentMonth = now.getMonthValue();
+
+        if (currentMonth >= 2 && currentMonth <= 7) {
+            // 当前在2-7月，本期就是2-7月
+            return new String[] {
+                    String.format("%d-02-01", currentYear),
+                    String.format("%d-07-31", currentYear)
+            };
+        } else if (currentMonth >= 8) {
+            // 当前在8-12月，本期是8月到明年1月
+            return new String[] {
+                    String.format("%d-08-01", currentYear),
+                    String.format("%d-01-31", currentYear + 1)
             };
         } else {
-            // 8-1月期间（跨年）
-            if (month >= 8) {
-                // 8-12月，期间是当年8月1日到次年1月31日
-                return new String[]{
-                    year + "-08-01 00:00:00",
-                    (year + 1) + "-01-31 23:59:59"
-                };
-            } else {
-                // 1月，期间是上年8月1日到当年1月31日
-                return new String[]{
-                    (year - 1) + "-08-01 00:00:00",
-                    year + "-01-31 23:59:59"
-                };
-            }
+            // 当前在1月，本期是去年8月到今年1月
+            return new String[] {
+                    String.format("%d-08-01", currentYear - 1),
+                    String.format("%d-01-31", currentYear)
+            };
         }
     }
-    
+
     /**
-     * 获取上一期间的开始和结束时间
+     * 获取上期的时间范围
+     * 
+     * @return [开始日期, 结束日期] 格式：yyyy-MM-dd
      */
     public static String[] getPreviousPeriod() {
         LocalDate now = LocalDate.now();
-        int year = now.getYear();
-        int month = now.getMonthValue();
-        
-        if (month >= 2 && month <= 7) {
-            // 当前是2-7月期间，上期是上年8月1日到当年1月31日
-            return new String[]{
-                (year - 1) + "-08-01 00:00:00",
-                year + "-01-31 23:59:59"
+        int currentYear = now.getYear();
+        int currentMonth = now.getMonthValue();
+
+        if (currentMonth >= 2 && currentMonth <= 7) {
+            // 当前在2-7月，上期是去年8月到今年1月
+            return new String[] {
+                    String.format("%d-08-01", currentYear - 1),
+                    String.format("%d-01-31", currentYear)
+            };
+        } else if (currentMonth >= 8) {
+            // 当前在8-12月，上期是今年2-7月
+            return new String[] {
+                    String.format("%d-02-01", currentYear),
+                    String.format("%d-07-31", currentYear)
             };
         } else {
-            // 当前是8-1月期间，上期是2-7月期间
-            if (month >= 8) {
-                // 当前8-12月，上期是当年2-7月
-                return new String[]{
-                    year + "-02-01 00:00:00",
-                    year + "-07-31 23:59:59"
-                };
-            } else {
-                // 当前1月，上期是上年2-7月
-                return new String[]{
-                    (year - 1) + "-02-01 00:00:00",
-                    (year - 1) + "-07-31 23:59:59"
-                };
-            }
+            // 当前在1月，上期是去年2-7月
+            return new String[] {
+                    String.format("%d-02-01", currentYear - 1),
+                    String.format("%d-07-31", currentYear - 1)
+            };
         }
     }
-    
+
     /**
-     * 根据指定日期获取其所在期间
+     * 获取本期到当前时间的范围（用于计算本期数据）
+     * 
+     * @return [开始日期, 当前日期] 格式：yyyy-MM-dd
      */
-    public static String[] getPeriodByDate(LocalDate date) {
-        int year = date.getYear();
-        int month = date.getMonthValue();
-        
-        if (month >= 2 && month <= 7) {
-            // 2-7月期间
-            return new String[]{
-                year + "-02-01 00:00:00",
-                year + "-07-31 23:59:59"
-            };
-        } else {
-            // 8-1月期间（跨年）
-            if (month >= 8) {
-                // 8-12月，期间是当年8月1日到次年1月31日
-                return new String[]{
-                    year + "-08-01 00:00:00",
-                    (year + 1) + "-01-31 23:59:59"
-                };
-            } else {
-                // 1月，期间是上年8月1日到当年1月31日
-                return new String[]{
-                    (year - 1) + "-08-01 00:00:00",
-                    year + "-01-31 23:59:59"
-                };
-            }
-        }
+    public static String[] getCurrentPeriodToNow() {
+        String[] currentPeriod = getCurrentPeriod();
+        LocalDate now = LocalDate.now();
+
+        return new String[] {
+                currentPeriod[0],
+                now.format(DATE_FORMATTER)
+        };
     }
-} 
+}
