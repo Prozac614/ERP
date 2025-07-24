@@ -239,7 +239,7 @@ public class MaterialService {
                                     lowSafeStock, highSafeStock);
                         }
                         // 更新当前库存
-                        depotItemService.updateCurrentStockFun(material.getId(), depotId);
+                        depotItemService.updateCurrentStockFun(material.getId(), depotId, new Date());
                     }
                 }
             }
@@ -1442,8 +1442,8 @@ public class MaterialService {
      * 直接从原始表查询每日出库数据（当汇总表查询失败时使用）
      *
      * @param materialId 商品ID
-     * @param beginTime 开始时间
-     * @param endTime 结束时间
+     * @param beginTime  开始时间
+     * @param endTime    结束时间
      * @return 每日出库数据列表
      */
     private List<Map<String, Object>> getDirectDailyOutStock(Long materialId, String beginTime, String endTime) {
@@ -1461,8 +1461,8 @@ public class MaterialService {
      * 简化的每日出库数据计算（最后的备用方案）
      *
      * @param materialId 商品ID
-     * @param beginTime 开始时间
-     * @param endTime 结束时间
+     * @param beginTime  开始时间
+     * @param endTime    结束时间
      * @return 简化的每日出库数据列表
      */
     private List<Map<String, Object>> getSimplifiedDailyOutStock(Long materialId, String beginTime, String endTime) {
@@ -1621,7 +1621,7 @@ public class MaterialService {
         List<Depot> depotList = depotService.getAllList();
         for (Long mId : idList) {
             for (Depot depot : depotList) {
-                depotItemService.updateCurrentStockFun(mId, depot.getId());
+                depotItemService.updateCurrentStockFun(mId, depot.getId(), new Date());
                 res = 1;
             }
         }
@@ -1680,8 +1680,9 @@ public class MaterialService {
 
     /**
      * 更新商品的库存告急状态
-     * @param materialId 商品ID
-     * @param alertStatus 告急状态
+     * 
+     * @param materialId     商品ID
+     * @param alertStatus    告急状态
      * @param sixMonthsSales 六个月销量
      */
     public void updateStockAlertStatus(Long materialId, String alertStatus, BigDecimal sixMonthsSales) {
@@ -1702,6 +1703,7 @@ public class MaterialService {
 
     /**
      * 忽略商品的库存风险
+     * 
      * @param materialId 商品ID
      */
     public void ignoreStockRisk(Long materialId) {
@@ -1721,6 +1723,7 @@ public class MaterialService {
 
     /**
      * 重新关注商品的库存风险
+     * 
      * @param materialId 商品ID
      */
     public void focusStockRisk(Long materialId) {
@@ -1755,7 +1758,7 @@ public class MaterialService {
             // 使用直接SQL更新，确保能清空ignored_at字段
             materialMapperEx.updateStockAlertStatusAndClearIgnored(materialId, alertStatus, sixMonthsSales);
             logger.info("重新关注商品{}库存风险，新状态：{}，当前库存：{}，六个月销量：{}",
-                       materialId, alertStatus, currentStock, sixMonthsSales);
+                    materialId, alertStatus, currentStock, sixMonthsSales);
 
         } catch (Exception e) {
             logger.error("重新关注商品{}库存风险失败", materialId, e);
@@ -1765,6 +1768,7 @@ public class MaterialService {
 
     /**
      * 获取商品的当前总库存
+     * 
      * @param materialId 商品ID
      * @return 当前总库存
      */
@@ -1792,6 +1796,7 @@ public class MaterialService {
 
     /**
      * 直接使用实体对象更新商品信息
+     * 
      * @param material 商品实体对象
      */
     public void updateMaterialByEntity(Material material) {

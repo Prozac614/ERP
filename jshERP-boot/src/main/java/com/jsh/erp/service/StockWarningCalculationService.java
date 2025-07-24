@@ -28,12 +28,12 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 @Service
 public class StockWarningCalculationService {
-    
+
     private Logger logger = LoggerFactory.getLogger(StockWarningCalculationService.class);
-    
+
     @Resource
     private MaterialMapper materialMapper;
-    
+
     @Resource
     private MaterialInitialStockMapper materialInitialStockMapper;
 
@@ -42,10 +42,10 @@ public class StockWarningCalculationService {
 
     @Resource
     private DepotMapper depotMapper;
-    
+
     @Resource
     private MaterialService materialService;
-    
+
     @Resource
     private UserService userService;
 
@@ -57,7 +57,7 @@ public class StockWarningCalculationService {
 
     // 任务状态管理
     private static final Map<String, CalculationTask> taskMap = new ConcurrentHashMap<>();
-    
+
     /**
      * 计算任务状态类
      */
@@ -72,7 +72,7 @@ public class StockWarningCalculationService {
         private Date endTime;
         private String errorMessage;
         private Long userId;
-        
+
         public CalculationTask(String taskId, int totalCount, Long userId) {
             this.taskId = taskId;
             this.totalCount = totalCount;
@@ -80,31 +80,77 @@ public class StockWarningCalculationService {
             this.status = "RUNNING";
             this.startTime = new Date();
         }
-        
+
         // Getters and setters
-        public String getTaskId() { return taskId; }
-        public String getStatus() { return status; }
-        public void setStatus(String status) { this.status = status; }
-        public int getTotalCount() { return totalCount; }
-        public int getProcessedCount() { return processedCount.get(); }
-        public int getSuccessCount() { return successCount.get(); }
-        public int getFailedCount() { return failedCount.get(); }
-        public Date getStartTime() { return startTime; }
-        public Date getEndTime() { return endTime; }
-        public void setEndTime(Date endTime) { this.endTime = endTime; }
-        public String getErrorMessage() { return errorMessage; }
-        public void setErrorMessage(String errorMessage) { this.errorMessage = errorMessage; }
-        public Long getUserId() { return userId; }
-        
-        public void incrementProcessed() { processedCount.incrementAndGet(); }
-        public void incrementSuccess() { successCount.incrementAndGet(); }
-        public void incrementFailed() { failedCount.incrementAndGet(); }
-        
+        public String getTaskId() {
+            return taskId;
+        }
+
+        public String getStatus() {
+            return status;
+        }
+
+        public void setStatus(String status) {
+            this.status = status;
+        }
+
+        public int getTotalCount() {
+            return totalCount;
+        }
+
+        public int getProcessedCount() {
+            return processedCount.get();
+        }
+
+        public int getSuccessCount() {
+            return successCount.get();
+        }
+
+        public int getFailedCount() {
+            return failedCount.get();
+        }
+
+        public Date getStartTime() {
+            return startTime;
+        }
+
+        public Date getEndTime() {
+            return endTime;
+        }
+
+        public void setEndTime(Date endTime) {
+            this.endTime = endTime;
+        }
+
+        public String getErrorMessage() {
+            return errorMessage;
+        }
+
+        public void setErrorMessage(String errorMessage) {
+            this.errorMessage = errorMessage;
+        }
+
+        public Long getUserId() {
+            return userId;
+        }
+
+        public void incrementProcessed() {
+            processedCount.incrementAndGet();
+        }
+
+        public void incrementSuccess() {
+            successCount.incrementAndGet();
+        }
+
+        public void incrementFailed() {
+            failedCount.incrementAndGet();
+        }
+
         public double getProgress() {
             return totalCount > 0 ? (double) processedCount.get() / totalCount * 100 : 0;
         }
     }
-    
+
     /**
      * 开始库存预警计算任务
      *
@@ -143,7 +189,7 @@ public class StockWarningCalculationService {
             throw new RuntimeException("启动计算任务失败: " + e.getMessage());
         }
     }
-    
+
     /**
      * 获取任务状态
      * 
@@ -158,7 +204,7 @@ public class StockWarningCalculationService {
             result.put("message", "任务不存在");
             return result;
         }
-        
+
         Map<String, Object> result = new HashMap<>();
         result.put("taskId", task.getTaskId());
         result.put("status", task.getStatus());
@@ -170,10 +216,10 @@ public class StockWarningCalculationService {
         result.put("startTime", task.getStartTime());
         result.put("endTime", task.getEndTime());
         result.put("errorMessage", task.getErrorMessage());
-        
+
         return result;
     }
-    
+
     /**
      * 获取所有有效商品
      */
@@ -184,7 +230,7 @@ public class StockWarningCalculationService {
                 .andDeleteFlagNotEqualTo(BusinessConstants.DELETE_FLAG_DELETED);
         return materialMapper.selectByExample(example);
     }
-    
+
     /**
      * 执行计算任务
      */
@@ -199,7 +245,7 @@ public class StockWarningCalculationService {
                     // 1. 先更新该商品在所有仓库的当前库存
                     for (Depot depot : depots) {
                         try {
-                            depotItemService.updateCurrentStockFun(material.getId(), depot.getId());
+                            depotItemService.updateCurrentStockFun(material.getId(), depot.getId(), new Date());
                         } catch (Exception e) {
                             logger.warn("更新商品{}在仓库{}的当前库存失败: {}",
                                     material.getId(), depot.getId(), e.getMessage());
@@ -239,7 +285,7 @@ public class StockWarningCalculationService {
             logger.error("库存预警计算任务执行失败，任务ID: {}", task.getTaskId(), e);
         }
     }
-    
+
     /**
      * 计算单个商品的安全库存并更新到数据库
      */
@@ -290,7 +336,7 @@ public class StockWarningCalculationService {
                 .andDeleteFlagNotEqualTo(BusinessConstants.DELETE_FLAG_DELETED);
         return depotMapper.selectByExample(example);
     }
-    
+
     /**
      * 更新商品在指定仓库的安全库存
      */
@@ -333,7 +379,7 @@ public class StockWarningCalculationService {
             throw e;
         }
     }
-    
+
     /**
      * 清理已完成的任务（避免内存泄漏）
      */

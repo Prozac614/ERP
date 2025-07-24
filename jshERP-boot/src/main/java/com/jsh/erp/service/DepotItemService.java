@@ -1128,9 +1128,27 @@ public class DepotItemService {
      */
     @Transactional(value = "transactionManager", rollbackFor = Exception.class)
     public void updateCurrentStock(DepotItem depotItem) throws Exception {
-        updateCurrentStockFun(depotItem.getMaterialId(), depotItem.getDepotId());
+        // 查询单据头获取操作时间
+        Date operTime = new Date(); // 默认使用当前时间
+        try {
+            if (depotItem.getHeaderId() != null) {
+                DepotHead depotHead = depotHeadMapper.selectByPrimaryKey(depotItem.getHeaderId());
+                if (depotHead != null && depotHead.getOperTime() != null) {
+                    operTime = depotHead.getOperTime();
+                    logger.debug("获取到单据操作时间: {}, 单据ID: {}", operTime, depotItem.getHeaderId());
+                } else {
+                    logger.debug("单据头或操作时间为空，使用当前时间, 单据ID: {}", depotItem.getHeaderId());
+                }
+            } else {
+                logger.debug("单据明细没有关联单据头，使用当前时间");
+            }
+        } catch (Exception e) {
+            logger.warn("获取单据操作时间失败，使用当前时间, 单据ID: {}, error: {}", depotItem.getHeaderId(), e.getMessage());
+        }
+
+        updateCurrentStockFun(depotItem.getMaterialId(), depotItem.getDepotId(), operTime);
         if (depotItem.getAnotherDepotId() != null) {
-            updateCurrentStockFun(depotItem.getMaterialId(), depotItem.getAnotherDepotId());
+            updateCurrentStockFun(depotItem.getMaterialId(), depotItem.getAnotherDepotId(), operTime);
         }
     }
 
@@ -1224,6 +1242,17 @@ public class DepotItemService {
      * @param dId
      */
     public void updateCurrentStockFun(Long mId, Long dId) throws Exception {
+        updateCurrentStockFun(mId, dId, new Date());
+    }
+
+    /**
+     * 根据商品和仓库来更新当前库存（包含操作时间）
+     * 
+     * @param mId
+     * @param dId
+     * @param operTime 操作时间
+     */
+    public void updateCurrentStockFun(Long mId, Long dId, Date operTime) throws Exception {
         if (mId != null && dId != null) {
             MaterialCurrentStockExample example = new MaterialCurrentStockExample();
             example.createCriteria().andMaterialIdEqualTo(mId).andDepotIdEqualTo(dId)
@@ -1243,10 +1272,10 @@ public class DepotItemService {
 
             // 新增：更新汇总表和清除缓存
             try {
-                updateSummaryTablesAfterStockChange(mId, dId);
+                updateSummaryTablesAfterStockChange(mId, dId, operTime);
             } catch (Exception e) {
-                logger.warn("更新汇总表失败，但不影响库存更新: materialId={}, depotId={}, error={}",
-                        mId, dId, e.getMessage());
+                logger.warn("更新汇总表失败，但不影响库存更新: materialId={}, depotId={}, operTime={}, error={}",
+                        mId, dId, operTime, e.getMessage());
             }
         }
     }
@@ -1576,8 +1605,8 @@ public class DepotItemService {
      * @param materialId 商品ID
      * @param depotId    仓库ID
      */
-    private void updateSummaryTablesAfterStockChange(Long materialId, Long depotId) {
-        logger.debug("开始更新汇总表，materialId={}, depotId={}", materialId, depotId);
+    private void updateSummaryTablesAfterStockChange(Long materialId, Long depotId, Date operTime) {
+        logger.debug("开始更新汇总表，materialId={}, depotId={}, operTime={}", materialId, depotId, operTime);
 
         // 获取当前用户的租户ID
         Long tenantId = null;
@@ -1588,8 +1617,8 @@ public class DepotItemService {
             logger.debug("获取当前用户失败，使用null作为tenantId");
         }
 
-        // 1. 更新当天的每日出库汇总（使用业务层逻辑）
-        updateDailyOutSummaryForMaterialBusinessLogic(materialId, tenantId);
+        // 1. 更新指定日期的每日出库汇总（使用业务层逻辑）
+        updateDailyOutSummaryForMaterialBusinessLogic(materialId, tenantId, operTime);
 
         // 2. 更新商品期间汇总（使用业务层逻辑）
         updatePeriodSummaryForMaterialBusinessLogic(materialId, tenantId);
@@ -1597,7 +1626,7 @@ public class DepotItemService {
         // 3. 清除相关缓存
         clearRelatedCache();
 
-        logger.debug("汇总表更新完成，materialId={}, depotId={}", materialId, depotId);
+        logger.debug("汇总表更新完成，materialId={}, depotId={}, operTime={}", materialId, depotId, operTime);
     }
 
     /**
@@ -1605,31 +1634,34 @@ public class DepotItemService {
      * 
      * @param materialId 商品ID
      * @param tenantId   租户ID
+     * @param operTime   操作时间
      */
-    private void updateDailyOutSummaryForMaterialBusinessLogic(Long materialId, Long tenantId) {
+    private void updateDailyOutSummaryForMaterialBusinessLogic(Long materialId, Long tenantId, Date operTime) {
         try {
-            // 获取当前日期
+            // 使用传入的操作时间而不是当前日期
             SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
-            String currentDate = sdf.format(new Date());
+            String operationDate = sdf.format(operTime != null ? operTime : new Date());
 
-            // 先删除指定商品当天的汇总记录
-            depotItemMapperEx.deleteDailyOutSummary(materialId, currentDate, tenantId);
+            // 先删除指定商品指定日期的汇总记录
+            depotItemMapperEx.deleteDailyOutSummary(materialId, operationDate, tenantId);
 
-            // 尝试使用复杂SQL重新插入或更新当天的汇总数据
+            // 尝试使用复杂SQL重新插入或更新指定日期的汇总数据
             try {
-                depotItemMapperEx.insertOrUpdateDailyOutSummary(materialId, currentDate, tenantId);
-                logger.debug("每日出库汇总更新成功（业务层），materialId={}, date={}", materialId, currentDate);
+                depotItemMapperEx.insertOrUpdateDailyOutSummary(materialId, operationDate, tenantId);
+                logger.debug("每日出库汇总更新成功（业务层），materialId={}, date={}, operTime={}", materialId, operationDate,
+                        operTime);
             } catch (Exception complexSqlException) {
                 // 如果复杂SQL失败，使用简化版本
-                logger.warn("复杂SQL失败，使用简化版本重试，materialId={}, error={}",
-                        materialId, complexSqlException.getMessage());
+                logger.warn("复杂SQL失败，使用简化版本重试，materialId={}, operTime={}, error={}",
+                        materialId, operTime, complexSqlException.getMessage());
 
-                depotItemMapperEx.insertOrUpdateDailyOutSummarySimple(materialId, currentDate, tenantId);
-                logger.debug("每日出库汇总更新成功（简化版本），materialId={}, date={}", materialId, currentDate);
+                depotItemMapperEx.insertOrUpdateDailyOutSummarySimple(materialId, operationDate, tenantId);
+                logger.debug("每日出库汇总更新成功（简化版本），materialId={}, date={}, operTime={}", materialId, operationDate,
+                        operTime);
             }
 
         } catch (Exception e) {
-            logger.warn("更新每日出库汇总失败（业务层），materialId={}, error={}", materialId, e.getMessage());
+            logger.warn("更新每日出库汇总失败（业务层），materialId={}, operTime={}, error={}", materialId, operTime, e.getMessage());
         }
     }
 
