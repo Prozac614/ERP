@@ -38,6 +38,7 @@
         <!-- 操作按钮区域 -->
         <div class="table-operator"  style="margin-top: 5px">
           <a-button @click="handleExport" type="primary" icon="download">导出库存</a-button>
+          <!-- 隐藏库存预警校验按钮
           <a-button @click="calculateAllStockAlert"
                     type="default"
                     icon="calculator"
@@ -45,6 +46,7 @@
                     :loading="calculatingAlert">
             库存预警校验
           </a-button>
+          -->
 
 
           <!-- 暂时隐藏展示所有数据按钮 -->
@@ -119,6 +121,7 @@
               <div>
                 <a @click="viewChart(record)">查看图表</a>
               </div>
+              <!-- 隐藏库存预警相关操作按钮
               <div v-if="record.stockAlertStatus === 'STOCK_ALERT'" style="margin-top: 4px;">
                 <a @click="ignoreStockRisk(record)"
                    style="color: #fa8c16;">
@@ -131,6 +134,7 @@
                   关注风险
                 </a>
               </div>
+              -->
             </span>
             <template slot="customRenderStock" slot-scope="value, record">
               <span style="color:green" v-if="value > 0">{{value || 0}}</span>
@@ -141,6 +145,7 @@
               <span style="color: #1890ff; font-weight: 500" v-if="value > 0">{{value}}</span>
               <span style="color: #ccc" v-else>-</span>
             </template>
+            <!-- 隐藏库存状态列渲染模板
             <template slot="stockAlertStatusRender" slot-scope="value, record">
               <a-tag v-if="value === 'NO_RISK'" color="green">
                 <a-icon type="check-circle" /> 无风险
@@ -155,6 +160,7 @@
                 <a-icon type="sync" spin /> 计算中
               </a-tag>
             </template>
+            -->
           </a-table>
           
           <!-- 图表弹窗 -->
@@ -197,7 +203,7 @@
         loadingRequest: null,
         dailyOutData: {},
         dateColumns: [],
-        calculatingAlert: false, // 库存预警校验加载状态
+        calculatingAlert: false, // 库存预警校验加载状态（已隐藏功能）
 
         // 页面样式
         cardStyle: 'padding: 0',
@@ -232,10 +238,10 @@
 
         // 表格滚动
         scroll: { x: 920 },
-        // 默认索引
-        defDataIndex: ['action', 'barCode', 'materialName', 'currentPeriodStock', 'previousPeriodStock', 'currentPeriodOut', 'previousPeriodOut', 'stockAlertStatus'],
-        settingDataIndex: ['action', 'barCode', 'materialName', 'currentPeriodStock', 'previousPeriodStock', 'currentPeriodOut', 'previousPeriodOut', 'stockAlertStatus'],
-        // 默认列
+        // 默认索引（移除stockAlertStatus）
+        defDataIndex: ['action', 'barCode', 'materialName', 'currentPeriodStock', 'previousPeriodStock', 'currentPeriodOut', 'previousPeriodOut'],
+        settingDataIndex: ['action', 'barCode', 'materialName', 'currentPeriodStock', 'previousPeriodStock', 'currentPeriodOut', 'previousPeriodOut'],
+        // 默认列（移除库存状态列）
         defColumns: [
           {
             title: '操作',
@@ -249,8 +255,7 @@
           { title: '本期结存', dataIndex: 'currentPeriodStock', width: 120, scopedSlots: { customRender: 'customRenderStock' } },
           { title: '上期结存', dataIndex: 'previousPeriodStock', width: 120, scopedSlots: { customRender: 'customRenderStock' } },
           { title: '本期出库', dataIndex: 'currentPeriodOut', width: 120, scopedSlots: { customRender: 'customRenderStock' } },
-          { title: '上期出库', dataIndex: 'previousPeriodOut', width: 120, scopedSlots: { customRender: 'customRenderStock' } },
-          { title: '库存状态', dataIndex: 'stockAlertStatus', width: 120, align: 'center', scopedSlots: { customRender: 'stockAlertStatusRender' } }
+          { title: '上期出库', dataIndex: 'previousPeriodOut', width: 120, scopedSlots: { customRender: 'customRenderStock' } }
         ]
 
       }
@@ -537,7 +542,8 @@
         this.$message.info('显示低库存预警')
       },
 
-      // 库存风险操作方法
+      // 库存风险操作方法（已隐藏功能，保留代码但注释掉）
+      /*
       ignoreStockRisk(record) {
         this.$confirm({
           title: '确认忽略风险',
@@ -588,8 +594,8 @@
         postAction('/depotItem/focusStockRisk', { materialId: record.materialId }).then(res => {
           loading()
           if (res.code === 200) {
-            this.$message.success(res.data || '已重新关注库存风险')
-            // 刷新数据以获取最新状态
+            this.$message.success('已重新关注库存风险')
+            // 刷新页面数据以获取最新状态
             this.loadStockData()
           } else {
             this.$message.error(res.data || '操作失败')
@@ -601,7 +607,7 @@
         })
       },
 
-      // 批量计算库存预警状态
+      // 批量计算库存预警状态（已隐藏功能）
       async calculateAllStockAlert() {
         try {
           // 显示确认对话框
@@ -634,6 +640,7 @@
           this.$message.error('操作失败')
         }
       },
+      */
     }
   }
 </script>
