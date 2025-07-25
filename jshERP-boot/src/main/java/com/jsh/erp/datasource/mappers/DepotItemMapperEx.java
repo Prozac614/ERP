@@ -285,10 +285,12 @@ public interface DepotItemMapperEx {
                         @Param("materialParam") String materialParam,
                         @Param("offset") Integer offset,
                         @Param("rows") Integer rows,
+                        @Param("stockAlertStatus") String stockAlertStatus,
                         @Param("tenantId") Long tenantId);
 
         int getMaterialPeriodStockCountOptimized(
                         @Param("materialParam") String materialParam,
+                        @Param("stockAlertStatus") String stockAlertStatus,
                         @Param("tenantId") Long tenantId);
 
         List<java.util.Map<String, Object>> getDailyOutStockFromSummary(

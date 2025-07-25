@@ -41,7 +41,7 @@ public class DepotItemOptimizedService {
      */
     public Map<String, Object> getOptimizedMaterialStockWithDailyOut(
             Integer currentPage, Integer pageSize, String materialParam,
-            String beginTime, String endTime, HttpServletRequest request) throws Exception {
+            String beginTime, String endTime, String stockAlertStatus, HttpServletRequest request) throws Exception {
 
         Map<String, Object> resultMap = new HashMap<>();
 
@@ -60,10 +60,11 @@ public class DepotItemOptimizedService {
             if (StringUtil.isNotEmpty(beginTime) && StringUtil.isNotEmpty(endTime)) {
                 // 有日期范围时，使用汇总表快速查询
                 resultMap = getOptimizedDataWithDateRange(currentPage, pageSize, materialParam,
-                        beginTime, endTime, tenantId);
+                        beginTime, endTime, stockAlertStatus, tenantId);
             } else {
                 // 无日期范围时，使用期间汇总表
-                resultMap = getOptimizedDataWithoutDateRange(currentPage, pageSize, materialParam, tenantId);
+                resultMap = getOptimizedDataWithoutDateRange(currentPage, pageSize, materialParam, stockAlertStatus,
+                        tenantId);
             }
 
         } catch (Exception e) {
@@ -79,14 +80,14 @@ public class DepotItemOptimizedService {
      */
     private Map<String, Object> getOptimizedDataWithDateRange(
             Integer currentPage, Integer pageSize, String materialParam,
-            String beginTime, String endTime, Long tenantId) throws Exception {
+            String beginTime, String endTime, String stockAlertStatus, Long tenantId) throws Exception {
 
         Map<String, Object> resultMap = new HashMap<>();
 
         // 1. 获取商品基础库存数据（分页）
         List<MaterialStockPeriodVo> stockList = depotItemMapperEx.getMaterialPeriodStockOptimized(
-                materialParam, (currentPage - 1) * pageSize, pageSize, tenantId);
-        int total = depotItemMapperEx.getMaterialPeriodStockCountOptimized(materialParam, tenantId);
+                materialParam, (currentPage - 1) * pageSize, pageSize, stockAlertStatus, tenantId);
+        int total = depotItemMapperEx.getMaterialPeriodStockCountOptimized(materialParam, stockAlertStatus, tenantId);
 
         // 2. 获取每日出库汇总数据
         Map<String, Map<String, BigDecimal>> dailyOutMap = new HashMap<>();
@@ -131,15 +132,17 @@ public class DepotItemOptimizedService {
      * 无日期范围的优化查询
      */
     private Map<String, Object> getOptimizedDataWithoutDateRange(
-            Integer currentPage, Integer pageSize, String materialParam, Long tenantId) throws Exception {
+            Integer currentPage, Integer pageSize, String materialParam, String stockAlertStatus, Long tenantId)
+            throws Exception {
 
         Map<String, Object> resultMap = new HashMap<>();
 
         try {
             // 从期间汇总表获取数据
             List<MaterialStockPeriodVo> stockList = depotItemMapperEx.getMaterialPeriodStockOptimized(
-                    materialParam, (currentPage - 1) * pageSize, pageSize, tenantId);
-            int total = depotItemMapperEx.getMaterialPeriodStockCountOptimized(materialParam, tenantId);
+                    materialParam, (currentPage - 1) * pageSize, pageSize, stockAlertStatus, tenantId);
+            int total = depotItemMapperEx.getMaterialPeriodStockCountOptimized(materialParam, stockAlertStatus,
+                    tenantId);
 
             // 直接读取数据库状态，不进行任何计算
             ensureDefaultStatus(stockList);
@@ -429,7 +432,7 @@ public class DepotItemOptimizedService {
 
             // 获取所有商品（不分页）
             List<MaterialStockPeriodVo> allStockList = depotItemMapperEx.getMaterialPeriodStockOptimized(
-                    null, 0, Integer.MAX_VALUE, tenantId);
+                    null, 0, Integer.MAX_VALUE, null, tenantId);
 
             int totalCount = allStockList.size();
             int updatedCount = 0;

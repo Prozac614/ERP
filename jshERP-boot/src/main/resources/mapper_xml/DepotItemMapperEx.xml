@@ -1341,6 +1341,9 @@
             and (mps.bar_code like concat('%', #{materialParam}, '%')
                 or m.name like concat('%', #{materialParam}, '%'))
         </if>
+        <if test="stockAlertStatus != null and stockAlertStatus != ''">
+            and m.stock_alert_status = #{stockAlertStatus}
+        </if>
         order by m.id
         <if test="offset != null and rows != null">
             limit #{offset}, #{rows}
@@ -1363,6 +1366,9 @@
         <if test="materialParam != null and materialParam != ''">
             and (mps.bar_code like concat('%', #{materialParam}, '%')
                 or m.name like concat('%', #{materialParam}, '%'))
+        </if>
+        <if test="stockAlertStatus != null and stockAlertStatus != ''">
+            and m.stock_alert_status = #{stockAlertStatus}
         </if>
     </select>
 

@@ -1203,11 +1203,12 @@ public class DepotItemController {
             @RequestParam(value = "materialParam", required = false) String materialParam,
             @RequestParam(value = "beginTime", required = false) String beginTime,
             @RequestParam(value = "endTime", required = false) String endTime,
+            @RequestParam(value = "stockAlertStatus", required = false) String stockAlertStatus,
             HttpServletRequest request) throws Exception {
         BaseResponseInfo res = new BaseResponseInfo();
         try {
             Map<String, Object> resultMap = depotItemOptimizedService.getOptimizedMaterialStockWithDailyOut(
-                    currentPage, pageSize, materialParam, beginTime, endTime, request);
+                    currentPage, pageSize, materialParam, beginTime, endTime, stockAlertStatus, request);
 
             res.code = 200;
             res.data = resultMap;

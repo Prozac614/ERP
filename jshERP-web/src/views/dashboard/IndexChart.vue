@@ -25,6 +25,21 @@
                   />
                 </a-form-item>
               </a-col>
+              <a-col :md="6" :sm="24">
+                <a-form-item label="库存状态" :labelCol="labelCol" :wrapperCol="wrapperCol">
+                  <a-select
+                    placeholder="请选择库存状态"
+                    v-model="queryParam.stockAlertStatus"
+                    allowClear
+                    @change="onStockAlertStatusChange"
+                    style="width:100%"
+                  >
+                    <a-select-option v-for="item in stockAlertStatusOptions" :key="item.value" :value="item.value">
+                      {{ item.label }}
+                    </a-select-option>
+                  </a-select>
+                </a-form-item>
+              </a-col>
               <span style="float: left;overflow: hidden;" class="table-page-search-submitButtons">
                 <a-col :md="6" :sm="24">
                   <a-button type="primary" @click="searchQuery">查询</a-button>
@@ -193,12 +208,21 @@
         // 查询条件
         queryParam: {
           materialParam: "",
-          createTimeRange: [moment().subtract(1, 'months'), moment()]
+          createTimeRange: [moment().subtract(1, 'months'), moment()],
+          stockAlertStatus: ""
         },
         loadingRequest: null,
         dailyOutData: {},
         dateColumns: [],
         calculatingAlert: false, // 库存预警校验加载状态
+        
+        // 库存状态选项
+        stockAlertStatusOptions: [
+          { value: "", label: "全部状态" },
+          { value: "NO_RISK", label: "无风险" },
+          { value: "STOCK_ALERT", label: "库存告急" },
+          { value: "RISK_IGNORED", label: "忽略风险" }
+        ],
 
         // 页面样式
         cardStyle: 'padding: 0',
@@ -365,7 +389,8 @@
       searchReset() {
         this.queryParam = {
           materialParam: "",
-          createTimeRange: [moment().subtract(1, 'months'), moment()]
+          createTimeRange: [moment().subtract(1, 'months'), moment()],
+          stockAlertStatus: ""
         }
         this.generateDateColumns()
         this.searchQuery()
@@ -395,6 +420,12 @@
       onDateOk(dates) {
         console.log('选择的日期: ', dates)
       },
+
+      // 库存状态变化处理
+      onStockAlertStatusChange(value) {
+        this.searchQuery()
+      },
+
       // 加载库存数据（性能优化版本）
       loadStockData(page) {
         if (page) {
@@ -410,7 +441,8 @@
         const params = {
           currentPage: this.ipagination.current,
           pageSize: this.ipagination.pageSize,
-          materialParam: this.queryParam.materialParam || ''
+          materialParam: this.queryParam.materialParam || '',
+          stockAlertStatus: this.queryParam.stockAlertStatus || ''
         }
         
         // 如果有日期范围参数，添加到请求中
