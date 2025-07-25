@@ -7,69 +7,78 @@ public class MaterialStockPeriodVo {
     private Long materialId;
     private String materialName;
     private String barCode;
-    private BigDecimal previousPeriodStock;  // 上期结存
-    private BigDecimal currentPeriodStock;   // 本期结存
-    private BigDecimal previousPeriodOut;    // 上期出库
-    private BigDecimal currentPeriodOut;     // 本期出库
-    private String stockAlertStatus;         // 库存告急状态
-    private BigDecimal lastSixMonthsSales;   // 过去六个月销量
-    private Date stockAlertIgnoredAt;        // 忽略风险时间
-    
+    private BigDecimal previousPeriodStock; // 上期结存
+    private BigDecimal currentPeriodStock; // 本期结存
+    private BigDecimal previousPeriodOut; // 上期出库
+    private BigDecimal currentPeriodOut; // 本期出库
+    private BigDecimal currentPeriodIn; // 本期入库
+    private String stockAlertStatus; // 库存告急状态
+    private BigDecimal lastSixMonthsSales; // 过去六个月销量
+    private Date stockAlertIgnoredAt; // 忽略风险时间
+
     // getter和setter方法
-    public Long getMaterialId() { 
-        return materialId; 
+    public Long getMaterialId() {
+        return materialId;
     }
-    
-    public void setMaterialId(Long materialId) { 
-        this.materialId = materialId; 
+
+    public void setMaterialId(Long materialId) {
+        this.materialId = materialId;
     }
-    
-    public String getMaterialName() { 
-        return materialName; 
+
+    public String getMaterialName() {
+        return materialName;
     }
-    
-    public void setMaterialName(String materialName) { 
-        this.materialName = materialName; 
+
+    public void setMaterialName(String materialName) {
+        this.materialName = materialName;
     }
-    
-    public String getBarCode() { 
-        return barCode; 
+
+    public String getBarCode() {
+        return barCode;
     }
-    
-    public void setBarCode(String barCode) { 
-        this.barCode = barCode; 
+
+    public void setBarCode(String barCode) {
+        this.barCode = barCode;
     }
-    
-    public BigDecimal getPreviousPeriodStock() { 
-        return previousPeriodStock; 
+
+    public BigDecimal getPreviousPeriodStock() {
+        return previousPeriodStock;
     }
-    
-    public void setPreviousPeriodStock(BigDecimal previousPeriodStock) { 
-        this.previousPeriodStock = previousPeriodStock; 
+
+    public void setPreviousPeriodStock(BigDecimal previousPeriodStock) {
+        this.previousPeriodStock = previousPeriodStock;
     }
-    
-    public BigDecimal getCurrentPeriodStock() { 
-        return currentPeriodStock; 
+
+    public BigDecimal getCurrentPeriodStock() {
+        return currentPeriodStock;
     }
-    
-    public void setCurrentPeriodStock(BigDecimal currentPeriodStock) { 
-        this.currentPeriodStock = currentPeriodStock; 
+
+    public void setCurrentPeriodStock(BigDecimal currentPeriodStock) {
+        this.currentPeriodStock = currentPeriodStock;
     }
-    
-    public BigDecimal getPreviousPeriodOut() { 
-        return previousPeriodOut; 
+
+    public BigDecimal getPreviousPeriodOut() {
+        return previousPeriodOut;
     }
-    
-    public void setPreviousPeriodOut(BigDecimal previousPeriodOut) { 
-        this.previousPeriodOut = previousPeriodOut; 
+
+    public void setPreviousPeriodOut(BigDecimal previousPeriodOut) {
+        this.previousPeriodOut = previousPeriodOut;
     }
-    
-    public BigDecimal getCurrentPeriodOut() { 
-        return currentPeriodOut; 
+
+    public BigDecimal getCurrentPeriodOut() {
+        return currentPeriodOut;
     }
-    
+
     public void setCurrentPeriodOut(BigDecimal currentPeriodOut) {
         this.currentPeriodOut = currentPeriodOut;
+    }
+
+    public BigDecimal getCurrentPeriodIn() {
+        return currentPeriodIn;
+    }
+
+    public void setCurrentPeriodIn(BigDecimal currentPeriodIn) {
+        this.currentPeriodIn = currentPeriodIn;
     }
 
     public String getStockAlertStatus() {

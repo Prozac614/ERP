@@ -1230,7 +1230,26 @@
                     or
                     (month(now()) = 1 and dh.oper_time >= concat(year(now()) - 1, '-02-01 00:00:00') and dh.oper_time &lt;= concat(year(now()) - 1, '-07-31 23:59:59'))
                 )
-            ), 0) as previousPeriodOut
+            ), 0) as previousPeriodOut,
+            
+            -- 本期入库：根据当前月份判断本期时间范围
+            ifnull((
+                select sum(ifnull(di.basic_number,0))
+                from jsh_depot_item di
+                left join jsh_depot_head dh on dh.id = di.header_id
+                where di.material_id = m.id
+                and dh.type = '入库'
+                and ifnull(di.delete_flag,'0') !='1'
+                and ifnull(dh.delete_flag,'0') !='1'
+                and (
+                    -- 本期时间范围：根据当前月份动态判断
+                    (month(now()) >= 2 and month(now()) &lt;= 7 and dh.oper_time >= concat(year(now()), '-02-01 00:00:00') and dh.oper_time &lt;= concat(year(now()), '-07-31 23:59:59'))
+                    or
+                    (month(now()) >= 8 and dh.oper_time >= concat(year(now()), '-08-01 00:00:00') and dh.oper_time &lt;= concat(year(now()) + 1, '-01-31 23:59:59'))
+                    or
+                    (month(now()) = 1 and dh.oper_time >= concat(year(now()) - 1, '-08-01 00:00:00') and dh.oper_time &lt;= concat(year(now()), '-01-31 23:59:59'))
+                )
+            ), 0) as currentPeriodIn
             
         from jsh_material m
         left join jsh_material_extend me on me.material_id = m.id and ifnull(me.delete_flag,'0') !='1'
@@ -1303,6 +1322,7 @@
             IFNULL(mps.previous_period_stock, 0) as previousPeriodStock,
             IFNULL(mps.current_period_out, 0) as currentPeriodOut,
             IFNULL(mps.previous_period_out, 0) as previousPeriodOut,
+            IFNULL(mps.current_period_in, 0) as currentPeriodIn,
             -- 直接从商品表获取库存告急状态
             m.stock_alert_status as stockAlertStatus,
             m.last_six_months_sales as lastSixMonthsSales,

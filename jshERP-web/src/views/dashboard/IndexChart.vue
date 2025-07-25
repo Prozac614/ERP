@@ -238,10 +238,10 @@
 
         // 表格滚动
         scroll: { x: 920 },
-        // 默认索引（移除stockAlertStatus）
-        defDataIndex: ['action', 'barCode', 'materialName', 'currentPeriodStock', 'previousPeriodStock', 'currentPeriodOut', 'previousPeriodOut'],
-        settingDataIndex: ['action', 'barCode', 'materialName', 'currentPeriodStock', 'previousPeriodStock', 'currentPeriodOut', 'previousPeriodOut'],
-        // 默认列（移除库存状态列）
+        // 默认索引（重新排序：上期结存、本期入库、本期出库、本期结存）
+        defDataIndex: ['action', 'barCode', 'materialName', 'previousPeriodStock', 'currentPeriodIn', 'currentPeriodOut', 'currentPeriodStock'],
+        settingDataIndex: ['action', 'barCode', 'materialName', 'previousPeriodStock', 'currentPeriodIn', 'currentPeriodOut', 'currentPeriodStock'],
+        // 默认列（重新排序：上期结存、本期入库、本期出库、本期结存）
         defColumns: [
           {
             title: '操作',
@@ -252,10 +252,10 @@
           },
           { title: '商品编码', dataIndex: 'barCode', width: 120 },
           { title: '商品名称', dataIndex: 'materialName', width: 200, ellipsis: true },
-          { title: '本期结存', dataIndex: 'currentPeriodStock', width: 120, scopedSlots: { customRender: 'customRenderStock' } },
           { title: '上期结存', dataIndex: 'previousPeriodStock', width: 120, scopedSlots: { customRender: 'customRenderStock' } },
+          { title: '本期入库', dataIndex: 'currentPeriodIn', width: 120, scopedSlots: { customRender: 'customRenderStock' } },
           { title: '本期出库', dataIndex: 'currentPeriodOut', width: 120, scopedSlots: { customRender: 'customRenderStock' } },
-          { title: '上期出库', dataIndex: 'previousPeriodOut', width: 120, scopedSlots: { customRender: 'customRenderStock' } }
+          { title: '本期结存', dataIndex: 'currentPeriodStock', width: 120, scopedSlots: { customRender: 'customRenderStock' } }
         ]
 
       }
@@ -522,7 +522,7 @@
           currentPeriodStock: materialRecord.currentPeriodStock,
           previousPeriodStock: materialRecord.previousPeriodStock,
           currentPeriodOut: materialRecord.currentPeriodOut,
-          previousPeriodOut: materialRecord.previousPeriodOut
+          currentPeriodIn: materialRecord.currentPeriodIn
         }
 
         this.chartModal.chartType = 'history' // 默认显示库存历史
