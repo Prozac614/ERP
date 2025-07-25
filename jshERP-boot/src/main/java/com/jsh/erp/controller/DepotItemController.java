@@ -1911,4 +1911,94 @@ public class DepotItemController {
         return res;
     }
 
+    /**
+     * 批量计算库存预警状态
+     *
+     * @param request
+     * @return
+     * @throws Exception
+     */
+    @PostMapping(value = "/calculateAllStockAlertStatus")
+    @ApiOperation(value = "批量计算库存预警状态")
+    public BaseResponseInfo calculateAllStockAlertStatus(HttpServletRequest request) throws Exception {
+        BaseResponseInfo res = new BaseResponseInfo();
+        try {
+            User user = userService.getCurrentUser();
+            Long tenantId = user != null ? user.getTenantId() : null;
+
+            Map<String, Object> result = depotItemOptimizedService.calculateAllStockAlertStatus(tenantId);
+
+            res.code = 200;
+            res.data = result;
+
+            logger.info("批量计算库存预警状态完成: {}", result);
+
+        } catch (Exception e) {
+            logger.error("批量计算库存预警状态失败", e);
+            res.code = 500;
+            res.data = "计算失败: " + e.getMessage();
+        }
+        return res;
+    }
+
+    /**
+     * 忽略库存风险
+     *
+     * @param obj
+     * @param request
+     * @return
+     * @throws Exception
+     */
+    @PostMapping(value = "/ignoreStockRisk")
+    @ApiOperation(value = "忽略库存风险")
+    public BaseResponseInfo ignoreStockRisk(@RequestBody JSONObject obj, HttpServletRequest request) throws Exception {
+        BaseResponseInfo res = new BaseResponseInfo();
+        try {
+            Long materialId = obj.getLong("materialId");
+
+            materialService.ignoreStockRisk(materialId);
+
+            res.code = 200;
+            res.data = "已忽略库存风险";
+
+            logger.info("忽略商品{}库存风险完成", materialId);
+
+        } catch (Exception e) {
+            logger.error("忽略库存风险失败", e);
+            res.code = 500;
+            res.data = "操作失败: " + e.getMessage();
+        }
+        return res;
+    }
+
+    /**
+     * 重新关注库存风险
+     *
+     * @param obj
+     * @param request
+     * @return
+     * @throws Exception
+     */
+    @PostMapping(value = "/focusStockRisk")
+    @ApiOperation(value = "重新关注库存风险")
+    public BaseResponseInfo focusStockRisk(@RequestBody JSONObject obj, HttpServletRequest request) throws Exception {
+        BaseResponseInfo res = new BaseResponseInfo();
+        try {
+            Long materialId = obj.getLong("materialId");
+
+            materialService.focusStockRisk(materialId);
+
+            res.code = 200;
+            res.data = "已重新关注库存风险";
+
+            logger.info("重新关注商品{}库存风险完成", materialId);
+
+        } catch (Exception e) {
+            logger.error("重新关注库存风险失败", e);
+            res.code = 500;
+            res.data = "操作失败: " + e.getMessage();
+        }
+        return res;
+    }
+
 }
