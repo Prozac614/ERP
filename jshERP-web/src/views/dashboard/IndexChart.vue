@@ -194,7 +194,7 @@
 
 <script>
   import moment from 'moment'
-  import { getAction, postAction } from '@/api/manage'
+import { getAction, postAction, downFile } from '@/api/manage'
   import JEllipsis from '@/components/jeecg/JEllipsis'
   import StockChartModal from '@/components/charts/StockChartModal'
 
@@ -578,8 +578,71 @@
         this.chartModal.currentMaterial = {}
       },
       handleExport() {
-        this.$message.info('导出库存数据功能')
+        // 显示确认对话框
+        this.$confirm({
+          title: '确认导出',
+          content: '确定要导出当前筛选条件下的所有库存数据吗？',
+          okText: '确定',
+          cancelText: '取消',
+          onOk: () => {
+            this.performExport()
+          }
+        })
       },
+      
+            performExport() {
+        const loading = this.$message.loading('正在准备导出数据，请稍候...', 0)
+        
+        // 构造导出参数
+        const params = {}
+        
+        // 添加商品筛选参数
+        if (this.queryParam.materialParam) {
+          params.materialParam = this.queryParam.materialParam
+        }
+        
+        // 添加时间范围参数
+        if (this.queryParam.createTimeRange && this.queryParam.createTimeRange.length === 2) {
+          params.beginTime = this.queryParam.createTimeRange[0].format('YYYY-MM-DD')
+          params.endTime = this.queryParam.createTimeRange[1].format('YYYY-MM-DD')
+        }
+        
+        // 使用downFile函数下载文件
+        downFile('/depotItem/exportMaterialStock', params).then((data) => {
+          loading()
+          if (!data) {
+            this.$message.warning('文件下载失败')
+            return
+          }
+          
+          // 创建下载链接
+          if (typeof window.navigator.msSaveBlob !== 'undefined') {
+            window.navigator.msSaveBlob(new Blob([data], {type: 'application/vnd.ms-excel'}), '商品库存数据.xls')
+          } else {
+            let url = window.URL.createObjectURL(new Blob([data], {type: 'application/vnd.ms-excel'}))
+            let link = document.createElement('a')
+            link.style.display = 'none'
+            link.href = url
+            link.setAttribute('download', '商品库存数据_' + this.getNowFormatStr() + '.xls')
+            document.body.appendChild(link)
+            link.click()
+            document.body.removeChild(link) // 下载完成移除元素
+            window.URL.revokeObjectURL(url) // 释放掉blob对象
+          }
+          
+          this.$message.success('导出成功')
+        }).catch((error) => {
+          loading()
+          console.error('导出失败:', error)
+          this.$message.error('导出失败，请重试')
+        })
+      },
+      
+      // 获取当前时间格式化字符串
+      getNowFormatStr() {
+        return moment().format('YYYYMMDD_HHmmss')
+      },
+      
       showLowStockAlert() {
         this.$message.info('显示低库存预警')
       },

@@ -15,13 +15,16 @@ import com.jsh.erp.exception.BusinessRunTimeException;
 import com.jsh.erp.exception.JshException;
 import com.jsh.erp.utils.StringUtil;
 import com.jsh.erp.utils.Tools;
+import com.jsh.erp.utils.ExcelUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import java.io.File;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 import java.math.BigDecimal;
 import java.text.SimpleDateFormat;
 import java.util.*;
@@ -1827,5 +1830,176 @@ public class DepotItemService {
         } catch (Exception e) {
             logger.warn("清除缓存失败，error={}", e.getMessage());
         }
+    }
+
+    /**
+     * 导出商品库存数据到Excel
+     * 
+     * @param materialParam 商品筛选参数
+     * @param beginTime     开始时间
+     * @param endTime       结束时间
+     * @param response      HTTP响应对象
+     * @throws Exception
+     */
+    public void exportMaterialStockToExcel(String materialParam, String beginTime, String endTime,
+            HttpServletResponse response) throws Exception {
+        logger.info("开始导出商品库存数据，参数: materialParam={}, beginTime={}, endTime={}", materialParam, beginTime, endTime);
+
+        // 1. 获取所有符合条件的库存数据（不分页）
+        // 使用现有的查询方法，设置一个较大的数量限制来获取所有数据
+        List<MaterialStockPeriodVo> stockList = depotItemMapperEx.getMaterialPeriodStock(materialParam, 0, 999999);
+
+        if (stockList == null || stockList.isEmpty()) {
+            throw new BusinessRunTimeException(ExceptionConstants.MATERIAL_NOT_EXISTS_CODE, "没有找到符合条件的库存数据");
+        }
+
+        logger.info("查询到{}条库存数据", stockList.size());
+
+        // 2. 如果有时间范围，获取每日出库数据
+        Map<String, Map<String, Object>> dailyOutMap = new HashMap<>();
+        List<String> dateColumns = new ArrayList<>();
+
+        if (StringUtil.isNotEmpty(beginTime) && StringUtil.isNotEmpty(endTime)) {
+            // 生成完整的日期列表（包含起止日期，格式yyyy-MM-dd）
+            List<String> fullDateList = new ArrayList<>();
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+            Date start = sdf.parse(beginTime);
+            Date end = sdf.parse(endTime);
+            Calendar cal = Calendar.getInstance();
+            cal.setTime(start);
+            while (!cal.getTime().after(end)) {
+                fullDateList.add(sdf.format(cal.getTime()));
+                cal.add(Calendar.DATE, 1);
+            }
+            dateColumns.addAll(fullDateList);
+
+            // 提取商品ID列表
+            StringBuilder materialIds = new StringBuilder();
+            for (int i = 0; i < stockList.size(); i++) {
+                if (i > 0)
+                    materialIds.append(",");
+                materialIds.append(stockList.get(i).getMaterialId());
+            }
+
+            if (materialIds.length() > 0) {
+                String formattedBeginTime = beginTime + BusinessConstants.DAY_FIRST_TIME;
+                String formattedEndTime = endTime + BusinessConstants.DAY_LAST_TIME;
+
+                List<Map<String, Object>> dailyOutList = getDailyOutStock(
+                        materialIds.toString(), formattedBeginTime, formattedEndTime);
+
+                // 将每日出库数据按商品编码和日期组织
+                for (Map<String, Object> dailyOut : dailyOutList) {
+                    String barCode = (String) dailyOut.get("barCode");
+                    String outDate = (String) dailyOut.get("outDate");
+
+                    if (!dailyOutMap.containsKey(barCode)) {
+                        dailyOutMap.put(barCode, new HashMap<>());
+                    }
+                    dailyOutMap.get(barCode).put(outDate, dailyOut.get("outQuantity"));
+                }
+            }
+        }
+
+        // 3. 构造Excel表头 - 按照要求的固定列顺序
+        List<String> headers = new ArrayList<>();
+        headers.add("商品编码");
+        headers.add("商品名称");
+        headers.add("上期结存");
+        headers.add("本期入库");
+        headers.add("本期出库");
+        headers.add("本期结存");
+
+        // 添加每日出库列（动态列）
+        for (String date : dateColumns) {
+            headers.add(date);
+        }
+
+        if (stockList.get(0).getStockAlertStatus() != null) {
+            headers.add("库存预警状态");
+        }
+
+        String[] headerArray = headers.toArray(new String[0]);
+
+        // 4. 构造Excel数据 - 按照表头顺序排列数据
+        List<Object[]> dataList = new ArrayList<>();
+        for (MaterialStockPeriodVo stock : stockList) {
+            List<Object> row = new ArrayList<>();
+
+            // 固定前6列数据
+            row.add(stock.getBarCode()); // 商品编码
+            row.add(stock.getMaterialName()); // 商品名称
+            row.add(stock.getPreviousPeriodStock() != null
+                    ? stock.getPreviousPeriodStock().setScale(2, BigDecimal.ROUND_HALF_UP)
+                    : BigDecimal.ZERO); // 上期结存
+            row.add(stock.getCurrentPeriodIn() != null
+                    ? stock.getCurrentPeriodIn().setScale(2, BigDecimal.ROUND_HALF_UP)
+                    : BigDecimal.ZERO); // 本期入库
+            row.add(stock.getCurrentPeriodOut() != null
+                    ? stock.getCurrentPeriodOut().setScale(2, BigDecimal.ROUND_HALF_UP)
+                    : BigDecimal.ZERO); // 本期出库
+            row.add(stock.getCurrentPeriodStock() != null
+                    ? stock.getCurrentPeriodStock().setScale(2, BigDecimal.ROUND_HALF_UP)
+                    : BigDecimal.ZERO); // 本期结存
+
+            // 添加每日出库数据（动态列）
+            Map<String, Object> dailyData = dailyOutMap.get(stock.getBarCode());
+            for (String date : dateColumns) {
+                Object quantity = dailyData != null ? dailyData.get(date) : null;
+                if (quantity instanceof BigDecimal) {
+                    row.add(((BigDecimal) quantity).setScale(2, BigDecimal.ROUND_HALF_UP));
+                } else if (quantity instanceof Number) {
+                    row.add(new BigDecimal(quantity.toString()).setScale(2, BigDecimal.ROUND_HALF_UP));
+                } else {
+                    row.add(BigDecimal.ZERO);
+                }
+            }
+
+            // 库存预警状态（可选列）
+            if (stock.getStockAlertStatus() != null) {
+                String alertStatusText = "";
+                switch (stock.getStockAlertStatus()) {
+                    case "CRITICAL":
+                        alertStatusText = "库存告急";
+                        break;
+                    case "WARNING":
+                        alertStatusText = "库存预警";
+                        break;
+                    case "RISK_IGNORED":
+                        alertStatusText = "风险已忽略";
+                        break;
+                    default:
+                        alertStatusText = "正常";
+                        break;
+                }
+                row.add(alertStatusText);
+            }
+
+            dataList.add(row.toArray());
+        }
+
+        // 5. 生成Excel文件
+        String title = "商品库存数据";
+        String fileName = "商品库存数据_" + getNowFormatStr();
+        String tip = "导出时间：" + getNowFormatStr();
+        if (StringUtil.isNotEmpty(beginTime) && StringUtil.isNotEmpty(endTime)) {
+            tip += "，时间范围：" + beginTime + " ~ " + endTime;
+        }
+        if (StringUtil.isNotEmpty(materialParam)) {
+            tip += "，筛选条件：" + materialParam;
+        }
+
+        File file = ExcelUtils.exportStockDataWithFrozenColumns(fileName, tip, headerArray, title, dataList);
+        ExcelUtils.downloadExcel(file, fileName, response);
+
+        logger.info("商品库存数据导出完成，共导出{}条记录", dataList.size());
+    }
+
+    /**
+     * 获取当前时间格式化字符串
+     */
+    private String getNowFormatStr() {
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+        return sdf.format(new Date());
     }
 }

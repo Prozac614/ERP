@@ -2036,4 +2036,37 @@ public class DepotItemController {
         return res;
     }
 
+    /**
+     * 导出商品库存数据
+     * 
+     * @param materialParam 商品筛选参数
+     * @param beginTime     开始时间
+     * @param endTime       结束时间
+     * @param request       请求对象
+     * @param response      响应对象
+     */
+    @GetMapping(value = "/exportMaterialStock")
+    @ApiOperation(value = "导出商品库存数据")
+    public void exportMaterialStock(
+            @RequestParam(value = "materialParam", required = false) String materialParam,
+            @RequestParam(value = "beginTime", required = false) String beginTime,
+            @RequestParam(value = "endTime", required = false) String endTime,
+            HttpServletRequest request,
+            HttpServletResponse response) {
+        try {
+            depotItemService.exportMaterialStockToExcel(
+                    StringUtil.toNull(materialParam),
+                    StringUtil.toNull(beginTime),
+                    StringUtil.toNull(endTime),
+                    response);
+        } catch (Exception e) {
+            logger.error("导出商品库存数据失败", e);
+            try {
+                response.setContentType("application/json;charset=UTF-8");
+                response.getWriter().write("{\"success\":false,\"message\":\"导出失败: " + e.getMessage() + "\"}");
+            } catch (Exception ex) {
+                logger.error("返回错误信息失败", ex);
+            }
+        }
+    }
 }
