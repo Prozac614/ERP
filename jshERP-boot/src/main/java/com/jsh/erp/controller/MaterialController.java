@@ -186,7 +186,8 @@ public class MaterialController extends BaseController {
             @RequestParam("unitId") Long unitId,
             HttpServletRequest request) throws Exception {
         Map<String, Object> objectMap = new HashMap<String, Object>();
-        int exist = materialService.checkIsExist(id, name, StringUtil.toNull(model), StringUtil.toNull(color),
+        int exist = materialService.checkIsExist(id, StringUtil.toNull(name), StringUtil.toNull(model),
+                StringUtil.toNull(color),
                 StringUtil.toNull(standard), StringUtil.toNull(mfrs), StringUtil.toNull(otherField1),
                 StringUtil.toNull(otherField2), StringUtil.toNull(otherField3), StringUtil.toNull(unit), unitId);
         if (exist > 0) {
