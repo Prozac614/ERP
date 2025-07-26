@@ -1915,19 +1915,28 @@ public class DepotItemController {
     /**
      * 批量计算库存预警状态
      *
+     * @param obj
      * @param request
      * @return
      * @throws Exception
      */
     @PostMapping(value = "/calculateAllStockAlertStatus")
     @ApiOperation(value = "批量计算库存预警状态")
-    public BaseResponseInfo calculateAllStockAlertStatus(HttpServletRequest request) throws Exception {
+    public BaseResponseInfo calculateAllStockAlertStatus(@RequestBody JSONObject obj, HttpServletRequest request)
+            throws Exception {
         BaseResponseInfo res = new BaseResponseInfo();
         try {
             User user = userService.getCurrentUser();
             Long tenantId = user != null ? user.getTenantId() : null;
 
-            Map<String, Object> result = depotItemOptimizedService.calculateAllStockAlertStatus(tenantId);
+            // 从请求体中读取是否保留忽略风险状态参数，默认为false（覆盖所有状态）
+            Boolean preserveIgnoredStatus = obj.getBoolean("preserveIgnoredStatus");
+            if (preserveIgnoredStatus == null) {
+                preserveIgnoredStatus = false;
+            }
+
+            Map<String, Object> result = depotItemOptimizedService.calculateAllStockAlertStatus(tenantId,
+                    preserveIgnoredStatus);
 
             res.code = 200;
             res.data = result;

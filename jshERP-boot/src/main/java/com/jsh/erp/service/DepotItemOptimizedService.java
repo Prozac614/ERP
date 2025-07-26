@@ -425,10 +425,22 @@ public class DepotItemOptimizedService {
      * @return 更新结果
      */
     public Map<String, Object> calculateAllStockAlertStatus(Long tenantId) {
+        return calculateAllStockAlertStatus(tenantId, false);
+    }
+
+    /**
+     * 批量计算和更新所有商品的库存告急状态
+     * 校验逻辑：当前库存 >= 过去六个月总出库量 则无风险，否则库存告急
+     * 
+     * @param tenantId              租户ID
+     * @param preserveIgnoredStatus 是否保留忽略风险状态（true=不覆盖忽略风险状态，false=覆盖所有状态）
+     * @return 更新结果
+     */
+    public Map<String, Object> calculateAllStockAlertStatus(Long tenantId, Boolean preserveIgnoredStatus) {
         Map<String, Object> result = new HashMap<>();
 
         try {
-            logger.info("开始批量计算库存告急状态，租户ID：{}", tenantId);
+            logger.info("开始批量计算库存告急状态，租户ID：{}，保留忽略风险状态：{}", tenantId, preserveIgnoredStatus);
 
             // 获取所有商品（不分页）
             List<MaterialStockPeriodVo> allStockList = depotItemMapperEx.getMaterialPeriodStockOptimized(
@@ -438,8 +450,16 @@ public class DepotItemOptimizedService {
             int updatedCount = 0;
             int noRiskCount = 0;
             int alertCount = 0;
+            int ignoredCount = 0;
 
             for (MaterialStockPeriodVo stock : allStockList) {
+                // 如果需要保留忽略风险状态，且当前商品状态为忽略风险，则跳过
+                if (preserveIgnoredStatus != null && preserveIgnoredStatus &&
+                        "RISK_IGNORED".equals(stock.getStockAlertStatus())) {
+                    ignoredCount++;
+                    continue;
+                }
+
                 // 获取当前库存
                 BigDecimal currentStock = stock.getCurrentPeriodStock();
                 if (currentStock == null) {
@@ -459,7 +479,7 @@ public class DepotItemOptimizedService {
                     alertCount++;
                 }
 
-                // 直接覆盖原有状态，更新数据库
+                // 更新数据库
                 materialService.updateStockAlertStatus(stock.getMaterialId(), newStatus, sixMonthsSales);
                 updatedCount++;
 
@@ -473,11 +493,20 @@ public class DepotItemOptimizedService {
             result.put("updatedCount", updatedCount);
             result.put("noRiskCount", noRiskCount);
             result.put("alertCount", alertCount);
-            result.put("message", String.format("成功校验%d个商品：无风险%d个，库存告急%d个",
-                    updatedCount, noRiskCount, alertCount));
+            result.put("ignoredCount", ignoredCount);
 
-            logger.info("批量计算库存告急状态完成：总数={}, 更新={}, 无风险={}, 告急={}",
-                    totalCount, updatedCount, noRiskCount, alertCount);
+            String message;
+            if (preserveIgnoredStatus != null && preserveIgnoredStatus && ignoredCount > 0) {
+                message = String.format("成功校验%d个商品：无风险%d个，库存告急%d个，跳过忽略风险%d个",
+                        updatedCount, noRiskCount, alertCount, ignoredCount);
+            } else {
+                message = String.format("成功校验%d个商品：无风险%d个，库存告急%d个",
+                        updatedCount, noRiskCount, alertCount);
+            }
+            result.put("message", message);
+
+            logger.info("批量计算库存告急状态完成：总数={}, 更新={}, 无风险={}, 告急={}, 跳过忽略风险={}",
+                    totalCount, updatedCount, noRiskCount, alertCount, ignoredCount);
 
         } catch (Exception e) {
             logger.error("批量计算库存告急状态失败", e);

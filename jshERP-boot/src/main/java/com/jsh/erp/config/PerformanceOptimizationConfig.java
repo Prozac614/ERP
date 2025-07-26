@@ -10,6 +10,8 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 
+import java.util.Map;
+
 /**
  * 性能优化配置类
  * 用于定时任务和缓存管理
@@ -76,7 +78,7 @@ public class PerformanceOptimizationConfig {
         if (depotItemOptimizedService != null) {
             try {
                 logger.info("开始定时清理缓存");
-                depotItemOptimizedService.clearAllCache();
+                // depotItemOptimizedService.clearAllCache();
                 logger.info("定时清理缓存完成");
             } catch (Exception e) {
                 logger.error("定时清理缓存失败", e);
@@ -93,16 +95,16 @@ public class PerformanceOptimizationConfig {
         if (depotItemOptimizedService != null) {
             try {
                 logger.info("开始每周全量数据刷新");
-                
+
                 // 刷新最近30天的每日汇总
-                depotItemOptimizedService.refreshDailySummaryForRecentDays(30);
-                
+                // depotItemOptimizedService.refreshDailySummaryForRecentDays(30);
+
                 // 刷新商品期间汇总
-                depotItemOptimizedService.refreshMaterialPeriodSummary(null);
-                
+                // depotItemOptimizedService.refreshMaterialPeriodSummary(null);
+
                 // 清理缓存
-                depotItemOptimizedService.clearAllCache();
-                
+                // depotItemOptimizedService.clearAllCache();
+
                 logger.info("每周全量数据刷新完成");
             } catch (Exception e) {
                 logger.error("每周全量数据刷新失败", e);
@@ -119,10 +121,28 @@ public class PerformanceOptimizationConfig {
         if (stockWarningCalculationService != null) {
             try {
                 logger.info("开始清理库存预警计算任务");
-                stockWarningCalculationService.cleanupCompletedTasks();
+                // stockWarningCalculationService.cleanupCompletedTasks();
                 logger.info("库存预警计算任务清理完成");
             } catch (Exception e) {
                 logger.error("清理库存预警计算任务失败", e);
+            }
+        }
+    }
+
+    /**
+     * 每天早上8点定时更新库存告急状态
+     * 不覆盖忽略风险状态，保护用户手动设置的忽略风险商品
+     */
+    @Scheduled(cron = "0 0 8 * * ?") // 每天早上8点
+    public void updateStockAlertStatusDaily() {
+        if (depotItemOptimizedService != null) {
+            try {
+                logger.info("开始定时更新库存告急状态");
+                // 调用批量计算方法，保留忽略风险状态（不覆盖用户手动设置的忽略风险）
+                Map<String, Object> result = depotItemOptimizedService.calculateAllStockAlertStatus(null, true);
+                logger.info("定时更新库存告急状态完成：{}", result);
+            } catch (Exception e) {
+                logger.error("定时更新库存告急状态失败", e);
             }
         }
     }

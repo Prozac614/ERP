@@ -215,6 +215,7 @@
         dailyOutData: {},
         dateColumns: [],
         calculatingAlert: false, // 库存预警校验加载状态
+        overrideIgnoredStatus: false, // 是否覆盖忽略风险状态
         
         // 库存状态选项
         stockAlertStatusOptions: [
@@ -640,14 +641,31 @@
         try {
           // 显示确认对话框
           this.$confirm({
-            title: '确认校验',
-            content: '此操作将重新校验所有商品的库存预警状态，校验结果将覆盖原有状态（包括忽略风险状态），是否继续？',
+            title: '库存预警校验配置',
+            content: () => {
+              return this.$createElement('div', [
+                this.$createElement('p', { style: { marginBottom: '16px' } }, 
+                  '此操作将重新校验所有商品的库存预警状态，请选择校验方式：'),
+                this.$createElement('div', { style: { marginBottom: '12px' } }, [
+                  this.$createElement('a-checkbox', {
+                    props: { checked: this.overrideIgnoredStatus },
+                    on: { change: (e) => { this.overrideIgnoredStatus = e.target.checked } }
+                  }, '覆盖忽略风险状态')
+                ]),
+                this.$createElement('p', { 
+                  style: { fontSize: '12px', color: '#666', margin: '0' } 
+                }, '提示：取消勾选将保护已忽略风险的商品，勾选则重新校验所有商品（包括忽略风险的商品）')
+              ])
+            },
             okText: '确认校验',
             cancelText: '取消',
             onOk: async () => {
               this.calculatingAlert = true
               try {
-                const res = await this.$http.post('/depotItem/calculateAllStockAlertStatus')
+                const requestData = {
+                  preserveIgnoredStatus: !this.overrideIgnoredStatus
+                }
+                const res = await this.$http.post('/depotItem/calculateAllStockAlertStatus', requestData)
                 if (res.code === 200) {
                   this.$message.success(res.data.message || '库存预警状态校验完成')
                   // 刷新数据
