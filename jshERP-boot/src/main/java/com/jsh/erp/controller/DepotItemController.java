@@ -1210,6 +1210,10 @@ public class DepotItemController {
             Map<String, Object> resultMap = depotItemOptimizedService.getOptimizedMaterialStockWithDailyOut(
                     currentPage, pageSize, materialParam, beginTime, endTime, stockAlertStatus, request);
 
+            // 添加库存预警权限标识
+            boolean hasStockAlertPermission = StockAlertPermissionUtil.hasStockAlertPermission(request);
+            resultMap.put("hasStockAlertPermission", hasStockAlertPermission);
+
             res.code = 200;
             res.data = resultMap;
 
@@ -1926,6 +1930,13 @@ public class DepotItemController {
             throws Exception {
         BaseResponseInfo res = new BaseResponseInfo();
         try {
+            // 检查库存预警权限
+            if (!StockAlertPermissionUtil.hasStockAlertPermission(request)) {
+                res.code = 403;
+                res.data = "没有库存预警功能权限";
+                return res;
+            }
+
             User user = userService.getCurrentUser();
             Long tenantId = user != null ? user.getTenantId() : null;
 
@@ -1964,6 +1975,13 @@ public class DepotItemController {
     public BaseResponseInfo ignoreStockRisk(@RequestBody JSONObject obj, HttpServletRequest request) throws Exception {
         BaseResponseInfo res = new BaseResponseInfo();
         try {
+            // 检查库存预警权限
+            if (!StockAlertPermissionUtil.hasStockAlertPermission(request)) {
+                res.code = 403;
+                res.data = "没有库存预警功能权限";
+                return res;
+            }
+
             Long materialId = obj.getLong("materialId");
 
             materialService.ignoreStockRisk(materialId);
@@ -1994,6 +2012,13 @@ public class DepotItemController {
     public BaseResponseInfo focusStockRisk(@RequestBody JSONObject obj, HttpServletRequest request) throws Exception {
         BaseResponseInfo res = new BaseResponseInfo();
         try {
+            // 检查库存预警权限
+            if (!StockAlertPermissionUtil.hasStockAlertPermission(request)) {
+                res.code = 403;
+                res.data = "没有库存预警功能权限";
+                return res;
+            }
+
             Long materialId = obj.getLong("materialId");
 
             materialService.focusStockRisk(materialId);

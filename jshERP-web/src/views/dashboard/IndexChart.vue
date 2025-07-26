@@ -57,7 +57,8 @@
                     type="default"
                     icon="calculator"
                     style="margin-left: 8px;"
-                    :loading="calculatingAlert">
+                    :loading="calculatingAlert"
+                    v-if="hasStockAlertPermission">
             库存预警校验
           </a-button>
 
@@ -134,13 +135,13 @@
               <div>
                 <a @click="viewChart(record)">查看图表</a>
               </div>
-              <div v-if="record.stockAlertStatus === 'STOCK_ALERT'" style="margin-top: 4px;">
+              <div v-if="record.stockAlertStatus === 'STOCK_ALERT' && hasStockAlertPermission" style="margin-top: 4px;">
                 <a @click="ignoreStockRisk(record)"
                    style="color: #fa8c16;">
                   忽略风险
                 </a>
               </div>
-              <div v-if="record.stockAlertStatus === 'RISK_IGNORED'" style="margin-top: 4px;">
+              <div v-if="record.stockAlertStatus === 'RISK_IGNORED' && hasStockAlertPermission" style="margin-top: 4px;">
                 <a @click="focusStockRisk(record)"
                    style="color: #1890ff;">
                   关注风险
@@ -203,7 +204,7 @@
       JEllipsis,
       StockChartModal
     },
-    data () {
+            data () {
       return {
         // 查询条件
         queryParam: {
@@ -216,6 +217,7 @@
         dateColumns: [],
         calculatingAlert: false, // 库存预警校验加载状态
         overrideIgnoredStatus: false, // 是否覆盖忽略风险状态
+        hasStockAlertPermission: false, // 库存预警权限标识
         
         // 库存状态选项
         stockAlertStatusOptions: [
@@ -476,6 +478,9 @@
         this.dataSource = data.rows || []
         this.ipagination.total = data.total || 0
         this.dailyOutData = data.dailyOutData || {}
+        
+        // 更新权限标识
+        this.hasStockAlertPermission = data.hasStockAlertPermission || false
 
         // 合并每日出库数据到商品数据中
         this.mergeDataOptimized()
