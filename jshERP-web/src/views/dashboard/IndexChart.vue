@@ -127,7 +127,7 @@
             :dataSource="dataSource"
             :components="handleDrag(columns)"
             :pagination="paginationConfig"
-            :scroll="scroll"
+            :scroll="{ x: scroll.x, y: tableBodyHeight }"
             :loading="loading"
             :rowSelection="{selectedRowKeys: selectedRowKeys, onChange: onSelectChange}"
             @change="handleTableChange">
@@ -260,6 +260,8 @@
 
         // 表格滚动
         scroll: { x: 0 },
+        // 新增：表格内部滚动高度
+        tableBodyHeight: 0,
         // 默认索引（包含库存状态列）
         defDataIndex: ['action', 'barCode', 'materialName', 'previousPeriodStock', 'currentPeriodIn', 'currentPeriodOut', 'currentPeriodStock', 'stockAlertStatus'],
         settingDataIndex: ['action', 'barCode', 'materialName', 'previousPeriodStock', 'currentPeriodIn', 'currentPeriodOut', 'currentPeriodStock', 'stockAlertStatus'],
@@ -317,6 +319,10 @@
       if (window.gc) {
         console.log('🗑️ 触发垃圾回收')
         window.gc()
+      }
+      // 移除resize监听
+      if (this._resizeHandler) {
+        window.removeEventListener('resize', this._resizeHandler);
       }
     },
     methods: {
@@ -692,7 +698,36 @@
           this.$message.error('操作失败')
         }
       },
-    }
+      // 新增：计算表格可用高度
+      calcTableBodyHeight() {
+        // 获取窗口高度
+        const windowHeight = document.documentElement.clientHeight;
+        // 获取搜索区高度
+        const searchWrapper = this.$el.querySelector('.table-page-search-wrapper');
+        const searchHeight = searchWrapper ? searchWrapper.offsetHeight : 0;
+        // 获取操作按钮区高度
+        const operator = this.$el.querySelector('.table-operator');
+        const operatorHeight = operator ? operator.offsetHeight : 0;
+        // 预估分页条高度（如有分页）
+        const paginationHeight = 120; // 进一步增加分页高度预留
+        // 预留边距/padding
+        const padding = 80; // 进一步增加边距预留
+        // 计算可用高度
+        this.tableBodyHeight = windowHeight - searchHeight - operatorHeight - paginationHeight - padding;
+        if (this.tableBodyHeight < 200) this.tableBodyHeight = 200; // 最小高度保护
+      },
+    },
+    mounted() {
+      // 初始化表格高度
+      this.$nextTick(() => {
+        this.calcTableBodyHeight();
+      });
+      // 监听窗口resize
+      this._resizeHandler = () => {
+        this.calcTableBodyHeight();
+      };
+      window.addEventListener('resize', this._resizeHandler);
+    },
   }
 </script>
 
