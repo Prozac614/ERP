@@ -120,7 +120,7 @@
           <!-- 标准分页表格 -->
           <a-table
             ref="table"
-            size="middle"
+            size="small"
             bordered
             rowKey="id"
             :columns="columns"
@@ -271,17 +271,17 @@ import { getAction, postAction, downFile } from '@/api/manage'
             title: '操作',
             dataIndex: 'action',
             align: "center", 
-            width: 120,
+            width: 80,
             fixed: 'left',
             scopedSlots: { customRender: 'action' },
           },
-          { title: '商品编码', dataIndex: 'barCode', width: 120, fixed: 'left' },
-          { title: '商品名称', dataIndex: 'materialName', width: 200, ellipsis: true, fixed: 'left' },
-          { title: '上期结存', dataIndex: 'previousPeriodStock', width: 120, fixed: 'left', scopedSlots: { customRender: 'customRenderStock' } },
-          { title: '本期入库', dataIndex: 'currentPeriodIn', width: 120, fixed: 'left', scopedSlots: { customRender: 'customRenderStock' } },
-          { title: '本期出库', dataIndex: 'currentPeriodOut', width: 120, fixed: 'left', scopedSlots: { customRender: 'customRenderStock' } },
-          { title: '本期结存', dataIndex: 'currentPeriodStock', width: 120, fixed: 'left', scopedSlots: { customRender: 'customRenderStock' } },
-          { title: '库存状态', dataIndex: 'stockAlertStatus', width: 120, align: 'center', fixed: 'left', scopedSlots: { customRender: 'stockAlertStatusRender' } }
+          { title: '商品编码', dataIndex: 'barCode', width: 100, fixed: 'left' },
+          { title: '商品名称', dataIndex: 'materialName', width: 150, ellipsis: true, fixed: 'left' },
+          { title: '上期结存', dataIndex: 'previousPeriodStock', width: 90, fixed: 'left', scopedSlots: { customRender: 'customRenderStock' } },
+          { title: '本期入库', dataIndex: 'currentPeriodIn', width: 90, fixed: 'left', scopedSlots: { customRender: 'customRenderStock' } },
+          { title: '本期出库', dataIndex: 'currentPeriodOut', width: 90, fixed: 'left', scopedSlots: { customRender: 'customRenderStock' } },
+          { title: '本期结存', dataIndex: 'currentPeriodStock', width: 90, fixed: 'left', scopedSlots: { customRender: 'customRenderStock' } },
+          { title: '库存状态', dataIndex: 'stockAlertStatus', width: 110, align: 'center', fixed: 'left', scopedSlots: { customRender: 'stockAlertStatusRender' } }
         ]
 
       }
@@ -378,13 +378,13 @@ import { getAction, postAction, downFile } from '@/api/manage'
         this.dateColumns = dates.map(date => ({
           title: moment(date).format('MM-DD'),
           dataIndex: `out_${date}`,
-          width: 80,
+          width: 60,
           align: 'center',
           scopedSlots: { customRender: 'dailyOutRender' }
         }))
         
         // 更新滚动宽度
-        this.scroll.x = (this.dateColumns.length * 80)
+        this.scroll.x = (this.dateColumns.length * 60)
       },
 
       // 防抖处理的数据加载
@@ -818,5 +818,14 @@ import { getAction, postAction, downFile } from '@/api/manage'
 
   .table-operator .ant-btn-group {
     margin-right: 8px;
+  }
+
+  /* 表格紧凑化样式 */
+  .ant-table-tbody > tr > td {
+    padding: 8px 12px !important;
+  }
+  
+  .ant-table-thead > tr > th {
+    padding: 10px 12px !important;
   }
 </style>
