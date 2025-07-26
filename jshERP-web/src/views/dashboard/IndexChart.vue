@@ -259,7 +259,7 @@
         },
 
         // 表格滚动
-        scroll: { x: 920 },
+        scroll: { x: 0 },
         // 默认索引（包含库存状态列）
         defDataIndex: ['action', 'barCode', 'materialName', 'previousPeriodStock', 'currentPeriodIn', 'currentPeriodOut', 'currentPeriodStock', 'stockAlertStatus'],
         settingDataIndex: ['action', 'barCode', 'materialName', 'previousPeriodStock', 'currentPeriodIn', 'currentPeriodOut', 'currentPeriodStock', 'stockAlertStatus'],
@@ -270,15 +270,16 @@
             dataIndex: 'action',
             align: "center", 
             width: 120,
+            fixed: 'left',
             scopedSlots: { customRender: 'action' },
           },
-          { title: '商品编码', dataIndex: 'barCode', width: 120 },
-          { title: '商品名称', dataIndex: 'materialName', width: 200, ellipsis: true },
-          { title: '上期结存', dataIndex: 'previousPeriodStock', width: 120, scopedSlots: { customRender: 'customRenderStock' } },
-          { title: '本期入库', dataIndex: 'currentPeriodIn', width: 120, scopedSlots: { customRender: 'customRenderStock' } },
-          { title: '本期出库', dataIndex: 'currentPeriodOut', width: 120, scopedSlots: { customRender: 'customRenderStock' } },
-          { title: '本期结存', dataIndex: 'currentPeriodStock', width: 120, scopedSlots: { customRender: 'customRenderStock' } },
-          { title: '库存状态', dataIndex: 'stockAlertStatus', width: 120, align: 'center', scopedSlots: { customRender: 'stockAlertStatusRender' } }
+          { title: '商品编码', dataIndex: 'barCode', width: 120, fixed: 'left' },
+          { title: '商品名称', dataIndex: 'materialName', width: 200, ellipsis: true, fixed: 'left' },
+          { title: '上期结存', dataIndex: 'previousPeriodStock', width: 120, fixed: 'left', scopedSlots: { customRender: 'customRenderStock' } },
+          { title: '本期入库', dataIndex: 'currentPeriodIn', width: 120, fixed: 'left', scopedSlots: { customRender: 'customRenderStock' } },
+          { title: '本期出库', dataIndex: 'currentPeriodOut', width: 120, fixed: 'left', scopedSlots: { customRender: 'customRenderStock' } },
+          { title: '本期结存', dataIndex: 'currentPeriodStock', width: 120, fixed: 'left', scopedSlots: { customRender: 'customRenderStock' } },
+          { title: '库存状态', dataIndex: 'stockAlertStatus', width: 120, align: 'center', fixed: 'left', scopedSlots: { customRender: 'stockAlertStatusRender' } }
         ]
 
       }
@@ -377,7 +378,7 @@
         }))
         
         // 更新滚动宽度
-        this.scroll.x = 920 + (this.dateColumns.length * 80)
+        this.scroll.x = (this.dateColumns.length * 80)
       },
 
       // 防抖处理的数据加载
