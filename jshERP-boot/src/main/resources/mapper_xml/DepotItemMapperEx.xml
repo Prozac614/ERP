@@ -1547,6 +1547,7 @@
              WHERE di.material_id = #{materialId} 
                AND DATE(dh.oper_time) = #{targetDate}
                AND dh.type = '出库' 
+               AND dh.sub_type = '销售' 
                AND dh.status = '1'
                AND IFNULL(di.delete_flag, '0') != '1'
                AND IFNULL(dh.delete_flag, '0') != '1'
@@ -1560,6 +1561,7 @@
              WHERE di.material_id = #{materialId} 
                AND DATE(dh.oper_time) = #{targetDate}
                AND dh.type = '出库' 
+               AND dh.sub_type = '销售' 
                AND dh.status = '1'
                AND IFNULL(di.delete_flag, '0') != '1'
                AND IFNULL(dh.delete_flag, '0') != '1'
@@ -1573,6 +1575,7 @@
              WHERE di.material_id = #{materialId} 
                AND DATE(dh.oper_time) = #{targetDate}
                AND dh.type = '出库' 
+               AND dh.sub_type = '销售' 
                AND dh.status = '1'
                AND IFNULL(di.delete_flag, '0') != '1'
                AND IFNULL(dh.delete_flag, '0') != '1'
