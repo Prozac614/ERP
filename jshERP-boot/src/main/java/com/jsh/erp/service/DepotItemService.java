@@ -1629,7 +1629,77 @@ public class DepotItemService {
         // 3. 清除相关缓存
         clearRelatedCache();
 
+        // 4. 更新库存预警状态
+        try {
+            updateStockAlertStatusForMaterial(materialId, tenantId);
+        } catch (Exception e) {
+            logger.warn("更新库存预警状态失败，但不影响其他操作: materialId={}, error={}", materialId, e.getMessage());
+        }
+
         logger.debug("汇总表更新完成，materialId={}, depotId={}, operTime={}", materialId, depotId, operTime);
+    }
+
+    /**
+     * 更新指定商品的库存预警状态
+     * 
+     * @param materialId 商品ID
+     * @param tenantId   租户ID
+     */
+    private void updateStockAlertStatusForMaterial(Long materialId, Long tenantId) {
+        try {
+            logger.debug("开始更新商品库存预警状态，materialId={}, tenantId={}", materialId, tenantId);
+
+            // 1. 获取商品信息
+            Material material = materialService.getMaterial(materialId);
+            if (material == null) {
+                logger.warn("商品不存在，跳过库存预警状态更新，materialId={}", materialId);
+                return;
+            }
+
+            // 2. 获取当前库存
+            BigDecimal currentStock = depotItemMapperEx.getMaterialCurrentStock(materialId, tenantId);
+            if (currentStock == null) {
+                currentStock = BigDecimal.ZERO;
+            }
+
+            // 3. 获取6个月销量
+            BigDecimal sixMonthsSales = depotItemMapperEx.getSixMonthsSalesByMaterialId(materialId, tenantId);
+            if (sixMonthsSales == null) {
+                sixMonthsSales = BigDecimal.ZERO;
+            }
+
+            logger.debug("库存预警状态计算参数，materialId={}, currentStock={}, sixMonthsSales={}",
+                    materialId, currentStock, sixMonthsSales);
+
+            // 4. 计算新的预警状态
+            String newAlertStatus;
+            if (currentStock.compareTo(sixMonthsSales) >= 0) {
+                newAlertStatus = "NO_RISK";
+            } else {
+                newAlertStatus = "STOCK_ALERT";
+            }
+
+            // 5. 获取当前预警状态
+            String currentAlertStatus = material.getStockAlertStatus();
+
+            logger.debug("预警状态计算结果，materialId={}, currentStatus={}, newStatus={}",
+                    materialId, currentAlertStatus, newAlertStatus);
+
+            // 6. 应用业务规则：如果新的预警状态是库存告警且原有的状态是忽略告警，不用更新库存状态
+            if ("STOCK_ALERT".equals(newAlertStatus) && "RISK_IGNORED".equals(currentAlertStatus)) {
+                logger.debug("新状态为库存告警且原状态为忽略告警，跳过更新，materialId={}", materialId);
+                return;
+            }
+
+            // 7. 更新预警状态
+            materialService.updateStockAlertStatus(materialId, newAlertStatus, sixMonthsSales);
+            logger.info("库存预警状态更新成功，materialId={}, oldStatus={}, newStatus={}, currentStock={}, sixMonthsSales={}",
+                    materialId, currentAlertStatus, newAlertStatus, currentStock, sixMonthsSales);
+
+        } catch (Exception e) {
+            logger.error("更新库存预警状态失败，materialId={}, tenantId={}", materialId, tenantId, e);
+            // 不抛出异常，避免影响主流程
+        }
     }
 
     /**
@@ -2001,5 +2071,73 @@ public class DepotItemService {
     private String getNowFormatStr() {
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
         return sdf.format(new Date());
+    }
+
+    /**
+     * 批量更新所有商品的期间汇总数据
+     * 用于定时任务调用
+     * 
+     * @throws Exception
+     */
+    @Transactional(value = "transactionManager", rollbackFor = Exception.class)
+    public void updateAllMaterialsPeriodSummary() throws Exception {
+        logger.info("开始批量更新所有商品的期间汇总数据");
+
+        try {
+            // 1. 获取所有未删除的商品列表
+            List<Material> materialList = materialService.getMaterial();
+            if (materialList == null || materialList.isEmpty()) {
+                logger.info("没有找到需要更新的商品数据");
+                return;
+            }
+
+            logger.info("找到{}个商品需要更新期间汇总数据", materialList.size());
+
+            // 2. 获取当前用户的租户ID
+            Long tenantId = null;
+            try {
+                User currentUser = userService.getCurrentUser();
+                tenantId = currentUser != null ? currentUser.getTenantId() : null;
+                logger.debug("获取到租户ID: {}", tenantId);
+            } catch (Exception e) {
+                logger.warn("获取当前用户租户ID失败，将使用null作为租户ID: {}", e.getMessage());
+            }
+
+            // 3. 分批处理商品（每批100个，避免内存问题）
+            int batchSize = 100;
+            int totalCount = materialList.size();
+            int successCount = 0;
+            int failCount = 0;
+
+            for (int i = 0; i < totalCount; i += batchSize) {
+                int endIndex = Math.min(i + batchSize, totalCount);
+                List<Material> batch = materialList.subList(i, endIndex);
+
+                logger.debug("处理第{}批商品，范围: {}-{}", (i / batchSize + 1), i, endIndex - 1);
+
+                for (Material material : batch) {
+                    try {
+                        // 4. 调用现有的更新方法
+                        updatePeriodSummaryForMaterialBusinessLogic(material.getId(), tenantId);
+                        successCount++;
+
+                        if (successCount % 50 == 0) {
+                            logger.info("已成功更新{}个商品的期间汇总数据", successCount);
+                        }
+                    } catch (Exception e) {
+                        failCount++;
+                        logger.error("更新商品{}的期间汇总数据失败: {}", material.getId(), e.getMessage());
+                        // 继续处理下一个商品，不中断整个批量处理
+                    }
+                }
+            }
+
+            logger.info("批量更新商品期间汇总数据完成 - 总数: {}, 成功: {}, 失败: {}",
+                    totalCount, successCount, failCount);
+
+        } catch (Exception e) {
+            logger.error("批量更新商品期间汇总数据时发生异常", e);
+            throw e;
+        }
     }
 }
