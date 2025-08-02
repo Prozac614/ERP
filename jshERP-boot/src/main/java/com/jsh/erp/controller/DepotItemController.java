@@ -1559,6 +1559,33 @@ public class DepotItemController {
     }
 
     /**
+     * 刷新所有商品期间汇总数据
+     * 
+     * @param request
+     * @return
+     * @throws Exception
+     */
+    @PostMapping(value = "/refreshAllMaterialsPeriodSummary")
+    @ApiOperation(value = "刷新所有商品期间汇总数据")
+    public BaseResponseInfo refreshAllMaterialsPeriodSummary(HttpServletRequest request) throws Exception {
+        BaseResponseInfo res = new BaseResponseInfo();
+        try {
+            depotItemService.updateAllMaterialsPeriodSummary();
+
+            res.code = 200;
+            res.data = "所有商品期间汇总数据刷新完成";
+
+            logger.info("所有商品期间汇总数据刷新成功");
+
+        } catch (Exception e) {
+            logger.error("刷新所有商品期间汇总数据失败", e);
+            res.code = 500;
+            res.data = "刷新失败: " + e.getMessage();
+        }
+        return res;
+    }
+
+    /**
      * 清除库存相关缓存
      * 
      * @param request

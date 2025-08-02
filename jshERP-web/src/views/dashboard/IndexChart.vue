@@ -61,6 +61,13 @@
                     v-if="hasStockAlertPermission">
             库存预警校验
           </a-button>
+          <a-button @click="refreshPeriodSummary"
+                    type="default"
+                    icon="sync"
+                    style="margin-left: 8px;"
+                    :loading="refreshingSummary">
+            刷新汇总数据
+          </a-button>
 
 
           <!-- 暂时隐藏展示所有数据按钮 -->
@@ -216,6 +223,7 @@ import { getAction, postAction, downFile } from '@/api/manage'
         dailyOutData: {},
         dateColumns: [],
         calculatingAlert: false, // 库存预警校验加载状态
+        refreshingSummary: false, // 刷新汇总数据加载状态
         overrideIgnoredStatus: false, // 是否覆盖忽略风险状态
         hasStockAlertPermission: false, // 库存预警权限标识
         
@@ -761,6 +769,38 @@ import { getAction, postAction, downFile } from '@/api/manage'
           this.$message.error('操作失败')
         }
       },
+      // 刷新汇总数据
+      refreshPeriodSummary() {
+        this.$confirm({
+          title: '确认刷新汇总数据',
+          content: '此操作将重新计算所有商品的期间汇总数据，包括本期结存、上期结存、本期出库入库、上期出库入库等。确定要继续吗？',
+          okText: '确定',
+          cancelText: '取消',
+          onOk: () => {
+            this.performRefreshPeriodSummary()
+          }
+        })
+      },
+      
+      performRefreshPeriodSummary() {
+        this.refreshingSummary = true
+        
+        postAction('/depotItem/refreshAllMaterialsPeriodSummary', {}).then(res => {
+          if (res.code === 200) {
+            this.$message.success('所有商品期间汇总数据刷新完成')
+            // 重新加载页面数据
+            this.loadStockData()
+          } else {
+            this.$message.error(res.data || '刷新失败')
+          }
+        }).catch(error => {
+          console.error('刷新汇总数据失败:', error)
+          this.$message.error('刷新失败，请重试')
+        }).finally(() => {
+          this.refreshingSummary = false
+        })
+      },
+      
       // 新增：计算表格可用高度
       calcTableBodyHeight() {
         // 获取窗口高度
