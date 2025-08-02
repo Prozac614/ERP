@@ -133,7 +133,7 @@ public class PerformanceOptimizationConfig {
      * 每天早上8点定时更新库存告急状态
      * 不覆盖忽略风险状态，保护用户手动设置的忽略风险商品
      */
-    @Scheduled(cron = "0 0 8 * * ?") // 每天早上8点
+    @Scheduled(cron = "0 0 15 * * ?") // 每天早上8点
     public void updateStockAlertStatusDaily() {
         if (depotItemOptimizedService != null) {
             try {
