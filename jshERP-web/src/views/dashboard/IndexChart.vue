@@ -13,29 +13,68 @@
                 </a-form-item>
               </a-col>
 
-              <a-col :md="6" :sm="24">
+              <a-col :md="12" :sm="24">
                 <a-form-item label="数据维度" :labelCol="labelCol" :wrapperCol="wrapperCol">
-                  <a-radio-group v-model="queryParam.dimensionType" @change="onDimensionChange">
-                    <a-radio value="daily">日</a-radio>
-                    <a-radio value="monthly">月</a-radio>
-                    <a-radio value="quarterly">季</a-radio>
-                    <a-radio value="period">期</a-radio>
-                  </a-radio-group>
-                </a-form-item>
-              </a-col>
-
-              <!-- 条件显示时间选择器 -->
-              <a-col :md="6" :sm="24" v-if="showTimeRangePicker">
-                <a-form-item :label="currentTimeLabel" :labelCol="labelCol" :wrapperCol="wrapperCol">
-                  <a-range-picker
-                    v-model="queryParam.createTimeRange"
-                    :picker="currentPickerType"
-                    :format="currentPickerFormat"
-                    :placeholder="currentPickerPlaceholder"
-                    @change="onTimeRangeChange"
-                    @ok="onTimeRangeOk"
-                    style="width:100%"
-                  />
+                  <a-space>
+                    <a-select
+                      v-model="queryParam.dimensionType"
+                      @change="onDimensionChange"
+                      style="width: 120px"
+                    >
+                      <a-select-option value="daily">日</a-select-option>
+                      <a-select-option value="monthly">月</a-select-option>
+                      <a-select-option value="quarter">季度</a-select-option>
+                      <a-select-option value="halfYear">半年</a-select-option>
+                      <a-select-option value="year">年</a-select-option>
+                    </a-select>
+                    <template v-if="currentPickerType === 'date'">
+                      <a-range-picker
+                        v-model="queryParam.createTimeRange"
+                        :format="currentPickerFormat"
+                        :placeholder="currentPickerPlaceholder"
+                        @change="onTimeRangeChange"
+                        @ok="onTimeRangeOk"
+                        style="width: 200px"
+                        :key="'date-picker'"
+                      />
+                    </template>
+                    <template v-else-if="currentPickerType === 'month'">
+                      <a-range-picker
+                        v-model="queryParam.createTimeRange"
+                        :picker="'month'"
+                        :format="currentPickerFormat"
+                        :placeholder="currentPickerPlaceholder"
+                        @change="onTimeRangeChange"
+                        @ok="onTimeRangeOk"
+                        style="width: 200px"
+                        :key="'month-picker'"
+                      />
+                    </template>
+                    <template v-else-if="currentPickerType === 'quarter'">
+                      <a-range-picker
+                        v-model="queryParam.createTimeRange"
+                        :picker="'quarter'"
+                        :format="currentPickerFormat"
+                        :placeholder="currentPickerPlaceholder"
+                        @change="onTimeRangeChange"
+                        @ok="onTimeRangeOk"
+                        style="width: 200px"
+                        :key="'quarter-picker'"
+                      />
+                    </template>
+                    <template v-else-if="currentPickerType === 'year'">
+                      <a-range-picker
+                        v-model="queryParam.createTimeRange"
+                        :picker="'year'"
+                        :format="currentPickerFormat"
+                        :placeholder="currentPickerPlaceholder"
+                        @change="onTimeRangeChange"
+                        @ok="onTimeRangeOk"
+                        style="width: 200px"
+                        :key="'year-picker'"
+                      />
+                    </template>
+                  </a-space>
                 </a-form-item>
               </a-col>
 
@@ -219,12 +258,14 @@
 import { getAction, postAction, downFile } from '@/api/manage'
   import JEllipsis from '@/components/jeecg/JEllipsis'
   import StockChartModal from '@/components/charts/StockChartModal'
+  import { Space } from 'ant-design-vue'
 
   export default {
     name: "IndexChart",
     components: {
       JEllipsis,
-      StockChartModal
+      StockChartModal,
+      ASpace: Space
     },
             data () {
       return {
@@ -257,8 +298,9 @@ import { getAction, postAction, downFile } from '@/api/manage'
         dimensionOptions: [
           { value: 'daily', label: '日' },
           { value: 'monthly', label: '月' },
-          { value: 'quarterly', label: '季' },
-          { value: 'period', label: '期' }
+          { value: 'quarter', label: '季度' },
+          { value: 'halfYear', label: '半年' },
+          { value: 'year', label: '年' }
         ],
 
         // 页面样式
@@ -347,18 +389,14 @@ import { getAction, postAction, downFile } from '@/api/manage'
       paginationConfig() {
         return this.ipagination
       },
-      // 控制时间选择器显示
-      showTimeRangePicker() {
-        return this.queryParam.dimensionType === 'daily' || this.queryParam.dimensionType === 'monthly'
-      },
-      
       // 当前时间选择器类型
       currentPickerType() {
         const pickerMap = {
           'daily': 'date',
           'monthly': 'month',
-          'quarterly': 'quarter',
-          'period': 'quarter'
+          'quarter': 'quarter',
+          'halfYear': 'quarter',
+          'year': 'year'
         }
         return pickerMap[this.queryParam.dimensionType] || 'date'
       },
@@ -368,8 +406,9 @@ import { getAction, postAction, downFile } from '@/api/manage'
         const formatMap = {
           'daily': 'YYYY-MM-DD',
           'monthly': 'YYYY-MM',
-          'quarterly': 'YYYY-[Q]Q',
-          'period': 'YYYY-[Q]Q'
+          'quarter': 'YYYY-[Q]Q',
+          'halfYear': 'YYYY-[Q]Q',
+          'year': 'YYYY'
         }
         return formatMap[this.queryParam.dimensionType] || 'YYYY-MM-DD'
       },
@@ -379,8 +418,9 @@ import { getAction, postAction, downFile } from '@/api/manage'
         const placeholderMap = {
           'daily': ['开始日期', '结束日期'],
           'monthly': ['开始月份', '结束月份'],
-          'quarterly': ['开始季度', '结束季度'],
-          'period': ['开始期间', '结束期间']
+          'quarter': ['开始季度', '结束季度'],
+          'halfYear': ['开始半年', '结束半年'],
+          'year': ['开始年份', '结束年份']
         }
         return placeholderMap[this.queryParam.dimensionType] || ['开始时间', '结束时间']
       },
@@ -390,8 +430,9 @@ import { getAction, postAction, downFile } from '@/api/manage'
         const labelMap = {
           'daily': '统计日期',
           'monthly': '统计月份',
-          'quarterly': '统计季度',
-          'period': '统计期间'
+          'quarter': '统计季度',
+          'halfYear': '统计半年',
+          'year': '统计年份'
         }
         return labelMap[this.queryParam.dimensionType] || '统计日期'
       },
@@ -469,11 +510,13 @@ import { getAction, postAction, downFile } from '@/api/manage'
       generateDateColumns() {
 
         
-        if (this.queryParam.dimensionType === 'quarterly') {
+        if (this.queryParam.dimensionType === 'quarter') {
           this.generateQuarterlyColumns()
-        } else if (this.queryParam.dimensionType === 'period') {
-          this.generatePeriodColumns()
-        } else if (this.showTimeRangePicker && this.queryParam.createTimeRange && this.queryParam.createTimeRange.length === 2) {
+        } else if (this.queryParam.dimensionType === 'halfYear') {
+          this.generateHalfYearColumns()
+        } else if (this.queryParam.dimensionType === 'year') {
+          this.generateYearColumns()
+        } else if (this.queryParam.createTimeRange && this.queryParam.createTimeRange.length === 2) {
           const [beginDate, endDate] = this.queryParam.createTimeRange
           
           if (this.queryParam.dimensionType === 'daily') {
@@ -580,12 +623,12 @@ import { getAction, postAction, downFile } from '@/api/manage'
         }
         
         // 🔧 动态计算列宽：少列时填满剩余空间
-        const dynamicWidth = this.calculateDynamicColumnWidth(quarters.length, 'quarterly')
+        const dynamicWidth = this.calculateDynamicColumnWidth(quarters.length, 'quarter')
         
 
         
         this.dateColumns = quarters.map(quarter => ({
-          title: this.generateColumnTitle(quarter, 'quarterly'),
+          title: this.generateColumnTitle(quarter, 'quarter'),
           dataIndex: `out_${quarter}`,
           width: dynamicWidth,
           align: 'center',
@@ -595,27 +638,55 @@ import { getAction, postAction, downFile } from '@/api/manage'
 
       },
 
-      // 生成期维度列
-      generatePeriodColumns() {
+      // 生成半年维度列
+      generateHalfYearColumns() {
 
         
-        const periods = []
+        const halfYears = []
         const currentYear = moment().year()
         
-        // 生成最近3年的期间
+        // 生成最近3年的半年
         for (let year = currentYear - 1; year <= currentYear; year++) {
-          periods.push(`${year}-P1`)
-          periods.push(`${year}-P2`)
+          halfYears.push(`${year}-H1`)
+          halfYears.push(`${year}-H2`)
         }
         
         // 🔧 动态计算列宽：少列时填满剩余空间
-        const dynamicWidth = this.calculateDynamicColumnWidth(periods.length, 'period')
+        const dynamicWidth = this.calculateDynamicColumnWidth(halfYears.length, 'halfYear')
         
 
         
-        this.dateColumns = periods.map(period => ({
-          title: this.generateColumnTitle(period, 'period'),
-          dataIndex: `out_${period}`,
+        this.dateColumns = halfYears.map(halfYear => ({
+          title: this.generateColumnTitle(halfYear, 'halfYear'),
+          dataIndex: `out_${halfYear}`,
+          width: dynamicWidth,
+          align: 'center',
+          scopedSlots: { customRender: 'dailyOutRender' }
+        }))
+        
+
+      },
+
+      // 生成年维度列
+      generateYearColumns() {
+
+        
+        const years = []
+        const currentYear = moment().year()
+        
+        // 生成最近5年的年份
+        for (let year = currentYear - 2; year <= currentYear; year++) {
+          years.push(`${year}`)
+        }
+        
+        // 🔧 动态计算列宽：少列时填满剩余空间
+        const dynamicWidth = this.calculateDynamicColumnWidth(years.length, 'year')
+        
+
+        
+        this.dateColumns = years.map(year => ({
+          title: this.generateColumnTitle(year, 'year'),
+          dataIndex: `out_${year}`,
           width: dynamicWidth,
           align: 'center',
           scopedSlots: { customRender: 'dailyOutRender' }
@@ -666,8 +737,9 @@ import { getAction, postAction, downFile } from '@/api/manage'
         const dimensionLimits = {
           'daily': { min: 60, max: 200, default: 80 },
           'monthly': { min: 80, max: 250, default: 120 },
-          'quarterly': { min: 100, max: 280, default: 150 },
-          'period': { min: 120, max: 300, default: 170 }
+          'quarter': { min: 100, max: 280, default: 150 },
+          'halfYear': { min: 120, max: 300, default: 170 },
+          'year': { min: 140, max: 320, default: 190 }
         }
         
         const limits = dimensionLimits[dimensionType] || dimensionLimits['daily']
@@ -764,9 +836,11 @@ import { getAction, postAction, downFile } from '@/api/manage'
             return moment(dateKey).format('MM-DD')
           case 'monthly':
             return moment(dateKey).format('YYYY年MM月')
-          case 'quarterly':
+          case 'quarter':
             return dateKey
-          case 'period':
+          case 'halfYear':
+            return dateKey
+          case 'year':
             return dateKey
           default:
             return dateKey
@@ -778,17 +852,18 @@ import { getAction, postAction, downFile } from '@/api/manage'
         this.ipagination.current = 1
         this.debouncedLoadStockData()
       },
-      // 重置查询
-      searchReset() {
-        this.queryParam = {
-          materialParam: "",
-          createTimeRange: [moment().subtract(1, 'months'), moment()],
-          stockAlertStatus: "",
-          dimensionType: "daily" // 重置维度类型
-        }
-        this.generateDateColumns()
-        this.searchQuery()
-      },
+              // 重置查询
+        searchReset() {
+          this.queryParam = {
+            materialParam: "",
+            createTimeRange: [moment().subtract(1, 'months'), moment()],
+            stockAlertStatus: "",
+            dimensionType: "daily" // 重置维度类型
+          }
+          this.setDefaultTimeRange()
+          this.generateDateColumns()
+          this.searchQuery()
+        },
 
       // 防抖处理的数据加载
       debouncedLoadStockData() {
@@ -812,16 +887,10 @@ import { getAction, postAction, downFile } from '@/api/manage'
       },
 
       // 维度变化处理
-      onDimensionChange(e) {
-        this.queryParam.dimensionType = e.target.value
+      onDimensionChange(value) {
+        this.queryParam.dimensionType = value
         
-        if (!this.showTimeRangePicker) {
-          this.queryParam.createTimeRange = null
-          this.$message.info('已切换到' + this.getDimensionLabel(e.target.value) + '维度，将显示全部数据')
-        } else {
-          this.setDefaultTimeRange()
-        }
-        
+        this.setDefaultTimeRange()
         this.generateDateColumns()
         this.debouncedLoadStockData()
       },
@@ -844,19 +913,16 @@ import { getAction, postAction, downFile } from '@/api/manage'
         const labelMap = {
           'daily': '日',
           'monthly': '月',
-          'quarterly': '季',
-          'period': '期'
+          'quarter': '季度',
+          'halfYear': '半年',
+          'year': '年'
         }
         return labelMap[dimensionType] || '未知'
       },
 
       // 获取查询按钮文本
       getQueryButtonText() {
-        if (this.showTimeRangePicker) {
-          return '查询'
-        } else {
-          return '刷新数据'
-        }
+        return '查询'
       },
 
       // 设置默认时间范围
@@ -867,6 +933,12 @@ import { getAction, postAction, downFile } from '@/api/manage'
           this.queryParam.createTimeRange = [now.clone().subtract(1, 'month'), now]
         } else if (this.queryParam.dimensionType === 'monthly') {
           this.queryParam.createTimeRange = [now.clone().subtract(3, 'month'), now]
+        } else if (this.queryParam.dimensionType === 'quarter') {
+          this.queryParam.createTimeRange = [now.clone().subtract(1, 'year'), now]
+        } else if (this.queryParam.dimensionType === 'halfYear') {
+          this.queryParam.createTimeRange = [now.clone().subtract(1, 'year'), now]
+        } else if (this.queryParam.dimensionType === 'year') {
+          this.queryParam.createTimeRange = [now.clone().subtract(2, 'year'), now]
         }
       },
 
@@ -896,12 +968,12 @@ import { getAction, postAction, downFile } from '@/api/manage'
         }
         
         // 根据维度类型处理时间参数
-        if (this.showTimeRangePicker && this.queryParam.createTimeRange && this.queryParam.createTimeRange.length === 2) {
-          // 日维度和月维度：使用用户选择的时间范围
+        if (this.queryParam.createTimeRange && this.queryParam.createTimeRange.length === 2) {
+          // 所有维度都使用用户选择的时间范围
           params.beginTime = this.queryParam.createTimeRange[0].format('YYYY-MM-DD')
           params.endTime = this.queryParam.createTimeRange[1].format('YYYY-MM-DD')
-        } else if (this.queryParam.dimensionType === 'quarterly' || this.queryParam.dimensionType === 'period') {
-          // 季维度和期维度：获取最近几年的完整数据
+        } else {
+          // 如果没有选择时间范围，获取最近几年的完整数据
           const now = moment()
           params.beginTime = now.clone().subtract(2, 'years').format('YYYY-MM-DD')
           params.endTime = now.format('YYYY-MM-DD')
@@ -982,10 +1054,12 @@ import { getAction, postAction, downFile } from '@/api/manage'
               this.mergeDailyData(item, dailyData)
             } else if (this.queryParam.dimensionType === 'monthly') {
               this.mergeMonthlyData(item, dailyData)
-            } else if (this.queryParam.dimensionType === 'quarterly') {
+            } else if (this.queryParam.dimensionType === 'quarter') {
               this.mergeQuarterlyData(item, dailyData)
-            } else if (this.queryParam.dimensionType === 'period') {
-              this.mergePeriodData(item, dailyData)
+            } else if (this.queryParam.dimensionType === 'halfYear') {
+              this.mergeHalfYearData(item, dailyData)
+            } else if (this.queryParam.dimensionType === 'year') {
+              this.mergeYearData(item, dailyData)
             }
           }
           
@@ -1045,26 +1119,47 @@ import { getAction, postAction, downFile } from '@/api/manage'
         })
       },
 
-      // 期维度数据聚合
-      mergePeriodData(item, dailyData) {
+      // 半年维度数据聚合
+      mergeHalfYearData(item, dailyData) {
         this.dateColumns.forEach(column => {
-          const periodKey = column.dataIndex.replace('out_', '')
-          let periodTotal = 0
+          const halfYearKey = column.dataIndex.replace('out_', '')
+          let halfYearTotal = 0
           
-          // 计算该期间所有日期的出库量总和
+          // 计算该半年所有日期的出库量总和
           Object.keys(dailyData).forEach(date => {
             const dateMoment = moment(date)
             const year = dateMoment.year()
-            const month = dateMoment.month() + 1
-            const period = month <= 6 ? 1 : 2
-            const currentPeriodKey = `${year}-P${period}`
+            const quarter = dateMoment.quarter()
+            const half = quarter <= 2 ? 'H1' : 'H2'
+            const currentHalfYearKey = `${year}-${half}`
             
-            if (currentPeriodKey === periodKey) {
-              periodTotal += parseFloat(dailyData[date] || 0)
+            if (currentHalfYearKey === halfYearKey) {
+              halfYearTotal += parseFloat(dailyData[date] || 0)
             }
           })
           
-          this.$set(item, column.dataIndex, periodTotal)
+          this.$set(item, column.dataIndex, halfYearTotal)
+        })
+      },
+
+      // 年维度数据聚合
+      mergeYearData(item, dailyData) {
+        this.dateColumns.forEach(column => {
+          const yearKey = column.dataIndex.replace('out_', '')
+          let yearTotal = 0
+          
+          // 计算该年所有日期的出库量总和
+          Object.keys(dailyData).forEach(date => {
+            const dateMoment = moment(date)
+            const year = dateMoment.year()
+            const currentYearKey = `${year}`
+            
+            if (currentYearKey === yearKey) {
+              yearTotal += parseFloat(dailyData[date] || 0)
+            }
+          })
+          
+          this.$set(item, column.dataIndex, yearTotal)
         })
       },
               
