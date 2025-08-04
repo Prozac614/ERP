@@ -4,6 +4,7 @@ import com.jsh.erp.datasource.entities.User;
 import com.jsh.erp.datasource.mappers.DepotItemMapperEx;
 import com.jsh.erp.datasource.vo.MaterialStockPeriodVo;
 import com.jsh.erp.utils.StringUtil;
+import com.jsh.erp.utils.StockAlertPermissionUtil;
 import com.jsh.erp.exception.JshException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -66,6 +67,11 @@ public class DepotItemOptimizedService {
                 resultMap = getOptimizedDataWithoutDateRange(currentPage, pageSize, materialParam, stockAlertStatus,
                         tenantId);
             }
+
+            // 检查库存预警权限并添加到结果中
+            boolean hasStockAlertPermission = StockAlertPermissionUtil.hasStockAlertPermission(request);
+            resultMap.put("hasStockAlertPermission", hasStockAlertPermission);
+            logger.debug("库存预警权限检查结果: {}", hasStockAlertPermission);
 
         } catch (Exception e) {
             logger.error("获取优化库存数据失败", e);
