@@ -340,8 +340,8 @@ import { getAction, postAction, downFile } from '@/api/manage'
         tableBodyHeight: 0,
 
         // 默认索引（包含库存状态列）
-        defDataIndex: ['action', 'barCode', 'materialName', 'currentPeriodStock', 'stockAlertStatus'],
-        settingDataIndex: ['action', 'barCode', 'materialName', 'currentPeriodStock', 'stockAlertStatus'],
+        defDataIndex: ['action', 'barCode', 'materialName', 'currentPeriodStock', 'sixMonthsOutTotal', 'stockAlertStatus'],
+        settingDataIndex: ['action', 'barCode', 'materialName', 'currentPeriodStock', 'sixMonthsOutTotal', 'stockAlertStatus'],
         // 默认列（将根据横向滚动需求自适应设置fixed属性，优化宽度显示）
         defColumns: [
           {
@@ -355,6 +355,7 @@ import { getAction, postAction, downFile } from '@/api/manage'
           { title: '商品编码', dataIndex: 'barCode', width: 120 }, // 🔧 100 → 120px，增加编码显示空间
           { title: '商品名称', dataIndex: 'materialName', width: 180, ellipsis: true }, // 🔧 150 → 180px，增加名称显示空间
           { title: '当前库存', dataIndex: 'currentPeriodStock', width: 110, scopedSlots: { customRender: 'customRenderStock' } }, // 🔧 90 → 110px，增加库存数据显示空间
+          { title: '近六月出库', dataIndex: 'sixMonthsOutTotal', width: 120, align: 'center' },
           { title: '库存状态', dataIndex: 'stockAlertStatus', width: 130, align: 'center', scopedSlots: { customRender: 'stockAlertStatusRender' } } // 🔧 110 → 130px，增加状态显示空间
         ]
 
@@ -803,6 +804,7 @@ import { getAction, postAction, downFile } from '@/api/manage'
             { title: '商品编码', dataIndex: 'barCode', width: 120, fixed: 'left' }, // 🔧 优化宽度
             { title: '商品名称', dataIndex: 'materialName', width: 180, ellipsis: true, fixed: 'left' }, // 🔧 优化宽度
             { title: '当前库存', dataIndex: 'currentPeriodStock', width: 110, fixed: 'left', scopedSlots: { customRender: 'customRenderStock' } }, // 🔧 优化宽度
+            { title: '近六月出库', dataIndex: 'sixMonthsOutTotal', width: 120, align: 'center', fixed: 'left' },
             { title: '库存状态', dataIndex: 'stockAlertStatus', width: 130, align: 'center', fixed: 'left', scopedSlots: { customRender: 'stockAlertStatusRender' } } // 🔧 优化宽度
           ]
 
@@ -820,6 +822,7 @@ import { getAction, postAction, downFile } from '@/api/manage'
             { title: '商品编码', dataIndex: 'barCode', width: 120 }, // 🔧 保持优化宽度
             { title: '商品名称', dataIndex: 'materialName', width: 180, ellipsis: true }, // 🔧 保持优化宽度
             { title: '当前库存', dataIndex: 'currentPeriodStock', width: 110, scopedSlots: { customRender: 'customRenderStock' } }, // 🔧 保持优化宽度
+            { title: '近六月出库', dataIndex: 'sixMonthsOutTotal', width: 120, align: 'center' },
             { title: '库存状态', dataIndex: 'stockAlertStatus', width: 130, align: 'center', scopedSlots: { customRender: 'stockAlertStatusRender' } } // 🔧 保持优化宽度
           ]
 
@@ -1061,6 +1064,9 @@ import { getAction, postAction, downFile } from '@/api/manage'
             } else if (this.queryParam.dimensionType === 'year') {
               this.mergeYearData(item, dailyData)
             }
+            
+            // 计算近六个月出库量总和
+            this.$set(item, 'sixMonthsOutTotal', this.calculateSixMonthsOutTotal(dailyData))
           }
           
           index = endIndex
@@ -1161,6 +1167,32 @@ import { getAction, postAction, downFile } from '@/api/manage'
           
           this.$set(item, column.dataIndex, yearTotal)
         })
+      },
+
+      // 计算近六个月出库量总和
+      calculateSixMonthsOutTotal(dailyData) {
+        if (!dailyData || Object.keys(dailyData).length === 0) {
+          return 0
+        }
+        
+        const now = moment()
+        let total = 0
+        
+        // 预计算最近6个月的年月字符串
+        const sixMonths = []
+        for (let i = 0; i < 6; i++) {
+          sixMonths.push(now.clone().subtract(i, 'month').format('YYYY-MM'))
+        }
+        
+        // 高效计算：遍历日期数据，匹配月份
+        Object.keys(dailyData).forEach(date => {
+          const monthStr = moment(date).format('YYYY-MM')
+          if (sixMonths.includes(monthStr)) {
+            total += parseFloat(dailyData[date] || 0)
+          }
+        })
+        
+        return total
       },
               
       // 表格操作      
