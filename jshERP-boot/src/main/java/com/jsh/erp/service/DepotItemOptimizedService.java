@@ -5,7 +5,6 @@ import com.jsh.erp.datasource.mappers.DepotItemMapperEx;
 import com.jsh.erp.datasource.vo.MaterialStockPeriodVo;
 import com.jsh.erp.utils.StringUtil;
 import com.jsh.erp.utils.StockAlertPermissionUtil;
-import com.jsh.erp.exception.JshException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -14,7 +13,6 @@ import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
 import java.math.BigDecimal;
 import java.util.*;
-import java.util.stream.Collectors;
 
 /**
  * 商品库存服务类 - 实时数据版本
@@ -79,6 +77,43 @@ public class DepotItemOptimizedService {
         }
 
         return resultMap;
+    }
+
+    /**
+     * 获取当前租户的全部商品库存总金额（不受筛选/分页影响）
+     * 计算口径：SUM(current_period_stock * default commodity_decimal)
+     * 规则：
+     * - 按当前租户约束
+     * - 删除标记排除
+     * - 负库存按实际值计入
+     * - 无默认零售价或为空按0计入，并输出一次warn日志（包含数量）
+     * 精度：保留两位小数（HALF_UP）
+     */
+    public BigDecimal getTotalStockValueForCurrentTenant() {
+        try {
+            User user = userService.getCurrentUser();
+            Long tenantId = user != null ? user.getTenantId() : null;
+            if (tenantId == null) {
+                logger.warn("获取库存总金额时tenantId为空，返回0");
+                return BigDecimal.ZERO.setScale(2, BigDecimal.ROUND_HALF_UP);
+            }
+
+            BigDecimal total = depotItemMapperEx.getTotalStockValueByTenant(tenantId);
+            if (total == null) {
+                total = BigDecimal.ZERO;
+            }
+
+            Long missing = depotItemMapperEx.countMaterialsMissingDefaultPrice(tenantId);
+            if (missing != null && missing > 0) {
+                logger.warn("Tenant {}: {} materials missing default retail price (counted as 0)", tenantId, missing);
+            }
+
+            // 统一保留两位
+            return total.setScale(2, BigDecimal.ROUND_HALF_UP);
+        } catch (Exception e) {
+            logger.error("获取库存总金额失败", e);
+            return BigDecimal.ZERO.setScale(2, BigDecimal.ROUND_HALF_UP);
+        }
     }
 
     /**
@@ -219,9 +254,6 @@ public class DepotItemOptimizedService {
      */
     public void refreshDailySummaryForRecentDays(int days) {
         try {
-            // 定时任务中无法获取当前用户，传入null让数据库处理所有租户的数据
-            Long tenantId = null;
-
             // 暂时跳过这个操作以避免MyBatis-Plus拦截器问题
             logger.warn("refreshDailySummaryForRecentDays 暂时禁用以避免MyBatis-Plus拦截器问题");
             // depotItemMapperEx.refreshDailySummaryForRecentDays(days, tenantId);

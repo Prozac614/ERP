@@ -306,6 +306,16 @@ public interface DepotItemMapperEx {
                         @Param("materialId") Long materialId,
                         @Param("tenantId") Long tenantId);
 
+        /**
+         * 聚合查询：按当前租户统计全量商品库存总金额（current_period_stock * commodity_decimal）
+         */
+        BigDecimal getTotalStockValueByTenant(@Param("tenantId") Long tenantId);
+
+        /**
+         * 统计：按当前租户统计缺失默认零售价（或默认价为null）的商品数量
+         */
+        Long countMaterialsMissingDefaultPrice(@Param("tenantId") Long tenantId);
+
         void refreshMaterialPeriodSummary(@Param("tenantId") Long tenantId);
 
         void updateDailyOutSummary(

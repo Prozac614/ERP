@@ -40,7 +40,6 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -889,7 +888,8 @@ public class DepotItemController {
             if (categoryId != null) {
                 categoryList = materialService.getListByParentId(categoryId);
             }
-            String[] mpArr = mpList.split(",");
+            // 解析多属性参数，但此处不需要使用
+            // String[] mpArr = mpList.split(",");
             List<DepotItemStockWarningCount> list = depotItemService.findStockWarningCount((currentPage - 1) * pageSize,
                     pageSize, materialParam, depotList, categoryList);
             // 存放数据json数组
@@ -1157,6 +1157,27 @@ public class DepotItemController {
             res.data = result;
         } catch (Exception e) {
             logger.error(e.getMessage(), e);
+            res.code = 500;
+            res.data = "获取数据失败";
+        }
+        return res;
+    }
+
+    /**
+     * 获取当前租户全部商品库存总金额（全量，独立轻量接口）
+     */
+    @GetMapping(value = "/getTotalStockValue")
+    @ApiOperation(value = "获取当前租户全部商品库存总金额")
+    public BaseResponseInfo getTotalStockValue(HttpServletRequest request) throws Exception {
+        BaseResponseInfo res = new BaseResponseInfo();
+        try {
+            BigDecimal value = depotItemOptimizedService.getTotalStockValueForCurrentTenant();
+            Map<String, Object> map = new HashMap<>();
+            map.put("totalStockValue", value);
+            res.code = 200;
+            res.data = map;
+        } catch (Exception e) {
+            logger.error("获取库存总金额失败", e);
             res.code = 500;
             res.data = "获取数据失败";
         }
@@ -1597,7 +1618,7 @@ public class DepotItemController {
         Map<String, Object> result = new HashMap<>();
 
         try {
-            boolean isEnabled = depotItemService.ensureForceApprovalEnabled();
+            depotItemService.ensureForceApprovalEnabled();
             boolean currentFlag = systemConfigService.getForceApprovalFlag();
 
             result.put("forceApprovalEnabled", currentFlag);
