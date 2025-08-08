@@ -1311,35 +1311,50 @@
 
     <!-- ========== 性能优化相关查询 ========== -->
 
-    <!-- 优化的商品期间库存统计查询 -->
+    <!-- 优化的商品期间库存统计查询（改为基于 jsh_material_current_stock 实时聚合） -->
     <select id="getMaterialPeriodStockOptimized" resultType="com.jsh.erp.datasource.vo.MaterialStockPeriodVo">
         select
             m.id as materialId,
-            mps.bar_code as barCode,
+            me.bar_code as barCode,
             m.name as materialName,
-            -- 从期间汇总表获取库存统计数据（如果有的话）
-            IFNULL(mps.current_period_stock, 0) as currentPeriodStock,
-            IFNULL(mps.previous_period_stock, 0) as previousPeriodStock,
-            IFNULL(mps.current_period_out, 0) as currentPeriodOut,
-            IFNULL(mps.previous_period_out, 0) as previousPeriodOut,
-            IFNULL(mps.current_period_in, 0) as currentPeriodIn,
+            -- 从实时库存表聚合当前库存
+            COALESCE(mcs_sum.current_stock, 0) as currentPeriodStock,
+            -- 以下期间相关字段无页面使用，保持为0以兼容VO
+            0 as previousPeriodStock,
+            0 as currentPeriodOut,
+            0 as previousPeriodOut,
+            0 as currentPeriodIn,
             -- 直接从商品表获取库存告急状态
             m.stock_alert_status as stockAlertStatus,
             m.last_six_months_sales as lastSixMonthsSales,
             m.stock_alert_ignored_at as stockAlertIgnoredAt
         from jsh_material m
-        left join jsh_material_period_summary mps on m.id = mps.material_id
-            and ifnull(mps.delete_flag,'0') != '1'
+        -- 默认条码/价格等扩展信息
+        left join jsh_material_extend me on me.material_id = m.id
+            and ifnull(me.delete_flag,'0') != '1'
+            and me.default_flag = '1'
             <if test="tenantId != null">
-                and mps.tenant_id = #{tenantId}
+                and me.tenant_id = #{tenantId}
             </if>
+        -- 实时库存聚合（按物料汇总）
+        left join (
+            select material_id, sum(ifnull(current_number,0)) as current_stock
+            from jsh_material_current_stock
+            where ifnull(delete_flag,'0') != '1'
+            <if test="tenantId != null">
+                and tenant_id = #{tenantId}
+            </if>
+            group by material_id
+        ) mcs_sum on mcs_sum.material_id = m.id
         where ifnull(m.delete_flag,'0') != '1'
         <if test="tenantId != null">
             and m.tenant_id = #{tenantId}
         </if>
         <if test="materialParam != null and materialParam != ''">
-            and (mps.bar_code like concat('%', #{materialParam}, '%')
-                or m.name like concat('%', #{materialParam}, '%'))
+            and (
+                me.bar_code like concat('%', #{materialParam}, '%')
+                or m.name like concat('%', #{materialParam}, '%')
+            )
         </if>
         <if test="stockAlertStatus != null and stockAlertStatus != ''">
             and m.stock_alert_status = #{stockAlertStatus}
@@ -1350,14 +1365,20 @@
         </if>
     </select>
 
-    <!-- 全量库存总金额（按租户） -->
+    <!-- 全量库存总金额（按租户，基于 jsh_material_current_stock × 默认零售价 实时汇总） -->
     <select id="getTotalStockValueByTenant" resultType="java.math.BigDecimal">
         select
-            COALESCE(ROUND(SUM(COALESCE(mps.current_period_stock, 0) * COALESCE(me.commodity_decimal, 0)), 2), 0) as totalStockValue
+            COALESCE(ROUND(SUM(COALESCE(mcs_sum.current_stock, 0) * COALESCE(me.commodity_decimal, 0)), 2), 0) as totalStockValue
         from jsh_material m
-        left join jsh_material_period_summary mps on mps.material_id = m.id
-            and ifnull(mps.delete_flag,'0') != '1'
-            and mps.tenant_id = #{tenantId}
+        -- 实时库存聚合（按物料）
+        left join (
+            select material_id, sum(ifnull(current_number,0)) as current_stock
+            from jsh_material_current_stock
+            where ifnull(delete_flag,'0') != '1'
+              and tenant_id = #{tenantId}
+            group by material_id
+        ) mcs_sum on mcs_sum.material_id = m.id
+        -- 默认零售价
         left join jsh_material_extend me on me.material_id = m.id
             and ifnull(me.delete_flag,'0') != '1'
             and me.default_flag = '1'
@@ -1383,18 +1404,21 @@
     <select id="getMaterialPeriodStockCountOptimized" resultType="java.lang.Integer">
         select count(1)
         from jsh_material m
-        left join jsh_material_period_summary mps on m.id = mps.material_id
-            and ifnull(mps.delete_flag,'0') != '1'
+        left join jsh_material_extend me on me.material_id = m.id
+            and ifnull(me.delete_flag,'0') != '1'
+            and me.default_flag = '1'
             <if test="tenantId != null">
-                and mps.tenant_id = #{tenantId}
+                and me.tenant_id = #{tenantId}
             </if>
         where ifnull(m.delete_flag,'0') != '1'
         <if test="tenantId != null">
             and m.tenant_id = #{tenantId}
         </if>
         <if test="materialParam != null and materialParam != ''">
-            and (mps.bar_code like concat('%', #{materialParam}, '%')
-                or m.name like concat('%', #{materialParam}, '%'))
+            and (
+                me.bar_code like concat('%', #{materialParam}, '%')
+                or m.name like concat('%', #{materialParam}, '%')
+            )
         </if>
         <if test="stockAlertStatus != null and stockAlertStatus != ''">
             and m.stock_alert_status = #{stockAlertStatus}
