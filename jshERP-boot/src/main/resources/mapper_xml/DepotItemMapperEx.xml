@@ -1350,6 +1350,35 @@
         </if>
     </select>
 
+    <!-- 全量库存总金额（按租户） -->
+    <select id="getTotalStockValueByTenant" resultType="java.math.BigDecimal">
+        select
+            COALESCE(ROUND(SUM(COALESCE(mps.current_period_stock, 0) * COALESCE(me.commodity_decimal, 0)), 2), 0) as totalStockValue
+        from jsh_material m
+        left join jsh_material_period_summary mps on mps.material_id = m.id
+            and ifnull(mps.delete_flag,'0') != '1'
+            and mps.tenant_id = #{tenantId}
+        left join jsh_material_extend me on me.material_id = m.id
+            and ifnull(me.delete_flag,'0') != '1'
+            and me.default_flag = '1'
+            and me.tenant_id = #{tenantId}
+        where ifnull(m.delete_flag,'0') != '1'
+          and m.tenant_id = #{tenantId}
+    </select>
+
+    <!-- 缺失默认零售价统计（按租户） -->
+    <select id="countMaterialsMissingDefaultPrice" resultType="java.lang.Long">
+        select count(distinct m.id)
+        from jsh_material m
+        left join jsh_material_extend me on me.material_id = m.id
+            and ifnull(me.delete_flag,'0') != '1'
+            and me.default_flag = '1'
+            and me.tenant_id = #{tenantId}
+        where ifnull(m.delete_flag,'0') != '1'
+          and m.tenant_id = #{tenantId}
+          and (me.id is null or me.commodity_decimal is null)
+    </select>
+
     <!-- 优化的商品期间库存统计计数 -->
     <select id="getMaterialPeriodStockCountOptimized" resultType="java.lang.Integer">
         select count(1)

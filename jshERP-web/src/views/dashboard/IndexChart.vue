@@ -167,6 +167,9 @@
             </template>
             <a-button icon="setting">列设置</a-button>
           </a-popover>
+          <span class="total-amount" style="display:inline-block; margin-left:12px; font-weight:700; font-size:16px; color:#1890ff; white-space:nowrap;">
+            库存总金额：{{ formatCurrency(totalStockValue) }}
+          </span>
           <a-tooltip placement="left" title="商品库存期间统计表显示各商品的期间库存变动情况。
           支持按商品信息、分类、供应商等条件进行筛选。
           可以导出数据进行进一步分析。" slot="action">
@@ -285,6 +288,8 @@ import { getAction, postAction, downFile } from '@/api/manage'
         refreshingSummary: false, // 刷新汇总数据加载状态
         overrideIgnoredStatus: false, // 是否覆盖忽略风险状态
         hasStockAlertPermission: false, // 库存预警权限标识
+        // 库存总金额（两位小数）
+        totalStockValue: null,
         
         // 库存状态选项
         stockAlertStatusOptions: [
@@ -494,6 +499,28 @@ import { getAction, postAction, downFile } from '@/api/manage'
           this.$message.info('日期范围较大，可能影响加载速度')
         }
         return { valid: true }
+      },
+      // 加载库存总金额
+      async loadTotalStockValue() {
+        try {
+          const res = await getAction('/depotItem/getTotalStockValue', {})
+          if (res && res.code === 200 && res.data) {
+            this.totalStockValue = res.data.totalStockValue != null ? res.data.totalStockValue : 0
+          } else {
+            this.totalStockValue = 0
+          }
+        } catch (e) {
+          console.error('获取库存总金额失败:', e)
+          this.totalStockValue = 0
+        }
+      },
+      // 金额格式化（两位小数）
+      formatCurrency(val) {
+        const num = Number(val)
+        if (!isFinite(num)) {
+          return '-'
+        }
+        return num.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
       },
 
       // 生成日期范围数组
@@ -1472,6 +1499,8 @@ import { getAction, postAction, downFile } from '@/api/manage'
             this.$message.success('所有商品期间汇总数据刷新完成')
             // 重新加载页面数据
             this.loadStockData()
+            // 刷新库存总金额
+            this.loadTotalStockValue()
           } else {
             this.$message.error(res.data || '刷新失败')
           }
@@ -1508,6 +1537,8 @@ import { getAction, postAction, downFile } from '@/api/manage'
       // 初始化表格高度
       this.$nextTick(() => {
         this.calcTableBodyHeight();
+        // 页面加载时拉取库存总金额
+        this.loadTotalStockValue();
       });
       
       // 监听窗口resize
