@@ -745,12 +745,64 @@ public class DepotHeadService {
             DepotHeadExample example = new DepotHeadExample();
             example.createCriteria().andIdIn(dhIds);
             result = depotHeadMapper.updateByExampleSelective(depotHead, example);
-            // 只对需要更新库存的单据进行库存更新
+            // 只对需要更新库存的单据进行库存更新（优化：批内去重合并 + 跳过0数量行）
             if (systemConfigService.getForceApprovalFlag() && dhIdsNeedStockUpdate.size() > 0) {
                 for (Long dhId : dhIdsNeedStockUpdate) {
                     List<DepotItem> list = depotItemService.getListByHeaderId(dhId);
+                    if (list == null || list.isEmpty()) {
+                        continue;
+                    }
+
+                    // 解析单据操作时间，避免在逐明细调用里重复读取
+                    Date operTime = null;
+                    try {
+                        DepotHead dhOne = getDepotHead(dhId);
+                        operTime = dhOne != null ? dhOne.getOperTime() : null;
+                    } catch (Exception e) {
+                        logger.debug("获取单据操作时间失败，使用当前时间, billId={}, error={}", dhId, e.getMessage());
+                    }
+                    if (operTime == null) {
+                        operTime = new Date();
+                    }
+
+                    int originalCount = list.size();
+                    int nonZeroCount = 0;
+                    // 使用唯一键(materialId, depotId)去重；对调拨行同时加入(anotherDepotId)
+                    Set<String> uniqueKeys = new HashSet<>();
                     for (DepotItem depotItem : list) {
-                        depotItemService.updateCurrentStock(depotItem);
+                        BigDecimal basicNumber = depotItem.getBasicNumber();
+                        if (basicNumber == null || basicNumber.compareTo(BigDecimal.ZERO) == 0) {
+                            continue; // 跳过库存变动为0的明细
+                        }
+                        nonZeroCount++;
+                        Long materialId = depotItem.getMaterialId();
+                        Long depotId = depotItem.getDepotId();
+                        if (materialId != null && depotId != null) {
+                            uniqueKeys.add(materialId + "_" + depotId);
+                        }
+                        Long anotherDepotId = depotItem.getAnotherDepotId();
+                        if (materialId != null && anotherDepotId != null) {
+                            uniqueKeys.add(materialId + "_" + anotherDepotId);
+                        }
+                    }
+
+                    // 记录聚合后的规模，用于观测优化收益
+                    try {
+                        logger.info("batchSetStatus stock update: billId={}, items={}, nonZeroItems={}, uniquePairs={}",
+                                dhId, originalCount, nonZeroCount, uniqueKeys.size());
+                    } catch (Exception ignore) {
+                        // 忽略日志异常
+                    }
+
+                    // 按唯一(物料, 仓库)调用一次库存更新（内部会执行库存/汇总/缓存/预警）
+                    for (String key : uniqueKeys) {
+                        String[] parts = key.split("_");
+                        if (parts.length != 2) {
+                            continue;
+                        }
+                        Long mId = Long.valueOf(parts[0]);
+                        Long dId = Long.valueOf(parts[1]);
+                        depotItemService.updateCurrentStockFun(mId, dId, operTime);
                     }
                 }
             }
