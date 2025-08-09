@@ -130,8 +130,10 @@ public class DepotItemOptimizedService {
                 materialParam, (currentPage - 1) * pageSize, pageSize, stockAlertStatus, tenantId);
         int total = depotItemMapperEx.getMaterialPeriodStockCountOptimized(materialParam, stockAlertStatus, tenantId);
 
-        // 2. 获取每日出库汇总数据
+        // 2. 获取每日出库汇总数据（受begin/end限制，用于动态列）
         Map<String, Map<String, BigDecimal>> dailyOutMap = new HashMap<>();
+        // 同时准备独立的“近六个月（仅销售）”聚合结果，不受begin/end限制
+        Map<Long, BigDecimal> lastSixMonthsSalesMap = new HashMap<>();
         if (!stockList.isEmpty()) {
             // 提取商品ID列表
             List<Long> materialIds = new ArrayList<>();
@@ -139,17 +141,36 @@ public class DepotItemOptimizedService {
                 materialIds.add(stock.getMaterialId());
             }
 
-            // 从汇总表快速获取每日出库数据
+            // 从汇总表快速获取每日出库数据（用于动态列展示）
             List<Map<String, Object>> dailyOutList = depotItemMapperEx.getDailyOutStockFromSummary(
                     materialIds, beginTime, endTime, tenantId);
 
-            // 组织每日出库数据
             for (Map<String, Object> dailyOut : dailyOutList) {
                 String barCode = (String) dailyOut.get("barCode");
                 String outDate = (String) dailyOut.get("outDate");
                 BigDecimal quantity = (BigDecimal) dailyOut.get("totalOutQuantity");
-
                 dailyOutMap.computeIfAbsent(barCode, k -> new HashMap<>()).put(outDate, quantity);
+            }
+
+            // 批量查询每个物料近六个月销售出库总量（与筛选无关、固定滚动窗口）
+            List<Map<String, Object>> sixMonthsList = depotItemMapperEx.getSixMonthsSalesByMaterialIds(materialIds,
+                    tenantId);
+            for (Map<String, Object> row : sixMonthsList) {
+                Object mid = row.get("materialId");
+                Object val = row.get("sixMonthsSales");
+                if (mid != null) {
+                    Long materialId = (mid instanceof Number) ? ((Number) mid).longValue()
+                            : Long.valueOf(mid.toString());
+                    BigDecimal qty = (val instanceof BigDecimal) ? (BigDecimal) val
+                            : (val != null ? new BigDecimal(val.toString()) : BigDecimal.ZERO);
+                    lastSixMonthsSalesMap.put(materialId, qty);
+                }
+            }
+
+            // 将结果写入VO
+            for (MaterialStockPeriodVo stock : stockList) {
+                BigDecimal v = lastSixMonthsSalesMap.get(stock.getMaterialId());
+                stock.setLastSixMonthsSales(v != null ? v : BigDecimal.ZERO);
             }
         }
 
@@ -184,6 +205,32 @@ public class DepotItemOptimizedService {
                     materialParam, (currentPage - 1) * pageSize, pageSize, stockAlertStatus, tenantId);
             int total = depotItemMapperEx.getMaterialPeriodStockCountOptimized(materialParam, stockAlertStatus,
                     tenantId);
+
+            // 批量查询每个物料近六个月销售出库总量（与筛选无关、固定滚动窗口）
+            if (!stockList.isEmpty()) {
+                List<Long> materialIds = new ArrayList<>();
+                for (MaterialStockPeriodVo stock : stockList) {
+                    materialIds.add(stock.getMaterialId());
+                }
+                List<Map<String, Object>> sixMonthsList = depotItemMapperEx.getSixMonthsSalesByMaterialIds(materialIds,
+                        tenantId);
+                Map<Long, BigDecimal> lastSixMonthsSalesMap = new HashMap<>();
+                for (Map<String, Object> row : sixMonthsList) {
+                    Object mid = row.get("materialId");
+                    Object val = row.get("sixMonthsSales");
+                    if (mid != null) {
+                        Long materialId = (mid instanceof Number) ? ((Number) mid).longValue()
+                                : Long.valueOf(mid.toString());
+                        BigDecimal qty = (val instanceof BigDecimal) ? (BigDecimal) val
+                                : (val != null ? new BigDecimal(val.toString()) : BigDecimal.ZERO);
+                        lastSixMonthsSalesMap.put(materialId, qty);
+                    }
+                }
+                for (MaterialStockPeriodVo stock : stockList) {
+                    BigDecimal v = lastSixMonthsSalesMap.get(stock.getMaterialId());
+                    stock.setLastSixMonthsSales(v != null ? v : BigDecimal.ZERO);
+                }
+            }
 
             // 直接读取数据库状态，不进行任何计算
             ensureDefaultStatus(stockList);

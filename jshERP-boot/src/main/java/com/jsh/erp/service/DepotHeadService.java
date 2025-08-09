@@ -747,6 +747,19 @@ public class DepotHeadService {
             result = depotHeadMapper.updateByExampleSelective(depotHead, example);
             // 只对需要更新库存的单据进行库存更新（优化：批内去重合并 + 跳过0数量行）
             if (systemConfigService.getForceApprovalFlag() && dhIdsNeedStockUpdate.size() > 0) {
+                // 请求级统计
+                long totalBills = 0L;
+                long totalItems = 0L;
+                long totalNonZero = 0L;
+                long totalUniquePairs = 0L;
+                long totalUniqueAnotherPairs = 0L;
+                long totalBuildMs = 0L;
+                long totalApplyMs = 0L;
+                long outBills = 0L, inBills = 0L, otherBills = 0L;
+                Set<Long> globalUniqueMaterials = new HashSet<>();
+                Set<String> globalUniquePairs = new HashSet<>();
+                Set<String> globalUniqueAnotherPairs = new HashSet<>();
+
                 for (Long dhId : dhIdsNeedStockUpdate) {
                     List<DepotItem> list = depotItemService.getListByHeaderId(dhId);
                     if (list == null || list.isEmpty()) {
@@ -755,8 +768,9 @@ public class DepotHeadService {
 
                     // 解析单据操作时间，避免在逐明细调用里重复读取
                     Date operTime = null;
+                    DepotHead dhOne = null;
                     try {
-                        DepotHead dhOne = getDepotHead(dhId);
+                        dhOne = getDepotHead(dhId);
                         operTime = dhOne != null ? dhOne.getOperTime() : null;
                     } catch (Exception e) {
                         logger.debug("获取单据操作时间失败，使用当前时间, billId={}, error={}", dhId, e.getMessage());
@@ -765,10 +779,26 @@ public class DepotHeadService {
                         operTime = new Date();
                     }
 
+                    String type = dhOne != null ? dhOne.getType() : null;
+                    String subType = dhOne != null ? dhOne.getSubType() : null;
+                    if ("出库".equals(type)) {
+                        outBills++;
+                    } else if ("入库".equals(type)) {
+                        inBills++;
+                    } else {
+                        otherBills++;
+                    }
+
+                    // 单据级上下文：物料级操作去重、批末清缓存
+                    depotItemService.beginBillProcessingContext(type);
+
                     int originalCount = list.size();
                     int nonZeroCount = 0;
+                    long t0 = System.nanoTime();
                     // 使用唯一键(materialId, depotId)去重；对调拨行同时加入(anotherDepotId)
                     Set<String> uniqueKeys = new HashSet<>();
+                    Set<String> uniqueAnotherKeys = new HashSet<>();
+                    Set<Long> uniqueMaterials = new HashSet<>();
                     for (DepotItem depotItem : list) {
                         BigDecimal basicNumber = depotItem.getBasicNumber();
                         if (basicNumber == null || basicNumber.compareTo(BigDecimal.ZERO) == 0) {
@@ -776,25 +806,39 @@ public class DepotHeadService {
                         }
                         nonZeroCount++;
                         Long materialId = depotItem.getMaterialId();
+                        if (materialId != null) {
+                            uniqueMaterials.add(materialId);
+                            globalUniqueMaterials.add(materialId);
+                        }
                         Long depotId = depotItem.getDepotId();
                         if (materialId != null && depotId != null) {
-                            uniqueKeys.add(materialId + "_" + depotId);
+                            String key = materialId + "_" + depotId;
+                            uniqueKeys.add(key);
+                            globalUniquePairs.add(key);
                         }
                         Long anotherDepotId = depotItem.getAnotherDepotId();
                         if (materialId != null && anotherDepotId != null) {
-                            uniqueKeys.add(materialId + "_" + anotherDepotId);
+                            String aKey = materialId + "_" + anotherDepotId;
+                            uniqueKeys.add(aKey);
+                            uniqueAnotherKeys.add(aKey);
+                            globalUniqueAnotherPairs.add(aKey);
                         }
                     }
+                    long t1 = System.nanoTime();
+                    long buildMs = (t1 - t0) / 1_000_000L;
 
                     // 记录聚合后的规模，用于观测优化收益
                     try {
-                        logger.info("batchSetStatus stock update: billId={}, items={}, nonZeroItems={}, uniquePairs={}",
-                                dhId, originalCount, nonZeroCount, uniqueKeys.size());
+                        logger.info(
+                                "batchSetStatus stock update: billId={}, type={}, subType={}, items={}, nonZeroItems={}, uniquePairs={}, uniqueAnotherPairs={}, uniqueMaterials={}, buildMs={}",
+                                dhId, type, subType, originalCount, nonZeroCount, uniqueKeys.size(),
+                                uniqueAnotherKeys.size(), uniqueMaterials.size(), buildMs);
                     } catch (Exception ignore) {
                         // 忽略日志异常
                     }
 
                     // 按唯一(物料, 仓库)调用一次库存更新（内部会执行库存/汇总/缓存/预警）
+                    long t2 = System.nanoTime();
                     for (String key : uniqueKeys) {
                         String[] parts = key.split("_");
                         if (parts.length != 2) {
@@ -804,6 +848,33 @@ public class DepotHeadService {
                         Long dId = Long.valueOf(parts[1]);
                         depotItemService.updateCurrentStockFun(mId, dId, operTime);
                     }
+                    long t3 = System.nanoTime();
+                    long applyMs = (t3 - t2) / 1_000_000L;
+
+                    // 单据级批末清缓存（仅当本单据确实发生了汇总或预警写入）
+                    depotItemService.clearAllCachesOnceForCurrentBill();
+                    depotItemService.endBillProcessingContext();
+
+                    // 单据级累计
+                    totalBills++;
+                    totalItems += originalCount;
+                    totalNonZero += nonZeroCount;
+                    totalUniquePairs += uniqueKeys.size();
+                    totalUniqueAnotherPairs += uniqueAnotherKeys.size();
+                    totalBuildMs += buildMs;
+                    totalApplyMs += applyMs;
+                }
+
+                // 请求级聚合日志
+                try {
+                    logger.info(
+                            "batchSetStatus summary: bills={}, items={}, nonZero={}, uniquePairs(sum)={}, uniqueAnotherPairs(sum)={}, uniqueMaterials(global)={}, outBills={}, inBills={}, otherBills={}, buildMs(sum)={}, applyMs(sum)={}",
+                            totalBills, totalItems, totalNonZero, totalUniquePairs, totalUniqueAnotherPairs,
+                            globalUniqueMaterials.size(), outBills, inBills, otherBills, totalBuildMs, totalApplyMs);
+                    // 额外输出全局唯一(物料,仓库)对数量（用于判断跨单据重复度）
+                    logger.info("batchSetStatus summary: uniquePairs(global)={}, uniqueAnotherPairs(global)={}",
+                            globalUniquePairs.size(), globalUniqueAnotherPairs.size());
+                } catch (Exception ignore) {
                 }
             }
         }

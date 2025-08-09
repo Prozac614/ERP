@@ -345,8 +345,8 @@ import { getAction, postAction, downFile } from '@/api/manage'
         tableBodyHeight: 0,
 
         // 默认索引（包含库存状态列）
-        defDataIndex: ['action', 'barCode', 'materialName', 'currentPeriodStock', 'sixMonthsOutTotal', 'stockAlertStatus'],
-        settingDataIndex: ['action', 'barCode', 'materialName', 'currentPeriodStock', 'sixMonthsOutTotal', 'stockAlertStatus'],
+        defDataIndex: ['action', 'barCode', 'materialName', 'currentPeriodStock', 'lastSixMonthsSales', 'stockAlertStatus'],
+        settingDataIndex: ['action', 'barCode', 'materialName', 'currentPeriodStock', 'lastSixMonthsSales', 'stockAlertStatus'],
         // 默认列（将根据横向滚动需求自适应设置fixed属性，优化宽度显示）
         defColumns: [
           {
@@ -360,7 +360,7 @@ import { getAction, postAction, downFile } from '@/api/manage'
           { title: '商品编码', dataIndex: 'barCode', width: 120 }, // 🔧 100 → 120px，增加编码显示空间
           { title: '商品名称', dataIndex: 'materialName', width: 180, ellipsis: true }, // 🔧 150 → 180px，增加名称显示空间
           { title: '当前库存', dataIndex: 'currentPeriodStock', width: 110, scopedSlots: { customRender: 'customRenderStock' } }, // 🔧 90 → 110px，增加库存数据显示空间
-          { title: '近六月出库', dataIndex: 'sixMonthsOutTotal', width: 120, align: 'center' },
+          { title: '近六月出库', dataIndex: 'lastSixMonthsSales', width: 120, align: 'center' },
           { title: '库存状态', dataIndex: 'stockAlertStatus', width: 130, align: 'center', scopedSlots: { customRender: 'stockAlertStatusRender' } } // 🔧 110 → 130px，增加状态显示空间
         ]
 
@@ -831,7 +831,7 @@ import { getAction, postAction, downFile } from '@/api/manage'
             { title: '商品编码', dataIndex: 'barCode', width: 120, fixed: 'left' }, // 🔧 优化宽度
             { title: '商品名称', dataIndex: 'materialName', width: 180, ellipsis: true, fixed: 'left' }, // 🔧 优化宽度
             { title: '当前库存', dataIndex: 'currentPeriodStock', width: 110, fixed: 'left', scopedSlots: { customRender: 'customRenderStock' } }, // 🔧 优化宽度
-            { title: '近六月出库', dataIndex: 'sixMonthsOutTotal', width: 120, align: 'center', fixed: 'left' },
+            { title: '近六月出库', dataIndex: 'lastSixMonthsSales', width: 120, align: 'center', fixed: 'left' },
             { title: '库存状态', dataIndex: 'stockAlertStatus', width: 130, align: 'center', fixed: 'left', scopedSlots: { customRender: 'stockAlertStatusRender' } } // 🔧 优化宽度
           ]
 
@@ -849,7 +849,7 @@ import { getAction, postAction, downFile } from '@/api/manage'
             { title: '商品编码', dataIndex: 'barCode', width: 120 }, // 🔧 保持优化宽度
             { title: '商品名称', dataIndex: 'materialName', width: 180, ellipsis: true }, // 🔧 保持优化宽度
             { title: '当前库存', dataIndex: 'currentPeriodStock', width: 110, scopedSlots: { customRender: 'customRenderStock' } }, // 🔧 保持优化宽度
-            { title: '近六月出库', dataIndex: 'sixMonthsOutTotal', width: 120, align: 'center' },
+            { title: '近六月出库', dataIndex: 'lastSixMonthsSales', width: 120, align: 'center' },
             { title: '库存状态', dataIndex: 'stockAlertStatus', width: 130, align: 'center', scopedSlots: { customRender: 'stockAlertStatusRender' } } // 🔧 保持优化宽度
           ]
 
@@ -1092,8 +1092,7 @@ import { getAction, postAction, downFile } from '@/api/manage'
               this.mergeYearData(item, dailyData)
             }
             
-            // 计算近六个月出库量总和
-            this.$set(item, 'sixMonthsOutTotal', this.calculateSixMonthsOutTotal(dailyData))
+            // 后端已返回 lastSixMonthsSales（仅销售、滚动6个月），无需前端再聚合
           }
           
           index = endIndex

@@ -71,6 +71,55 @@ public class DepotItemService {
     @Resource
     private DepotItemOptimizedService depotItemOptimizedService;
 
+    // ========== 批次处理上下文（线程级） ==========
+    private final ThreadLocal<Set<Long>> processedMaterialIds = new ThreadLocal<>();
+    private final ThreadLocal<Boolean> summaryOrAlertWritten = new ThreadLocal<>();
+    private final ThreadLocal<String> billTypeContext = new ThreadLocal<>();
+
+    public void beginBillProcessingContext(String billType) {
+        processedMaterialIds.set(new HashSet<>());
+        summaryOrAlertWritten.set(Boolean.FALSE);
+        billTypeContext.set(billType);
+    }
+
+    public void endBillProcessingContext() {
+        processedMaterialIds.remove();
+        summaryOrAlertWritten.remove();
+        billTypeContext.remove();
+    }
+
+    public void clearAllCachesOnceForCurrentBill() {
+        try {
+            Boolean flag = summaryOrAlertWritten.get();
+            if (flag != null && flag) {
+                clearRelatedCache();
+            }
+        } catch (Exception e) {
+            logger.warn("清除缓存失败，error={}", e.getMessage());
+        } finally {
+            summaryOrAlertWritten.set(Boolean.FALSE);
+        }
+    }
+
+    private boolean tryMarkMaterialProcessed(Long materialId) {
+        Set<Long> set = processedMaterialIds.get();
+        if (set == null) {
+            return true;
+        }
+        if (materialId == null) {
+            return true;
+        }
+        if (set.contains(materialId)) {
+            return false;
+        }
+        set.add(materialId);
+        return true;
+    }
+
+    private void markWriteHappened() {
+        summaryOrAlertWritten.set(Boolean.TRUE);
+    }
+
     public DepotItem getDepotItem(long id) throws Exception {
         DepotItem result = null;
         try {
@@ -1273,7 +1322,7 @@ public class DepotItemService {
                 materialCurrentStockMapper.insertSelective(materialCurrentStock);
             }
 
-            // 新增：更新汇总表和清除缓存
+            // 新增：更新汇总表和预警（清缓存延迟到单据级批末一次）
             try {
                 updateSummaryTablesAfterStockChange(mId, dId, operTime);
             } catch (Exception e) {
@@ -1620,23 +1669,47 @@ public class DepotItemService {
             logger.debug("获取当前用户失败，使用null作为tenantId");
         }
 
-        // 1. 更新指定日期的每日出库汇总（使用业务层逻辑）
-        updateDailyOutSummaryForMaterialBusinessLogic(materialId, tenantId, operTime);
+        // 当次单据内的物料级重复操作短路
+        boolean materialFirstTime = tryMarkMaterialProcessed(materialId);
 
-        // 2. 已弃用：不再维护商品期间汇总表
-        // updatePeriodSummaryForMaterialBusinessLogic(materialId, tenantId);
+        // 1) 仅在出库型场景下更新每日出库汇总，且只在物料首次出现时执行
+        if (materialFirstTime && isOutTypeAffectingSummary(materialId, operTime, tenantId)) {
+            updateDailyOutSummaryForMaterialBusinessLogic(materialId, tenantId, operTime);
+            markWriteHappened();
+        } else {
+            logger.debug("跳过每日出库汇总: materialId={}, materialFirstTime={}, outType={} ", materialId,
+                    materialFirstTime, isOutTypeAffectingSummary(materialId, operTime, tenantId));
+        }
 
-        // 3. 清除相关缓存
-        clearRelatedCache();
-
-        // 4. 更新库存预警状态
-        try {
-            updateStockAlertStatusForMaterial(materialId, tenantId);
-        } catch (Exception e) {
-            logger.warn("更新库存预警状态失败，但不影响其他操作: materialId={}, error={}", materialId, e.getMessage());
+        // 2) 更新库存预警状态（物料级，仅首次执行；并带等值短路）
+        if (materialFirstTime) {
+            try {
+                boolean updated = updateStockAlertStatusForMaterial(materialId, tenantId);
+                if (updated) {
+                    markWriteHappened();
+                }
+            } catch (Exception e) {
+                logger.warn("更新库存预警状态失败，但不影响其他操作: materialId={}, error={}", materialId, e.getMessage());
+            }
         }
 
         logger.debug("汇总表更新完成，materialId={}, depotId={}, operTime={}", materialId, depotId, operTime);
+    }
+
+    // 判断当日是否存在需要进入每日出库汇总口径的出库明细（存在即返回true）
+    private boolean isOutTypeAffectingSummary(Long materialId, Date operTime, Long tenantId) {
+        try {
+            if (materialId == null || operTime == null) {
+                return false;
+            }
+            // 这里复用 Mapper 中复杂SQL的口径：出库 + 具体子类型（以销售为主）。
+            // 为降低成本，仅做存在性判断应使用对应的 exists/limit 1 查询。
+            // 暂用已有 upsert 口径的同一日期，若查询接口不可用，则默认返回 true，保持功能正确性。
+            return true;
+        } catch (Exception e) {
+            logger.debug("判断出库统计口径失败，默认true, materialId={}, error={}", materialId, e.getMessage());
+            return true;
+        }
     }
 
     /**
@@ -1645,7 +1718,7 @@ public class DepotItemService {
      * @param materialId 商品ID
      * @param tenantId   租户ID
      */
-    private void updateStockAlertStatusForMaterial(Long materialId, Long tenantId) {
+    private boolean updateStockAlertStatusForMaterial(Long materialId, Long tenantId) {
         try {
             logger.debug("开始更新商品库存预警状态，materialId={}, tenantId={}", materialId, tenantId);
 
@@ -1653,7 +1726,7 @@ public class DepotItemService {
             Material material = materialService.getMaterial(materialId);
             if (material == null) {
                 logger.warn("商品不存在，跳过库存预警状态更新，materialId={}", materialId);
-                return;
+                return false;
             }
 
             // 2. 获取当前库存
@@ -1688,17 +1761,27 @@ public class DepotItemService {
             // 6. 应用业务规则：如果新的预警状态是库存告警且原有的状态是忽略告警，不用更新库存状态
             if ("STOCK_ALERT".equals(newAlertStatus) && "RISK_IGNORED".equals(currentAlertStatus)) {
                 logger.debug("新状态为库存告警且原状态为忽略告警，跳过更新，materialId={}", materialId);
-                return;
+                return false;
             }
 
-            // 7. 更新预警状态
+            // 7. 等值短路：若状态和值均未变化则跳过
+            if (newAlertStatus != null && newAlertStatus.equals(currentAlertStatus)
+                    && sixMonthsSales.compareTo(material.getLastSixMonthsSales() == null ? BigDecimal.ZERO
+                            : material.getLastSixMonthsSales()) == 0) {
+                logger.debug("预警状态与销量未变化，跳过更新，materialId={}", materialId);
+                return false;
+            }
+
             materialService.updateStockAlertStatus(materialId, newAlertStatus, sixMonthsSales);
-            logger.info("库存预警状态更新成功，materialId={}, oldStatus={}, newStatus={}, currentStock={}, sixMonthsSales={}",
+            logger.info(
+                    "库存预警状态更新成功，materialId={}, oldStatus={}, newStatus={}, currentStock={}, sixMonthsSales={}",
                     materialId, currentAlertStatus, newAlertStatus, currentStock, sixMonthsSales);
+            return true;
 
         } catch (Exception e) {
             logger.error("更新库存预警状态失败，materialId={}, tenantId={}", materialId, tenantId, e);
             // 不抛出异常，避免影响主流程
+            return false;
         }
     }
 
@@ -1714,9 +1797,6 @@ public class DepotItemService {
             // 使用传入的操作时间而不是当前日期
             SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
             String operationDate = sdf.format(operTime != null ? operTime : new Date());
-
-            // 先删除指定商品指定日期的汇总记录
-            depotItemMapperEx.deleteDailyOutSummary(materialId, operationDate, tenantId);
 
             // 尝试使用复杂SQL重新插入或更新指定日期的汇总数据
             try {

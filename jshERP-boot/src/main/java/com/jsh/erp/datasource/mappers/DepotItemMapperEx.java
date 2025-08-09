@@ -307,6 +307,13 @@ public interface DepotItemMapperEx {
                         @Param("tenantId") Long tenantId);
 
         /**
+         * 批量获取商品过去6个月的销量（仅销售）
+         */
+        List<Map<String, Object>> getSixMonthsSalesByMaterialIds(
+                        @Param("materialIds") List<Long> materialIds,
+                        @Param("tenantId") Long tenantId);
+
+        /**
          * 聚合查询：按当前租户统计全量商品库存总金额（current_period_stock * commodity_decimal）
          */
         BigDecimal getTotalStockValueByTenant(@Param("tenantId") Long tenantId);
