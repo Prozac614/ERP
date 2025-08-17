@@ -1315,9 +1315,25 @@ public class DepotItemService {
             materialCurrentStock.setDepotId(dId);
             materialCurrentStock.setCurrentNumber(getStockByParam(dId, mId, null, null));
             if (list != null && list.size() > 0) {
-                Long mcsId = list.get(0).getId();
-                materialCurrentStock.setId(mcsId);
-                materialCurrentStockMapper.updateByPrimaryKeySelective(materialCurrentStock);
+                // 检查是否存在重复记录
+                if (list.size() > 1) {
+                    // 处理重复记录：重新计算库存并删除重复项
+                    handleDuplicateStockRecords(list, mId, dId);
+                    // 重新查询，确保只剩一条记录
+                    MaterialCurrentStockExample reCheckExample = new MaterialCurrentStockExample();
+                    reCheckExample.createCriteria().andMaterialIdEqualTo(mId).andDepotIdEqualTo(dId)
+                            .andDeleteFlagNotEqualTo(BusinessConstants.DELETE_FLAG_DELETED);
+                    list = materialCurrentStockMapper.selectByExample(reCheckExample);
+                }
+
+                if (list != null && list.size() > 0) {
+                    Long mcsId = list.get(0).getId();
+                    materialCurrentStock.setId(mcsId);
+                    materialCurrentStockMapper.updateByPrimaryKeySelective(materialCurrentStock);
+                } else {
+                    // 如果处理后没有记录了，插入新记录
+                    materialCurrentStockMapper.insertSelective(materialCurrentStock);
+                }
             } else {
                 materialCurrentStockMapper.insertSelective(materialCurrentStock);
             }
@@ -1329,6 +1345,51 @@ public class DepotItemService {
                 logger.warn("更新汇总表失败，但不影响库存更新: materialId={}, depotId={}, operTime={}, error={}",
                         mId, dId, operTime, e.getMessage());
             }
+        }
+    }
+
+    /**
+     * 处理重复的库存记录
+     * 重新计算库存，保留第一条记录，删除其他重复记录
+     * 
+     * @param duplicateList 重复记录列表
+     * @param materialId    商品ID
+     * @param depotId       仓库ID
+     */
+    private void handleDuplicateStockRecords(List<MaterialCurrentStock> duplicateList, Long materialId, Long depotId) {
+        try {
+            logger.warn("发现重复库存记录: materialId={}, depotId={}, 记录数={}",
+                    materialId, depotId, duplicateList.size());
+
+            // 重新计算准确的库存数量
+            BigDecimal recalculatedStock = getStockByParam(depotId, materialId, null, null);
+            logger.info("重新计算库存: materialId={}, depotId={}, 计算结果={}",
+                    materialId, depotId, recalculatedStock);
+
+            // 保留第一条记录的ID，用于后续更新
+            Long keepRecordId = duplicateList.get(0).getId();
+
+            // 删除从第二条开始的所有重复记录
+            for (int i = 1; i < duplicateList.size(); i++) {
+                Long deleteId = duplicateList.get(i).getId();
+                int deleteResult = materialCurrentStockMapper.deleteByPrimaryKey(deleteId);
+                logger.info("删除重复库存记录: id={}, materialId={}, depotId={}, 删除结果={}",
+                        deleteId, materialId, depotId, deleteResult > 0 ? "成功" : "失败");
+            }
+
+            // 更新保留的记录为重新计算的库存数量
+            MaterialCurrentStock updateRecord = new MaterialCurrentStock();
+            updateRecord.setId(keepRecordId);
+            updateRecord.setCurrentNumber(recalculatedStock);
+            int updateResult = materialCurrentStockMapper.updateByPrimaryKeySelective(updateRecord);
+
+            logger.info("更新保留记录: id={}, materialId={}, depotId={}, 新库存={}, 更新结果={}",
+                    keepRecordId, materialId, depotId, recalculatedStock, updateResult > 0 ? "成功" : "失败");
+
+        } catch (Exception e) {
+            logger.error("处理重复库存记录失败: materialId={}, depotId={}, error={}",
+                    materialId, depotId, e.getMessage(), e);
+            // 不抛出异常，避免影响主流程
         }
     }
 
