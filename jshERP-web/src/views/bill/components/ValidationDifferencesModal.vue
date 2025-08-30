@@ -3,6 +3,7 @@
     title="校验差异详情"
     :visible="visible"
     :footer="null"
+    :width="modalWidth"
     @cancel="handleCancel"
   >
     <div>
@@ -21,12 +22,19 @@
         row-key="materialKey"
         size="small"
         bordered
-        style="width: auto; min-width: 400px; max-width: 90vw; margin: 0 auto;"
+        style="width: 100%; margin: 0 auto;"
       >
         <template slot="materialInfo" slot-scope="text, record">
           <div>
             <div style="font-weight: bold;">{{ record.materialName }}</div>
             <div style="font-size: 12px; color: #666;">{{ record.materialBarCode }}</div>
+          </div>
+        </template>
+        
+        <!-- 动态渲染用户列 -->
+        <template v-for="(user, index) in allUsers" :slot="`user_${index}`" slot-scope="text, record">
+          <div :key="`user_${index}`" :style="getDifferenceStyle(record, user, index)">
+            {{ formatUserData(record, user, index) }}
           </div>
         </template>
       </a-table>
@@ -49,7 +57,8 @@ export default {
       differences: [],
       matrixData: [],
       matrixColumns: [],
-      allUsers: []
+      allUsers: [],
+      modalWidth: 600
     }
   },
   created() {
@@ -69,6 +78,7 @@ export default {
       this.matrixData = []
       this.matrixColumns = []
       this.allUsers = []
+      this.modalWidth = 600
     },
     
     processMatrixData() {
@@ -102,7 +112,7 @@ export default {
         {
           title: '商品信息',
           dataIndex: 'materialInfo',
-          width: 200,
+          width: 160,
           scopedSlots: { customRender: 'materialInfo' }
         }
       ]
@@ -111,22 +121,9 @@ export default {
         this.matrixColumns.push({
           title: user,
           dataIndex: userColumnKey,
-          width: 100,
+          width: 150,
           align: 'center',
-          customRender: ((columnKey) => {
-            return (text, record) => {
-              if (text !== undefined && text !== null && text !== '') {
-                try {
-                  const numValue = parseFloat(String(text))
-                  if (!isNaN(numValue)) {
-                    return Math.floor(numValue).toString()
-                  }
-                } catch (e) {}
-                return String(text)
-              }
-              return '-'
-            }
-          })(userColumnKey)
+          scopedSlots: { customRender: userColumnKey }
         })
       })
       this.matrixData = Array.from(materialsData.values()).map(item => {
@@ -151,6 +148,24 @@ export default {
         })
         return rowData
       })
+      
+      // 根据列数量计算合适的模态框宽度
+      this.calculateModalWidth()
+    },
+    
+    calculateModalWidth() {
+      // 基础宽度：商品信息列(160px) + 边距和滚动条(60px)
+      const baseWidth = 160 + 60
+      // 用户列宽度：每个用户列150px
+      const userColumnsWidth = this.allUsers.length * 150
+      // 计算总宽度
+      const totalWidth = baseWidth + userColumnsWidth
+      
+      // 设置最小宽度500px，最大宽度为屏幕宽度的90%
+      const minWidth = 500
+      const maxWidth = Math.floor(window.innerWidth * 0.9)
+      
+      this.modalWidth = Math.max(minWidth, Math.min(totalWidth, maxWidth))
     },
     
     extractUserQuantities(description) {
@@ -158,58 +173,158 @@ export default {
       
       if (!description) return userQuantities
       
-      // 查找"各用户出库数量不一致:"后的内容
-      const marker = '各用户出库数量不一致:'
-      const startIndex = description.indexOf(marker)
+      // 查找差异描述的内容，支持多种格式
+      const markers = ['各用户数量和单价均不一致: ', '各用户数量不一致: ', '各用户单价不一致: ']
+      let startIndex = -1
+      let foundMarker = ''
+      
+      for (const marker of markers) {
+        const index = description.indexOf(marker)
+        if (index !== -1) {
+          startIndex = index
+          foundMarker = marker
+          break
+        }
+      }
+      
       if (startIndex === -1) {
         return userQuantities
       }
       
-      const userPart = description.substring(startIndex + marker.length).trim()
+      const userPart = description.substring(startIndex + foundMarker.length).trim()
       
-      // 分割每个用户的信息 "用户名(ID:xxx): 数量; "
+      // 分割每个用户的信息 "用户名(ID:xxx): 数量=xxx, 单价=xxx; "
       const userEntries = userPart.split(';')
       
       userEntries.forEach(entry => {
         const trimmedEntry = entry.trim()
         if (!trimmedEntry) return
         
-        // 匹配格式: "用户名(ID:xxx): 数量"
+        // 匹配格式: "用户名(ID:xxx): 数量=xxx, 单价=xxx" 或 "用户名(ID:xxx): 数量"
         const match = trimmedEntry.match(/^(.+?)\(ID:\d+\):\s*(.+)$/)
         if (match) {
           const userName = match[1].trim()
-          const quantity = match[2].trim()
-          userQuantities[userName] = quantity
+          const dataStr = match[2].trim()
+          
+          // 尝试解析新格式: "数量=xxx, 单价=xxx"
+          const quantityMatch = dataStr.match(/数量=([^,]+)/)
+          if (quantityMatch) {
+            userQuantities[userName] = quantityMatch[1].trim()
+          } else {
+            // 兼容旧格式，直接使用整个字符串作为数量
+            userQuantities[userName] = dataStr
+          }
         }
       })
       
       return userQuantities
     },
     
-    getDifferenceStyle(record, user) {
-      const quantities = Object.values(record.userQuantities)
-      const currentQuantity = record.userQuantities[user]
+    formatUserData(record, user, index) {
+      const userColumnKey = `user_${index}`
+      const rawValue = record[userColumnKey]
       
-      if (currentQuantity === undefined || quantities.length <= 1) {
+      if (!rawValue || rawValue === '-') {
+        return '-'
+      }
+      
+      // 检查是否有单价信息（从原始差异数据中解析）
+      const userQuantities = record.userQuantities || {}
+      const quantity = userQuantities[user]
+      
+      if (quantity !== undefined && quantity !== null) {
+        // 尝试从description中解析单价信息
+        const priceInfo = this.extractUserPriceInfo(record, user)
+        if (priceInfo) {
+          return `数量: ${Math.floor(parseFloat(quantity))}\n单价: ${priceInfo}`
+        } else {
+          return Math.floor(parseFloat(quantity)).toString()
+        }
+      }
+      
+      return rawValue || '-'
+    },
+    
+    extractUserPriceInfo(record, user) {
+      // 从相关差异记录中找到这个商品和用户的单价信息
+      if (!this.differences) return null
+      
+      const relevantDiff = this.differences.find(diff => 
+        diff.materialBarCode === record.materialBarCode || 
+        diff.materialName === record.materialName
+      )
+      
+      if (!relevantDiff || !relevantDiff.description) return null
+      
+      // 解析description中的单价信息: "用户名(ID:xxx): 数量=xxx, 单价=xxx; "
+      const userPattern = new RegExp(`${user}\\(ID:\\d+\\):\\s*数量=[^,]+,\\s*单价=([^;]+)`, 'g')
+      const match = userPattern.exec(relevantDiff.description)
+      
+      if (match && match[1]) {
+        const price = match[1].trim()
+        if (price === '无') {
+          return '无'
+        }
+        // 尝试格式化价格为合理的小数位数
+        const numPrice = parseFloat(price)
+        if (!isNaN(numPrice)) {
+          return numPrice.toFixed(2)
+        }
+        return price
+      }
+      
+      return null
+    },
+
+    getDifferenceStyle(record, user, index) {
+      const userQuantities = record.userQuantities || {}
+      const allQuantities = Object.values(userQuantities)
+      const currentQuantity = userQuantities[user]
+      
+      if (currentQuantity === undefined || allQuantities.length <= 1) {
         return {}
       }
       
-      // 检查是否有不一致的数量
-      const hasInconsistency = quantities.some(q => 
-        Math.floor(parseFloat(q)) !== Math.floor(parseFloat(currentQuantity))
+      // 检查数量是否不一致
+      const quantityInconsistent = allQuantities.some(q => 
+        Math.floor(parseFloat(q || 0)) !== Math.floor(parseFloat(currentQuantity || 0))
       )
       
-      if (hasInconsistency) {
+      // 检查单价是否不一致
+      const priceInfo = this.extractUserPriceInfo(record, user)
+      const priceInconsistent = this.checkPriceInconsistency(record, user)
+      
+      if (quantityInconsistent || priceInconsistent) {
         return {
           backgroundColor: '#ffebee',
           color: '#c62828',
           fontWeight: 'bold',
-          padding: '4px 8px',
-          borderRadius: '4px'
+          padding: '6px 8px',
+          borderRadius: '4px',
+          border: '1px solid #ffcdd2',
+          whiteSpace: 'pre-line'
         }
       }
       
-      return {}
+      return {
+        padding: '6px 8px',
+        whiteSpace: 'pre-line'
+      }
+    },
+    
+    checkPriceInconsistency(record, user) {
+      if (!this.differences) return false
+      
+      const relevantDiff = this.differences.find(diff => 
+        diff.materialBarCode === record.materialBarCode || 
+        diff.materialName === record.materialName
+      )
+      
+      if (!relevantDiff) return false
+      
+      // 检查差异类型是否包含单价不一致
+      return relevantDiff.diffType === 'PRICE_INCONSISTENT' || 
+             relevantDiff.diffType === 'QUANTITY_PRICE_INCONSISTENT'
     }
   }
 }
@@ -217,12 +332,40 @@ export default {
 
 <style scoped>
 .ant-table-tbody > tr > td {
-  padding: 8px 16px;
+  padding: 4px 8px;
+  vertical-align: top;
 }
 
 .ant-table-thead > tr > th {
   background-color: #fafafa;
   font-weight: 600;
   text-align: center;
+  padding: 8px 4px;
+}
+
+.ant-table-tbody > tr > td > div {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+/* 保证表格内容正确对齐 */
+.ant-table-small .ant-table-tbody > tr > td {
+  padding: 4px;
+}
+
+/* 突出显示差异的样式增强 */
+.difference-highlight {
+  background: linear-gradient(135deg, #ffebee 0%, #fce4ec 100%);
+  box-shadow: 0 1px 3px rgba(198, 40, 40, 0.2);
+  transition: all 0.2s ease;
+}
+
+.difference-highlight:hover {
+  box-shadow: 0 2px 6px rgba(198, 40, 40, 0.3);
+  transform: translateY(-1px);
 }
 </style> 

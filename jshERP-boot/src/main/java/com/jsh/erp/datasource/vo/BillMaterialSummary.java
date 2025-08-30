@@ -35,6 +35,11 @@ public class BillMaterialSummary {
     private BigDecimal totalOutNumber;
 
     /**
+     * 单价（用于校验价格一致性）
+     */
+    private BigDecimal unitPrice;
+
+    /**
      * 创建时间
      */
     private Date createTime;
@@ -79,6 +84,14 @@ public class BillMaterialSummary {
         this.totalOutNumber = totalOutNumber;
     }
 
+    public BigDecimal getUnitPrice() {
+        return unitPrice;
+    }
+
+    public void setUnitPrice(BigDecimal unitPrice) {
+        this.unitPrice = unitPrice;
+    }
+
     public Date getCreateTime() {
         return createTime;
     }
@@ -86,4 +99,4 @@ public class BillMaterialSummary {
     public void setCreateTime(Date createTime) {
         this.createTime = createTime;
     }
-} 
+}

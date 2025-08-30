@@ -23,6 +23,16 @@ public class CrossValidationRequest {
      */
     private String validationDate;
 
+    /**
+     * 单据类型
+     */
+    private String type;
+
+    /**
+     * 单据子类型
+     */
+    private String subType;
+
     public List<String> getCurrentUserIds() {
         return currentUserIds;
     }
@@ -45,5 +55,21 @@ public class CrossValidationRequest {
 
     public void setValidationDate(String validationDate) {
         this.validationDate = validationDate;
+    }
+
+    public String getType() {
+        return type;
+    }
+
+    public void setType(String type) {
+        this.type = type;
+    }
+
+    public String getSubType() {
+        return subType;
+    }
+
+    public void setSubType(String subType) {
+        this.subType = subType;
     }
 }

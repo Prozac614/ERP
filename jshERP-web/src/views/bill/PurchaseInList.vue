@@ -121,6 +121,7 @@
           </a-tooltip>
           <a-button v-if="checkFlag && btnEnableList.indexOf(2)>-1" icon="check" @click="batchSetStatus(1)">审核</a-button>
           <a-button v-if="checkFlag && btnEnableList.indexOf(7)>-1" icon="stop" @click="batchSetStatus(0)">反审核</a-button>
+          <a-button v-if="btnEnableList.indexOf(8)>-1 || saleBtnEnableList.indexOf(8)>-1 || hasValidationPermission" icon="eye" @click="batchValidation">校验</a-button>
           <a-button v-if="isShowExcel && btnEnableList.indexOf(3)>-1" icon="download" @click="handleExport">导出</a-button>
           <a-popover trigger="click" placement="right">
             <template slot="content">
@@ -214,6 +215,25 @@
         <purchase-back-modal ref="transferModalForm" @ok="modalFormOk" @close="modalFormClose"></purchase-back-modal>
         <bill-detail ref="modalDetail" @ok="modalFormOk" @close="modalFormClose"></bill-detail>
         <bill-excel-iframe ref="billExcelIframe" @ok="modalFormOk" @close="modalFormClose"></bill-excel-iframe>
+        
+        <!-- 日期选择器模态框 -->
+        <a-modal
+          title="选择校验日期"
+          :visible="validationDateVisible"
+          @ok="handleDateConfirm"
+          @cancel="handleDateCancel"
+          okText="确定"
+          cancelText="取消">
+          <a-form-item label="校验日期">
+            <a-date-picker v-model="selectedValidationDate" style="width: 100%" />
+          </a-form-item>
+        </a-modal>
+        
+        <!-- 用户选择模态框 -->
+        <user-selection-modal ref="userSelectionModal" @validation-success="handleValidationSuccess" @validation-failed="handleValidationFailed"></user-selection-modal>
+        
+        <!-- 校验差异显示模态框 -->
+        <validation-differences-modal ref="validationDifferencesModal"></validation-differences-modal>
       </a-card>
     </a-col>
   </a-row>
@@ -224,11 +244,15 @@
   import PurchaseBackModal from './modules/PurchaseBackModal'
   import BillDetail from './dialog/BillDetail'
   import BillExcelIframe from '@/components/tools/BillExcelIframe'
+  import UserSelectionModal from './components/UserSelectionModal'
+  import ValidationDifferencesModal from './components/ValidationDifferencesModal'
   import { JeecgListMixin } from '@/mixins/JeecgListMixin'
   import { BillListMixin } from './mixins/BillListMixin'
   import JEllipsis from '@/components/jeecg/JEllipsis'
   import JDate from '@/components/jeecg/JDate'
   import Vue from 'vue'
+  import { postAction } from '@/api/manage'
+  import moment from 'moment'
   export default {
     name: "PurchaseInList",
     mixins:[JeecgListMixin,BillListMixin],
@@ -237,6 +261,8 @@
       PurchaseBackModal,
       BillDetail,
       BillExcelIframe,
+      UserSelectionModal,
+      ValidationDifferencesModal,
       JEllipsis,
       JDate
     },
@@ -260,6 +286,11 @@
         prefixNo: 'CGRK',
         //出入库管理开关，适合独立仓管场景
         inOutManageFlag: false,
+        // 交叉验证日期选择
+        validationDateVisible: false,
+        selectedValidationDate: null,
+        // 销售出库按钮权限字符串，用于权限复用
+        saleBtnEnableList: '',
         labelCol: {
           span: 5
         },
@@ -331,6 +362,27 @@
       }
     },
     computed: {
+      // 检查是否有销售出库的校验权限（第8个按钮权限）
+      hasValidationPermission() {
+        // 检查销售出库页面的第8个按钮（校验）权限
+        let btnStrList = Vue.ls.get('winBtnStrList');
+        if (btnStrList) {
+          for (let i = 0; i < btnStrList.length; i++) {
+            if (btnStrList[i].url && (
+                btnStrList[i].url.includes('sale_out') || 
+                btnStrList[i].url.includes('sale-out') ||
+                btnStrList[i].url.includes('saleOut') ||
+                btnStrList[i].url.includes('销售出库')
+              )) {
+              if (btnStrList[i].btnStr && btnStrList[i].btnStr.length > 8) {
+                // 检查第8个位置的权限（校验按钮）
+                return btnStrList[i].btnStr.charAt(8) === '1';
+              }
+            }
+          }
+        }
+        return false;
+      }
     },
     created () {
       this.initSystemConfig()
@@ -340,8 +392,132 @@
       this.initAccount()
       this.initQuickBtn()
       this.getDepotByCurrentUser()
+      this.initSaleBtnStr()
     },
     methods: {
+      batchValidation() {
+
+        let that = this;
+        this.$confirm({
+          title: "交叉验证确认",
+          content: "校验将会自动校验指定日期所有用户的未审核单据数据，只有在每个用户提交的采购单据统计数据一致时，会自动通过审核。是否继续？",
+          onOk: function () {
+
+
+            that.showDateSelector();
+          }
+        });
+      },
+      handleValidation(validationDate) {
+        // 执行校验逻辑
+        this.loading = true;
+        const requestData = {
+          validationDate: validationDate,
+          type: "入库",
+          subType: "采购"
+        };
+        postAction('/depotHead/checkTodayUsers', requestData).then((res) => {
+
+          if(res.code === 200) {
+            if(res.data.hasOtherUsers) {
+              // 有其他用户，显示用户选择界面
+              this.showUserSelectionModal(res.data, validationDate);
+            } else {
+              this.$message.error("校验失败：" + validationDate + " 没有其他用户保存采购入库单据！");
+            }
+          } else {
+            this.$message.error(res.msg || "校验失败");
+          }
+        }).catch((error) => {
+          console.error('checkTodayUsers请求错误:', error);
+          this.$message.error("校验请求失败");
+        }).finally(() => {
+          this.loading = false;
+        });
+      },
+      
+      showUserSelectionModal(data, validationDate) {
+        // 显示用户选择界面
+        this.$refs.userSelectionModal.show(data, validationDate, "入库", "采购");
+      },
+      
+      showDateSelector() {
+        // 显示日期选择器
+        this.selectedValidationDate = moment().format('YYYY-MM-DD'); // 默认选择今天
+        this.validationDateVisible = true;
+      },
+      
+      handleDateConfirm() {
+        if (!this.selectedValidationDate) {
+          this.$message.warning('请选择校验日期！');
+          return;
+        }
+        // 确保日期格式为 YYYY-MM-DD 字符串
+        let formattedDate;
+        if (moment.isMoment(this.selectedValidationDate)) {
+          // 如果是 moment 对象
+          formattedDate = this.selectedValidationDate.format('YYYY-MM-DD');
+        } else if (this.selectedValidationDate instanceof Date) {
+          // 如果是 Date 对象
+          formattedDate = moment(this.selectedValidationDate).format('YYYY-MM-DD');
+        } else if (typeof this.selectedValidationDate === 'string') {
+          // 如果已经是字符串，确保格式正确
+          formattedDate = moment(this.selectedValidationDate).format('YYYY-MM-DD');
+        } else {
+          this.$message.error('日期格式无效');
+          return;
+        }
+        this.validationDateVisible = false;
+        this.handleValidation(formattedDate);
+      },
+      
+      handleDateCancel() {
+        this.validationDateVisible = false;
+        this.selectedValidationDate = null;
+      },
+      
+
+      
+      showValidationDifferences(differences) {
+        // 显示校验差异界面
+        if (this.$refs.validationDifferencesModal) {
+          this.$refs.validationDifferencesModal.show(differences);
+        } else {
+          console.error('ValidationDifferencesModal组件引用未找到！');
+        }
+      },
+      
+      handleValidationSuccess(result) {
+        // 处理校验成功
+        this.$message.success(`校验通过！共有 ${result.totalBills} 种商品数据一致，相关单据状态已自动更新。`);
+        this.loadData(); // 刷新列表
+      },
+      
+      handleValidationFailed(differences) {
+        // 处理校验失败，显示差异
+        this.showValidationDifferences(differences);
+      },
+      
+      // 初始化销售出库权限字符串，用于权限复用
+      initSaleBtnStr() {
+        let btnStrList = Vue.ls.get('winBtnStrList'); //按钮功能列表 JSON字符串
+        this.saleBtnEnableList = ""; //销售出库按钮列表
+        
+        if (btnStrList) {
+          for (let i = 0; i < btnStrList.length; i++) {
+            // 尝试多种可能的URL格式
+            if (btnStrList[i].url === '/bill/sale_out' || 
+                btnStrList[i].url === '/sale_out' ||
+                btnStrList[i].url.includes('sale_out') ||
+                btnStrList[i].url.includes('销售出库')) {
+              if (btnStrList[i].btnStr) {
+                this.saleBtnEnableList = btnStrList[i].btnStr;
+              }
+              break;
+            }
+          }
+        }
+      }
     }
   }
 </script>

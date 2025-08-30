@@ -13,14 +13,12 @@ import com.jsh.erp.datasource.vo.ValidationDifference;
 import com.jsh.erp.constants.BusinessConstants;
 import com.jsh.erp.constants.ExceptionConstants;
 import com.jsh.erp.exception.BusinessRunTimeException;
-import com.jsh.erp.exception.JshException;
+
 import com.jsh.erp.utils.StringUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
-import java.util.HashMap;
-import java.util.Map;
 import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
@@ -33,7 +31,6 @@ import java.util.HashSet;
 import java.util.stream.Collectors;
 import java.math.BigDecimal;
 import java.text.SimpleDateFormat;
-import java.util.Date;
 import java.util.regex.Pattern;
 
 /**
@@ -59,8 +56,8 @@ public class CrossValidationService {
      * @param validationDate 校验日期
      * @return 检查结果
      */
-    public CrossValidationCheckResult checkTodayUsers(String validationDate) {
-        logger.info("开始执行checkTodayUsers方法，校验日期: {}", validationDate);
+    public CrossValidationCheckResult checkTodayUsers(String validationDate, String type, String subType) {
+        logger.info("开始执行checkTodayUsers方法，校验日期: {}, 单据类型: {}, 子类型: {}", validationDate, type, subType);
 
         CrossValidationCheckResult result = new CrossValidationCheckResult();
         result.setCurrentUserIds(new ArrayList<>());
@@ -71,7 +68,7 @@ public class CrossValidationService {
                 throw new BusinessRunTimeException(ExceptionConstants.CROSS_VALIDATION_DATE_FORMAT_ERROR_CODE,
                         ExceptionConstants.CROSS_VALIDATION_DATE_FORMAT_ERROR_MSG);
             }
-            
+
             // 验证日期格式
             if (!isValidDateFormat(validationDate)) {
                 logger.debug("日期格式错误: {}", validationDate);
@@ -83,9 +80,9 @@ public class CrossValidationService {
             User currentUser = userService.getCurrentUser();
             Long currentUserId = currentUser.getId();
             Long tenantId = currentUser.getTenantId();
-            
+
             logger.info("当前用户信息: userId={}, tenantId={}", currentUserId, tenantId);
-            
+
             // 检查租户ID是否为空
             if (tenantId == null) {
                 logger.warn("当前用户租户ID为空，无法进行交叉校验");
@@ -94,10 +91,11 @@ public class CrossValidationService {
             }
 
             // 查询指定日期其他用户的单据汇总情况
-            List<TodayUserBillSummary> otherUsers = getTodayUserBillSummaryByDate(validationDate, tenantId, currentUserId);
+            List<TodayUserBillSummary> otherUsers = getTodayUserBillSummaryByDate(validationDate, tenantId,
+                    currentUserId, type, subType);
 
             // 获取单据总数
-            int totalBills = countBillsByDateAndUsers(validationDate, tenantId, otherUsers);
+            int totalBills = countBillsByDateAndUsers(validationDate, tenantId, otherUsers, type, subType);
 
             result.setOtherUsers(otherUsers);
             result.setHasOtherUsers(otherUsers.size() > 0);
@@ -133,12 +131,12 @@ public class CrossValidationService {
 
         try {
             // 参数校验
-            if (request == null || StringUtil.isEmpty(request.getValidationDate()) || 
-                request.getSelectedUserIds() == null || request.getSelectedUserIds().isEmpty()) {
+            if (request == null || StringUtil.isEmpty(request.getValidationDate()) ||
+                    request.getSelectedUserIds() == null || request.getSelectedUserIds().isEmpty()) {
                 throw new BusinessRunTimeException(ExceptionConstants.CROSS_VALIDATION_USER_PARAM_ERROR_CODE,
                         ExceptionConstants.CROSS_VALIDATION_USER_PARAM_ERROR_MSG);
             }
-            
+
             // 验证日期格式
             if (!isValidDateFormat(request.getValidationDate())) {
                 logger.debug("日期格式错误: {}", request.getValidationDate());
@@ -149,9 +147,9 @@ public class CrossValidationService {
             // 获取当前用户和租户信息
             User currentUser = userService.getCurrentUser();
             Long tenantId = currentUser.getTenantId();
-            
+
             logger.info("执行交叉校验 - 当前用户信息: userId={}, tenantId={}", currentUser.getId(), tenantId);
-            
+
             // 检查租户ID是否为空
             if (tenantId == null) {
                 logger.warn("当前用户租户ID为空，无法进行交叉校验");
@@ -164,19 +162,20 @@ public class CrossValidationService {
             if (!allUserIds.contains(currentUser.getId())) {
                 allUserIds.add(currentUser.getId());
             }
-            
-            logger.info("准备查询商品唛头汇总数据，日期: {}, 租户ID: {}, 当前用户ID: {}, 选中用户列表: {}, 完整用户列表: {}", 
-                    request.getValidationDate(), tenantId, currentUser.getId(), request.getSelectedUserIds(), allUserIds);
-            
+
+            logger.info("准备查询商品唛头汇总数据，日期: {}, 租户ID: {}, 当前用户ID: {}, 选中用户列表: {}, 完整用户列表: {}",
+                    request.getValidationDate(), tenantId, currentUser.getId(), request.getSelectedUserIds(),
+                    allUserIds);
+
             List<BillMaterialSummary> materialSummaries = depotHeadMapper.getBillMaterialSummaryByDateAndUsers(
-                    request.getValidationDate(), tenantId, allUserIds);
+                    request.getValidationDate(), tenantId, allUserIds, request.getType(), request.getSubType());
 
             logger.info("查询到商品唛头汇总数据条数: {}", materialSummaries == null ? 0 : materialSummaries.size());
-            
+
             if (materialSummaries != null && !materialSummaries.isEmpty()) {
                 for (BillMaterialSummary summary : materialSummaries) {
-                    logger.info("商品数据详情: 用户ID={}, 用户名={}, 条形码={}, 商品名={}, 数量={}", 
-                            summary.getUserId(), summary.getUserName(), summary.getMaterialBarCode(), 
+                    logger.info("商品数据详情: 用户ID={}, 用户名={}, 条形码={}, 商品名={}, 数量={}",
+                            summary.getUserId(), summary.getUserName(), summary.getMaterialBarCode(),
                             summary.getMaterialName(), summary.getTotalOutNumber());
                 }
             }
@@ -206,18 +205,22 @@ public class CrossValidationService {
 
             // 如果校验通过，自动更新单据状态
             if (differences.isEmpty()) {
-                updateBillStatusAfterValidation(request.getValidationDate(), tenantId, allUserIds, currentUser.getId());
+                updateBillStatusAfterValidation(request.getValidationDate(), tenantId, allUserIds, currentUser.getId(),
+                        request.getType(), request.getSubType());
             }
 
-            logger.info("performCrossValidation方法执行完成，校验日期: {}, 返回结果: consistent={}, differences.size()={}, totalMaterials={}",
+            logger.info(
+                    "performCrossValidation方法执行完成，校验日期: {}, 返回结果: consistent={}, differences.size()={}, totalMaterials={}",
                     request.getValidationDate(), result.isConsistent(), differences.size(), totalMaterials);
 
         } catch (BusinessRunTimeException e) {
             // 如果是业务异常，直接重新抛出，保留原始错误信息
-            logger.debug("performCrossValidation方法执行异常，校验日期: {}, 异常信息: {}", request.getValidationDate(), e.getMessage());
+            logger.debug("performCrossValidation方法执行异常，校验日期: {}, 异常信息: {}", request.getValidationDate(),
+                    e.getMessage());
             throw e;
         } catch (Exception e) {
-            logger.debug("performCrossValidation方法执行异常，校验日期: {}, 异常信息: {}", request.getValidationDate(), e.getMessage(), e);
+            logger.debug("performCrossValidation方法执行异常，校验日期: {}, 异常信息: {}", request.getValidationDate(), e.getMessage(),
+                    e);
             throw new BusinessRunTimeException(ExceptionConstants.CROSS_VALIDATION_EXECUTE_FAILED_CODE,
                     ExceptionConstants.CROSS_VALIDATION_EXECUTE_FAILED_MSG + ": " + e.getMessage());
         }
@@ -233,38 +236,38 @@ public class CrossValidationService {
      * @param currentUserId  当前用户ID
      * @return 用户单据汇总列表
      */
-    private List<TodayUserBillSummary> getTodayUserBillSummaryByDate(String validationDate, Long tenantId, Long currentUserId) {
+    private List<TodayUserBillSummary> getTodayUserBillSummaryByDate(String validationDate, Long tenantId,
+            Long currentUserId, String type, String subType) {
         try {
-            logger.info("查询指定日期用户单据汇总，参数: validationDate={}, tenantId={}, currentUserId={}", 
-                    validationDate, tenantId, currentUserId);
-            
+            logger.info("查询指定日期用户单据汇总，参数: validationDate={}, tenantId={}, currentUserId={}, type={}, subType={}",
+                    validationDate, tenantId, currentUserId, type, subType);
+
             // 先进行简单的测试：检查当前用户是否有效
             if (currentUserId == null) {
                 throw new RuntimeException("当前用户ID为空");
             }
-            
+
             // 调用指定日期的用户单据汇总查询方法
             List<TodayUserBillSummary> result;
             try {
-                logger.info("准备调用 depotHeadMapper.getUserBillSummaryByDate 方法");
-                result = depotHeadMapper.getUserBillSummaryByDate(validationDate, tenantId, currentUserId);
-                logger.info("depotHeadMapper.getUserBillSummaryByDate 方法调用成功");
+                result = depotHeadMapper.getUserBillSummaryByDate(validationDate, tenantId, currentUserId, type,
+                        subType);
             } catch (Exception e) {
                 logger.debug("调用 depotHeadMapper.getUserBillSummaryByDate 失败: {}", e.getMessage(), e);
                 throw new RuntimeException("数据库查询失败: " + e.getMessage(), e);
             }
-            
+
             logger.info("查询指定日期用户单据汇总完成，返回结果数量: {}", result == null ? 0 : result.size());
             if (result != null && !result.isEmpty()) {
                 for (TodayUserBillSummary summary : result) {
-                    logger.info("用户单据汇总详情: userId={}, userName={}, billCount={}", 
+                    logger.info("用户单据汇总详情: userId={}, userName={}, billCount={}",
                             summary.getUserId(), summary.getUserName(), summary.getBillCount());
                 }
             }
-            
+
             return result;
         } catch (Exception e) {
-                        logger.debug("获取指定日期用户单据汇总失败，日期: {}, 租户ID: {}, 当前用户ID: {}, 异常信息: {}",
+            logger.debug("获取指定日期用户单据汇总失败，日期: {}, 租户ID: {}, 当前用户ID: {}, 异常信息: {}",
                     validationDate, tenantId, currentUserId, e.getMessage(), e);
             throw e;
         }
@@ -278,7 +281,8 @@ public class CrossValidationService {
      * @param otherUsers     其他用户列表
      * @return 单据总数
      */
-    private int countBillsByDateAndUsers(String validationDate, Long tenantId, List<TodayUserBillSummary> otherUsers) {
+    private int countBillsByDateAndUsers(String validationDate, Long tenantId, List<TodayUserBillSummary> otherUsers,
+            String type, String subType) {
         if (otherUsers == null || otherUsers.isEmpty()) {
             return 0;
         }
@@ -294,7 +298,7 @@ public class CrossValidationService {
     }
 
     /**
-     * 校验商品唛头的数量一致性
+     * 校验商品唛头的数量和单价一致性
      * 
      * @param materialSummaries 商品唛头汇总数据
      * @return 校验差异列表
@@ -304,7 +308,7 @@ public class CrossValidationService {
 
         try {
             logger.info("开始校验数量一致性，输入数据条数: {}", materialSummaries == null ? 0 : materialSummaries.size());
-            
+
             if (materialSummaries == null || materialSummaries.isEmpty()) {
                 logger.info("没有数据需要校验，返回空的差异列表");
                 return differences;
@@ -336,89 +340,164 @@ public class CrossValidationService {
                 barCodeMaterialNameMap.put(summary.getMaterialBarCode(), summary.getMaterialName());
             }
 
-            // 步骤5: 构建完整的用户-商品-数量映射表，为缺失的用户-商品组合设置数量为0
-            Map<String, Map<Long, BigDecimal>> barCodeUserQuantityMap = new HashMap<>();
-            
-            // 首先初始化所有商品的所有用户数量为0
-            for (String barCode : allBarCodes) {
-                Map<Long, BigDecimal> userQuantityMap = new HashMap<>();
-                for (Long userId : allUserIds) {
-                    userQuantityMap.put(userId, BigDecimal.ZERO);
-                }
-                barCodeUserQuantityMap.put(barCode, userQuantityMap);
-            }
+            // 步骤5: 构建完整的用户-商品-数量和单价映射表
+            // 结构: Map<商品条码, Map<用户ID, List<商品记录>>>
+            Map<String, Map<Long, List<BillMaterialSummary>>> barCodeUserRecordsMap = new HashMap<>();
 
-            // 然后填入实际的数量数据
+            // 按商品条码和用户ID组织数据
             for (BillMaterialSummary summary : materialSummaries) {
                 String barCode = summary.getMaterialBarCode();
                 Long userId = summary.getUserId();
-                BigDecimal quantity = summary.getTotalOutNumber();
-                
-                barCodeUserQuantityMap.get(barCode).put(userId, quantity);
+
+                barCodeUserRecordsMap.computeIfAbsent(barCode, k -> new HashMap<>())
+                        .computeIfAbsent(userId, k -> new ArrayList<>())
+                        .add(summary);
+            }
+
+            // 计算每个用户每个商品的总数量和统一单价
+            Map<String, Map<Long, BigDecimal>> barCodeUserQuantityMap = new HashMap<>();
+            Map<String, Map<Long, BigDecimal>> barCodeUserPriceMap = new HashMap<>();
+
+            for (String barCode : allBarCodes) {
+                Map<Long, BigDecimal> userQuantityMap = new HashMap<>();
+                Map<Long, BigDecimal> userPriceMap = new HashMap<>();
+
+                for (Long userId : allUserIds) {
+                    List<BillMaterialSummary> userRecords = barCodeUserRecordsMap.getOrDefault(barCode, new HashMap<>())
+                            .getOrDefault(userId, new ArrayList<>());
+
+                    if (userRecords.isEmpty()) {
+                        // 用户没有该商品的记录
+                        userQuantityMap.put(userId, BigDecimal.ZERO);
+                        userPriceMap.put(userId, null);
+                    } else {
+                        // 计算该用户该商品的总数量
+                        BigDecimal totalQuantity = userRecords.stream()
+                                .map(BillMaterialSummary::getTotalOutNumber)
+                                .reduce(BigDecimal.ZERO, BigDecimal::add);
+                        userQuantityMap.put(userId, totalQuantity);
+
+                        // 检查该用户该商品的单价是否一致
+                        Set<BigDecimal> prices = userRecords.stream()
+                                .map(BillMaterialSummary::getUnitPrice)
+                                .collect(java.util.stream.Collectors.toSet());
+
+                        if (prices.size() > 1) {
+                            // 同一用户同一商品有多个不同单价，记录为差异
+                            logger.warn("用户 {} 的商品 {} 有多个不同单价: {}", userId, barCode, prices);
+                        }
+
+                        // 使用第一个记录的单价作为该用户该商品的单价
+                        userPriceMap.put(userId, userRecords.get(0).getUnitPrice());
+                    }
+                }
+
+                barCodeUserQuantityMap.put(barCode, userQuantityMap);
+                barCodeUserPriceMap.put(barCode, userPriceMap);
             }
 
             logger.info("构建完整的用户-商品-数量映射表完成，商品数量: {}, 用户数量: {}", allBarCodes.size(), allUserIds.size());
 
-            // 步骤6: 严格校验每个商品在所有用户间的数量一致性
+            // 步骤6: 严格校验每个商品在所有用户间的数量和单价一致性
             for (String barCode : allBarCodes) {
                 Map<Long, BigDecimal> userQuantityMap = barCodeUserQuantityMap.get(barCode);
-                
-                logger.info("开始校验商品 {} 的数量一致性", barCode);
-                
+                Map<Long, BigDecimal> userPriceMap = barCodeUserPriceMap.get(barCode);
+
+                logger.info("开始校验商品 {} 的数量和单价一致性", barCode);
+
                 // 检查所有用户的数量是否一致
                 BigDecimal firstQuantity = null;
-                boolean isConsistent = true;
-                
+                boolean quantityConsistent = true;
+
                 for (BigDecimal quantity : userQuantityMap.values()) {
                     if (firstQuantity == null) {
                         firstQuantity = quantity;
                     } else if (firstQuantity.compareTo(quantity) != 0) {
-                        isConsistent = false;
+                        quantityConsistent = false;
                         break;
                     }
                 }
 
+                // 检查所有用户的单价是否一致（排除没有该商品的用户）
+                BigDecimal firstPrice = null;
+                boolean priceConsistent = true;
+
+                for (BigDecimal price : userPriceMap.values()) {
+                    if (price != null) { // 只比较有该商品的用户的单价
+                        if (firstPrice == null) {
+                            firstPrice = price;
+                        } else if (firstPrice.compareTo(price) != 0) {
+                            priceConsistent = false;
+                            break;
+                        }
+                    }
+                }
+
+                boolean isConsistent = quantityConsistent && priceConsistent;
+
                 // 如果不一致，记录差异
                 if (!isConsistent) {
                     String materialName = barCodeMaterialNameMap.get(barCode);
-                    
-                    logger.info("发现数量不一致的商品: {}, 商品名称: {}", barCode, materialName);
-                    
+
+                    logger.info("发现数量或单价不一致的商品: {}, 商品名称: {}, 数量一致: {}, 单价一致: {}",
+                            barCode, materialName, quantityConsistent, priceConsistent);
+
                     // 构建差异描述
                     StringBuilder description = new StringBuilder();
                     description.append("商品唛头: ").append(barCode)
-                            .append(", 名称: ").append(materialName)
-                            .append(", 各用户出库数量不一致: ");
+                            .append(", 名称: ").append(materialName);
+
+                    if (!quantityConsistent && !priceConsistent) {
+                        description.append(", 各用户数量和单价均不一致: ");
+                    } else if (!quantityConsistent) {
+                        description.append(", 各用户数量不一致: ");
+                    } else {
+                        description.append(", 各用户单价不一致: ");
+                    }
 
                     StringBuilder usersInfo = new StringBuilder();
-                    
+
                     // 构建结构化的用户数量映射（key为用户名）
                     Map<String, BigDecimal> userQuantitiesMap = new HashMap<>();
-                    
+
                     for (Map.Entry<Long, BigDecimal> userEntry : userQuantityMap.entrySet()) {
                         Long userId = userEntry.getKey();
                         String userName = userIdToNameMap.get(userId);
                         BigDecimal quantity = userEntry.getValue();
-                        
+                        BigDecimal price = userPriceMap.get(userId);
+
                         // 设置结构化数据
                         userQuantitiesMap.put(userName, quantity);
-                        
+
                         description.append(userName).append("(ID:").append(userId).append(")")
-                                .append(": ").append(quantity).append("; ");
-                        
+                                .append(": 数量=").append(quantity)
+                                .append(", 单价=").append(price == null ? "无" : price)
+                                .append("; ");
+
                         if (usersInfo.length() > 0) {
                             usersInfo.append(", ");
                         }
                         usersInfo.append(userName);
-                        
-                        logger.info("用户 {} (ID: {}) 的商品 {} 数量: {}", userName, userId, barCode, quantity);
+
+                        logger.info("用户 {} (ID: {}) 的商品 {} 数量: {}, 单价: {}",
+                                userName, userId, barCode, quantity, price);
                     }
 
                     ValidationDifference difference = new ValidationDifference();
                     difference.setMaterialBarCode(barCode);
                     difference.setMaterialName(materialName);
-                    difference.setDiffType("QUANTITY_INCONSISTENT");
-                    difference.setDiffTypeName("数量不一致");
+
+                    if (!quantityConsistent && !priceConsistent) {
+                        difference.setDiffType("QUANTITY_PRICE_INCONSISTENT");
+                        difference.setDiffTypeName("数量单价不一致");
+                    } else if (!quantityConsistent) {
+                        difference.setDiffType("QUANTITY_INCONSISTENT");
+                        difference.setDiffTypeName("数量不一致");
+                    } else {
+                        difference.setDiffType("PRICE_INCONSISTENT");
+                        difference.setDiffTypeName("单价不一致");
+                    }
+
                     difference.setDescription(description.toString());
                     difference.setUsers(usersInfo.toString());
                     difference.setAffectedBills(userQuantityMap.size());
@@ -448,14 +527,16 @@ public class CrossValidationService {
      * @param currentUserId  当前用户ID
      */
     @Transactional(value = "transactionManager", rollbackFor = Exception.class)
-    private void updateBillStatusAfterValidation(String validationDate, Long tenantId, List<Long> allUserIds, Long currentUserId) {
+    private void updateBillStatusAfterValidation(String validationDate, Long tenantId, List<Long> allUserIds,
+            Long currentUserId, String type, String subType) {
         try {
-            logger.info("开始更新校验通过后的单据状态，日期: {}, 租户ID: {}, 用户列表: {}, 当前用户: {}", 
-                    validationDate, tenantId, allUserIds, currentUserId);
+            logger.info("开始更新校验通过后的单据状态，日期: {}, 租户ID: {}, 用户列表: {}, 当前用户: {}, 类型: {}, 子类型: {}",
+                    validationDate, tenantId, allUserIds, currentUserId, type, subType);
 
-            // 查询所有参与校验的用户的销售出库单据
-            List<DepotHead> bills = depotHeadMapper.getBillsByDateAndUsers(validationDate, tenantId, allUserIds);
-            
+            // 查询所有参与校验的用户的单据
+            List<DepotHead> bills = depotHeadMapper.getBillsByDateAndUsers(validationDate, tenantId, allUserIds, type,
+                    subType);
+
             if (bills == null || bills.isEmpty()) {
                 logger.info("未找到需要更新状态的单据");
                 return;
@@ -466,7 +547,7 @@ public class CrossValidationService {
             // 分别处理当前用户和其他用户的单据
             List<Long> currentUserBillIds = new ArrayList<>();
             List<Long> otherUserBillIds = new ArrayList<>();
-            
+
             for (DepotHead bill : bills) {
                 if (currentUserId.equals(bill.getCreator())) {
                     currentUserBillIds.add(bill.getId());
@@ -479,7 +560,8 @@ public class CrossValidationService {
 
             // 更新当前用户的单据为已审核状态（使用batchSetStatus确保库存更新）
             if (!currentUserBillIds.isEmpty()) {
-                String currentUserIds = currentUserBillIds.stream().map(String::valueOf).collect(Collectors.joining(","));
+                String currentUserIds = currentUserBillIds.stream().map(String::valueOf)
+                        .collect(Collectors.joining(","));
                 depotHeadService.batchSetStatus(BusinessConstants.BILLS_STATUS_AUDIT, currentUserIds);
                 logger.info("已将当前用户的 {} 张单据设置为已审核状态并更新库存", currentUserBillIds.size());
             }
@@ -524,7 +606,7 @@ public class CrossValidationService {
             logger.info("批量更新单据状态完成，更新状态: {}, 影响行数: {}", status, updateCount);
 
         } catch (Exception e) {
-            logger.error("批量更新单据状态失败，单据ID列表: {}, 目标状态: {}, 异常信息: {}", 
+            logger.error("批量更新单据状态失败，单据ID列表: {}, 目标状态: {}, 异常信息: {}",
                     billIds, status, e.getMessage(), e);
             throw e;
         }
@@ -540,13 +622,13 @@ public class CrossValidationService {
         if (StringUtil.isEmpty(dateString)) {
             return false;
         }
-        
+
         // 验证日期格式：YYYY-MM-DD
         Pattern datePattern = Pattern.compile("^\\d{4}-\\d{2}-\\d{2}$");
         if (!datePattern.matcher(dateString).matches()) {
             return false;
         }
-        
+
         try {
             SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
             sdf.setLenient(false);

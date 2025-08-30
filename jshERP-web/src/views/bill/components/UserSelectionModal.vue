@@ -43,6 +43,8 @@ export default {
       selectedUserIds: [],
       currentUserIds: [],
       validationDate: null,
+      type: null,
+      subType: null,
       columns: [
         {
           title: '用户名',
@@ -70,12 +72,14 @@ export default {
     }
   },
   methods: {
-    show(data, validationDate) {
+    show(data, validationDate, type = null, subType = null) {
       this.visible = true
       this.userList = data.otherUsers || []
       this.currentUserIds = data.currentUserIds || []
       this.selectedUserIds = []
       this.validationDate = validationDate
+      this.type = type
+      this.subType = subType
     },
     
     handleOk() {
@@ -85,14 +89,20 @@ export default {
       }
       
       this.confirmLoading = true
+      
+      // 向后兼容：如果type和subType为null，默认使用销售出库的参数
+      const requestType = this.type || "出库"
+      const requestSubType = this.subType || "销售"
+      
       const request = {
         currentUserIds: this.currentUserIds,
         selectedUserIds: this.selectedUserIds,
-        validationDate: this.validationDate
+        validationDate: this.validationDate,
+        type: requestType,
+        subType: requestSubType
       }
       
       postAction('/depotHead/performCrossValidation', request).then((res) => {
-        console.log('performCrossValidation响应:', res);
         if (res.code === 200) {
           this.handleValidationResult(res.data)
         } else {
@@ -119,35 +129,20 @@ export default {
     },
     
     handleValidationResult(result) {
-      console.log('===== UserSelectionModal.handleValidationResult 被调用 =====');
-      console.log('校验结果 result:', result);
-      console.log('result类型:', typeof result);
-      
       // 兼容处理字段名（可能是 consistent 或 isConsistent）
       const isConsistent = result.isConsistent !== undefined ? result.isConsistent : result.consistent;
-      console.log('是否一致 isConsistent:', isConsistent);
-      console.log('差异数据 result.differences:', result.differences);
       
       if (isConsistent) {
-        console.log('校验通过，发送validation-success事件');
         this.$message.success(`校验通过！共有 ${result.totalBills} 种商品数据一致，相关单据状态已自动更新。`)
         this.visible = false
         this.$emit('validation-success', result)
       } else {
-        console.log('校验失败，即将显示差异');
         // 显示校验差异
         this.showValidationDifferences(result.differences)
       }
     },
     
     showValidationDifferences(differences) {
-      // TODO: 显示校验差异界面，后续在阶段二完善
-      console.log('===== UserSelectionModal.showValidationDifferences 被调用 =====');
-      console.log('传入的differences:', differences);
-      console.log('differences类型:', typeof differences);
-      console.log('differences长度:', differences ? differences.length : 'undefined');
-      
-      console.log('发送validation-failed事件到父组件');
       // 发送校验失败事件，让父组件处理差异显示
       this.$emit('validation-failed', differences)
       this.visible = false
