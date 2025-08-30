@@ -656,7 +656,7 @@ export const BillModalMixin = {
         otherField3: mInfo.otherField3,
         unit: mInfo.commodityUnit,
         sku: mInfo.sku,
-        operNumber: 1,
+        operNumber: null,
         unitPrice: mInfo.billPrice,
         allPrice: mInfo.billPrice,
         taxRate: 0,
