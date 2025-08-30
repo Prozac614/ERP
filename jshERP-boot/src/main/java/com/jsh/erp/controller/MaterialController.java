@@ -632,10 +632,11 @@ public class MaterialController extends BaseController {
             if (list != null && list.size() > 0) {
                 for (MaterialVo4Unit mvo : list) {
                     mvo.setMaterialOther(materialService.getMaterialOtherByParam(mpArr, mvo));
-                    if ("LSCK".equals(prefixNo) || "LSTH".equals(prefixNo)) {
+                    if ("LSCK".equals(prefixNo) || "LSTH".equals(prefixNo) || "CGRK".equals(prefixNo)
+                            || "XSCK".equals(prefixNo)) {
                         // 零售价
                         mvo.setBillPrice(mvo.getCommodityDecimal());
-                    } else if ("CGDD".equals(prefixNo) || "CGRK".equals(prefixNo) || "CGTH".equals(prefixNo)) {
+                    } else if ("CGDD".equals(prefixNo) || "CGTH".equals(prefixNo)) {
                         // 采购价
                         mvo.setBillPrice(mvo.getPurchaseDecimal());
                     } else if ("QTRK".equals(prefixNo) || "DBCK".equals(prefixNo) || "ZZD".equals(prefixNo)
@@ -645,7 +646,7 @@ public class MaterialController extends BaseController {
                         mvo.setBillPrice(roleService.parseBillPriceByLimit(mvo.getPurchaseDecimal(), "buy", priceLimit,
                                 request));
                     }
-                    if ("XSDD".equals(prefixNo) || "XSCK".equals(prefixNo) || "XSTH".equals(prefixNo)
+                    if ("XSDD".equals(prefixNo) || "XSTH".equals(prefixNo)
                             || "QTCK".equals(prefixNo)) {
                         // 销售价
                         if (organId == null) {
