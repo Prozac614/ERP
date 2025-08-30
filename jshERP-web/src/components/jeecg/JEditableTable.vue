@@ -55,6 +55,9 @@
           <div v-if="dragSortAndNumber" class="td td-ds" :style="style.tdLeftDs">
             <span>#</span>
           </div>
+          <div v-if="dragToInsert" class="td td-ds" :style="style.tdLeftDs">
+            <span>#</span>
+          </div>
           <div v-if="rowNumber" class="td td-num" :style="style.tdLeft">
             <span>#</span>
           </div>
@@ -96,7 +99,7 @@
           <!-- v-model="rows"-->
           <draggable
             :value="rows"
-            handle=".td-ds-icons"
+            handle=".drag-handle"
             @start="handleDragMoveStart"
             @end="handleDragMoveEnd"
           >
@@ -146,6 +149,12 @@
                       <a-menu-item key="3" @click="_handleRowInsertDown(rowIndex)">插入一行</a-menu-item> -->
                     </a-menu>
                   </a-dropdown>
+                </div>
+
+                <div v-if="dragToInsert" class="td td-ds drag-handle" :style="style.tdLeftDs">
+                  <div class="td-ds-icons" title="拖拽到下方新增行" style="text-align: center; line-height: 32px; cursor: move;">
+                    <span>{{ rowIndex+1 }}</span>
+                  </div>
                 </div>
 
                 <div v-if="rowNumber" class="td td-num" :style="style.tdLeft">
@@ -744,7 +753,10 @@
                     </div>
 
                     <!-- else (normal) -->
-                    <span v-else :key="i" v-bind="buildProps(row,col)" class="td-span" :title="inputValues[rowIndex][col.key]">
+                    <span v-else :key="i" v-bind="buildProps(row,col)" 
+                          :class="['td-span', dragToInsert ? 'drag-handle' : '']" 
+                          :style="dragToInsert ? 'cursor: move;' : ''"
+                          :title="inputValues[rowIndex][col.key]">
                       {{ inputValues[rowIndex][col.key] }}
                     </span>
                   </template>
@@ -768,6 +780,8 @@
             <div v-if="dragSort" class="td td-ds" :style="style.tdLeftDs">
             </div>
             <div v-if="dragSortAndNumber" class="td td-ds" :style="style.tdLeftDs">
+            </div>
+            <div v-if="dragToInsert" class="td td-ds" :style="style.tdLeftDs">
             </div>
             <div v-if="rowNumber" class="td td-num" :style="style.tdLeft">
               <span v-if="!rowSelection">统计</span>
@@ -898,6 +912,11 @@
         type: Boolean,
         default: false
       },
+      // 是否可拖拽新增行
+      dragToInsert: {
+        type: Boolean,
+        default: false
+      },
       dragSortKey: {
         type: String,
         default: 'orderNum'
@@ -963,6 +982,11 @@
         deleteIds: [],
         // 存储显示tooltip的信息
         tooltips: {},
+        // 拖拽提示信息
+        dragInsertTip: {
+          visible: false,
+          message: '拖拽到目标位置释放以插入新行'
+        },
         // 存储没有通过验证的inputId
         notPassedIds: [],
 
@@ -2227,12 +2251,23 @@
       handleDragMoveStart(event) {
         this.dragging = true
         this.$refs.scrollView.style.overflow = 'hidden'
+        
+        if (this.dragToInsert) {
+          // 显示拖拽插入提示
+          this.dragInsertTip.visible = true
+          this.$message.info(this.dragInsertTip.message, 1.5)
+        }
       },
 
       /** 拖动结束，交换inputValue中的值 */
       handleDragMoveEnd(event) {
         this.dragging = false
         this.$refs.scrollView.style.overflow = 'auto'
+        
+        if (this.dragToInsert) {
+          // 隐藏拖拽插入提示
+          this.dragInsertTip.visible = false
+        }
 
         let { oldIndex, newIndex, item: { dataset: { idx: dataIdx } } } = event
 
@@ -2241,8 +2276,35 @@
         oldIndex += diff
         newIndex += diff
 
-        this.rowResort(oldIndex, newIndex)
-        this.emitDragged(oldIndex, newIndex)
+        if (this.dragToInsert) {
+          // 拖拽新增模式：在目标位置插入空白行
+          let rows = this.rows
+          let row = { id: this.generateId(rows) }
+          rows = this.push(row, false, rows, newIndex)
+          // 同步更改
+          this.rows = rows
+          this.$nextTick(() => {
+            this.recalcSortNumber()
+            this.forceUpdateFormValues()
+          })
+          // 触发 added 事件，以便设置仓库默认值
+          this.$emit('added', {
+            row: (() => {
+              let r = Object.assign({}, row)
+              r.id = this.getCleanId(r.id)
+              return r
+            })(),
+            target: this
+          })
+          // 自动滚动到新增行位置
+          this.$nextTick(() => {
+            this.autoJumpNextInputBill()
+          })
+        } else {
+          // 原有的拖拽排序模式
+          this.rowResort(oldIndex, newIndex)
+          this.emitDragged(oldIndex, newIndex)
+        }
       },
 
       /** 行重新排序 */
