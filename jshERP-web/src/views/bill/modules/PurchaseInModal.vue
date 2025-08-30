@@ -221,7 +221,8 @@
   import JUpload from '@/components/jeecg/JUpload'
   import JDate from '@/components/jeecg/JDate'
   import Vue from 'vue'
-  import { getCurrentSystemConfig } from '@/api/api'
+     import { getCurrentSystemConfig } from '@/api/api'
+   import { getAction } from '@/api/manage'
 
   export default {
     name: "PurchaseInModal",
@@ -250,15 +251,21 @@
         title:"操作",
         width: '1600px',
         moreStatus: false,
-        // 新增时子表默认添加几行空数据
-        addDefaultRowNum: 1,
+                 // 新增时子表默认添加几行空数据
+         addDefaultRowNum: 20,
         visible: false,
         operTimeStr: '',
         prefixNo: 'CGRK',
         depositStatus: false,
         fileList:[],
         rowCanEdit: true,
-        model: {},
+                 model: {},
+         // 滚动加载相关
+         scrollLoadThreshold: 10,  // 距离底部10px时加载
+         scrollLoadRowCount: 1,    // 每次加轵5行
+         isScrollLoading: false,   // 防止重复加载
+         lastScrollTop: 0,         // 上次滚动位置
+         hasReachedBottom: false,  // 是否已经到达过底部
         labelCol: {
           xs: { span: 24 },
           sm: { span: 8 },
@@ -276,8 +283,7 @@
             { title: '仓库名称', key: 'depotId', width: '8%', type: FormTypes.select, placeholder: '请选择${title}', options: [],
               allowSearch:true, validateRules: [{ required: true, message: '${title}不能为空' }]
             },
-            { title: '唛头', key: 'barCode', width: '12%', type: FormTypes.popupJsh, kind: 'material', multi: true,
-              validateRules: [{ required: true, message: '${title}不能为空' }]
+            { title: '唛头', key: 'barCode', width: '12%', type: FormTypes.popupJsh, kind: 'material', multi: true
             },
             { title: '名称', key: 'name', width: '10%', type: FormTypes.normal },
             { title: '规格', key: 'standard', width: '9%', type: FormTypes.normal },
@@ -339,8 +345,15 @@
         }
       }
     },
-    created () {
-    },
+         created () {
+     },
+     beforeDestroy() {
+       // 清理滚动事件监听器
+       const tableRef = this.$refs[this.refKeys[0]];
+       if (tableRef && tableRef.$refs.scrollView) {
+         tableRef.$refs.scrollView.removeEventListener('scroll', this.handleTableScroll);
+       }
+     },
     methods: {
       //调用完edit()方法之后会自动调用此方法
       editAfter() {
@@ -368,10 +381,14 @@
 
           this.$nextTick(() => {
             handleIntroJs(this.prefixNo, 1)
-            if(this.transferParam && this.transferParam.number) {
-              let tp = this.transferParam
-              this.linkBillListOk(tp.list, tp.number, tp.organId, tp.discountMoney, tp.deposit, tp.remark, this.defaultDepotId, tp.accountId)
-            }
+                         if(this.transferParam && this.transferParam.number) {
+               let tp = this.transferParam
+               this.linkBillListOk(tp.list, tp.number, tp.organId, tp.discountMoney, tp.deposit, tp.remark, this.defaultDepotId, tp.accountId)
+             }
+             // 初始化后滚动到顶部
+             this.scrollToTop();
+             // 模拟为每一行触发onAdded事件
+             this.triggerOnAddedForAllRows();
           })
         } else {
           if(this.model.linkNumber) {
@@ -419,15 +436,148 @@
         this.initDepot()
         this.initAccount(0)
         this.initPlatform()
-        this.initQuickBtn()
-        this.handleChangeOtherField()
+                 this.initQuickBtn()
+         this.handleChangeOtherField()
+         
+         // 绑定滚动事件监听器
+         this.$nextTick(() => {
+           const tableRef = this.$refs[this.refKeys[0]];
+           if (tableRef && tableRef.$refs.scrollView) {
+             tableRef.$refs.scrollView.addEventListener('scroll', this.handleTableScroll);
+           }
+         });
+             },
+       
+       // 处理表格滚动事件
+       handleTableScroll() {
+         if (this.isScrollLoading) return;
+         
+         const tableRef = this.$refs[this.refKeys[0]];
+         if (!tableRef) return;
+         
+         const scrollView = tableRef.$refs.scrollView;
+         if (!scrollView) return;
+         
+         const { scrollTop, scrollHeight, clientHeight } = scrollView;
+         const distanceToBottom = scrollHeight - scrollTop - clientHeight;
+         const isScrollingDown = scrollTop > this.lastScrollTop;
+         
+         // 只有当向下滚动且已经到达过底部且再次试图向下滚动时才添加行
+         if (distanceToBottom <= this.scrollLoadThreshold) {
+           if (!this.hasReachedBottom) {
+             // 第一次到达底部，只记录状态，不添加行
+             this.hasReachedBottom = true;
+           } else if (isScrollingDown && this.hasReachedBottom) {
+             // 已经在底部且继续向下滚动，添加新行
+             this.addMoreRows();
+             this.hasReachedBottom = false; // 重置状态，防止连续触发
+           }
+         } else {
+           // 不在底部时重置状态
+           this.hasReachedBottom = false;
+         }
+         
+         this.lastScrollTop = scrollTop;
+       },
+
+       // 添加更多行
+       addMoreRows() {
+         this.isScrollLoading = true;
+         const tableRef = this.$refs[this.refKeys[0]];
+         if (tableRef && tableRef.add) {
+           tableRef.add(this.scrollLoadRowCount);
+         }
+         // 使用setTimeout防止过于频繁的触发
+         setTimeout(() => {
+           this.isScrollLoading = false;
+         }, 200);
+       },
+       
+             // 重写onAdded方法，防止自动滚动但保留仓库设置逻辑
+      onAdded(event) {
+        const { row, target } = event
+        target.setValues([{ rowKey: row.id, values: { operNumber: 0 } }])
+        
+        // 保留原来的仓库设置逻辑
+        if (this.currentSelectDepotId) {
+          //如果单据选择过仓库，则直接从当前选择的仓库加载
+          target.setValues([{ rowKey: row.id, values: { depotId: this.currentSelectDepotId } }])
+        } else {
+          getAction('/depot/findDepotByCurrentUser').then((res) => {
+            if (res.code === 200) {
+              let arr = res.data
+              if (arr.length === 1) {
+                target.setValues([{ rowKey: row.id, values: { depotId: arr[0].id + '' } }])
+              } else {
+                for (let i = 0; i < arr.length; i++) {
+                  if (arr[i].isDefault) {
+                    target.setValues([{ rowKey: row.id, values: { depotId: arr[i].id + '' } }])
+                    break
+                  }
+                }
+              }
+            }
+          })
+        }
       },
-      //提交单据时整理成formData
+       
+       // 为所有初始行触发onAdded逻辑
+       triggerOnAddedForAllRows() {
+         setTimeout(() => {
+           const tableRef = this.$refs[this.refKeys[0]];
+           if (!tableRef || !tableRef.rows || tableRef.rows.length === 0) {
+             setTimeout(() => this.triggerOnAddedForAllRows(), 500);
+             return;
+           }
+           
+           // 为每个初始行模拟触发onAdded事件
+           tableRef.rows.forEach(row => {
+             const mockEvent = {
+               row: row,
+               target: tableRef
+             };
+             this.onAdded(mockEvent);
+           });
+         }, 1000);
+       },
+       
+       // 滚动到顶部
+       scrollToTop() {
+         // 多次尝试确保滚动到顶部
+         const attemptScroll = () => {
+           const tableRef = this.$refs[this.refKeys[0]];
+           if (tableRef && tableRef.$refs.scrollView) {
+             tableRef.$refs.scrollView.scrollTop = 0;
+             // 再次检查是否成功
+             setTimeout(() => {
+               if (tableRef.$refs.scrollView.scrollTop > 0) {
+                 attemptScroll(); // 如果还没有滚动到顶部，再试一次
+               }
+             }, 100);
+           }
+         };
+         
+         this.$nextTick(() => {
+           attemptScroll();
+           // 再等待一段时间后再次尝试
+           setTimeout(attemptScroll, 500);
+           setTimeout(attemptScroll, 1000);
+         });
+       },
+       
+       //提交单据时整理成formData
       classifyIntoFormData(allValues) {
         let totalPrice = 0
         let billMain = Object.assign(this.model, allValues.formValue)
-        let detailArr = allValues.tablesValue[0].values
-        billMain.type = '入库'
+                 let detailArr = allValues.tablesValue[0].values
+         
+         // 过滤掉唡头为空的行（数量现在是必填的）
+         detailArr = detailArr.filter(item => {
+           const hasBarCode = item.barCode && item.barCode.trim() !== '';
+           return hasBarCode;
+         });
+         
+         billMain.type = '入库'
         billMain.subType = '采购'
         for(let item of detailArr){
           totalPrice += item.allPrice-0

@@ -237,6 +237,7 @@
   import JDate from '@/components/jeecg/JDate'
   import Vue from 'vue'
   import { getCurrentSystemConfig } from '@/api/api'
+  import { getAction } from '@/api/manage'
   export default {
     name: "SaleOutModal",
     mixins: [JEditableTableMixin, BillModalMixin],
@@ -266,7 +267,13 @@
         width: '1600px',
         moreStatus: false,
         // 新增时子表默认添加几行空数据
-        addDefaultRowNum: 1,
+        addDefaultRowNum: 20,
+        // 滚动加载相关参数
+        scrollLoadThreshold: 10,  // 距离底部10px时加载
+        scrollLoadRowCount: 1,    // 每次加载1行
+        isScrollLoading: false,   // 防止重复加载
+        lastScrollTop: 0,         // 记录上次滚动位置
+        hasReachedBottom: false,  // 是否已经到达底部
         visible: false,
         operTimeStr: '',
         prefixNo: 'XSCK',
@@ -291,8 +298,7 @@
             { title: '仓库名称', key: 'depotId', width: '8%', type: FormTypes.select, placeholder: '请选择${title}', options: [],
               allowSearch:true, validateRules: [{ required: true, message: '${title}不能为空' }]
             },
-            { title: '唛头', key: 'barCode', width: '12%', type: FormTypes.popupJsh, kind: 'material', multi: true,
-              validateRules: [{ required: true, message: '${title}不能为空' }]
+            { title: '唛头', key: 'barCode', width: '12%', type: FormTypes.popupJsh, kind: 'material', multi: true
             },
             { title: '名称', key: 'name', width: '10%', type: FormTypes.normal },
             { title: '规格', key: 'standard', width: '9%', type: FormTypes.normal },
@@ -388,6 +394,10 @@
               let tp = this.transferParam
               this.linkBillListOk(tp.list, tp.number, tp.organId, tp.discountMoney, tp.deposit, tp.remark, this.defaultDepotId, tp.accountId, tp.salesMan)
             }
+            // 初始化后滚动到顶部
+            this.scrollToTop();
+            // 模拟为每一行触发onAdded事件
+            this.triggerOnAddedForAllRows();
           })
         } else {
           if(this.model.linkNumber) {
@@ -439,12 +449,26 @@
         this.initPlatform()
         this.initQuickBtn()
         this.handleChangeOtherField()
+        
+        // 添加滚动监听器
+        this.$nextTick(() => {
+          const tableRef = this.$refs[this.refKeys[0]];
+          if (tableRef && tableRef.$refs.scrollView) {
+            tableRef.$refs.scrollView.addEventListener('scroll', this.handleTableScroll);
+          }
+        });
       },
       //提交单据时整理成formData
       classifyIntoFormData(allValues) {
         let totalPrice = 0
         let billMain = Object.assign(this.model, allValues.formValue)
         let detailArr = allValues.tablesValue[0].values
+        
+        // 过滤掉唱头为空的行（数量现在是必填的）
+        detailArr = detailArr.filter(item => {
+          const hasBarCode = item.barCode && item.barCode.trim() !== '';
+          return hasBarCode;
+        });
         billMain.type = '出库'
         billMain.subType = '销售'
         for(let item of detailArr){
@@ -550,6 +574,124 @@
           }
         }
       },
+      
+      // 重写onAdded方法，防止自动滚动但保留仓库设置逻辑
+      onAdded(event) {
+        const { row, target } = event
+        target.setValues([{ rowKey: row.id, values: { operNumber: 0 } }])
+        
+        // 保留原来的仓库设置逻辑
+        if (this.currentSelectDepotId) {
+          //如果单据选择过仓库，则直接从当前选择的仓库加载
+          target.setValues([{ rowKey: row.id, values: { depotId: this.currentSelectDepotId } }])
+        } else {
+          getAction('/depot/findDepotByCurrentUser').then((res) => {
+            if (res.code === 200) {
+              let arr = res.data
+              if (arr.length === 1) {
+                target.setValues([{ rowKey: row.id, values: { depotId: arr[0].id + '' } }])
+              } else {
+                for (let i = 0; i < arr.length; i++) {
+                  if (arr[i].isDefault) {
+                    target.setValues([{ rowKey: row.id, values: { depotId: arr[i].id + '' } }])
+                    break
+                  }
+                }
+              }
+            }
+          })
+        }
+      },
+      
+      // 为所有初始行触发onAdded逻辑
+      triggerOnAddedForAllRows() {
+        setTimeout(() => {
+          const tableRef = this.$refs[this.refKeys[0]];
+          if (!tableRef || !tableRef.rows || tableRef.rows.length === 0) {
+            setTimeout(() => this.triggerOnAddedForAllRows(), 500);
+            return;
+          }
+          
+          // 为每个初始行模拟触发onAdded事件
+          tableRef.rows.forEach(row => {
+            const mockEvent = {
+              row: row,
+              target: tableRef
+            };
+            this.onAdded(mockEvent);
+          });
+        }, 1000);
+      },
+      
+      // 滚动事件处理
+      handleTableScroll() {
+        const tableRef = this.$refs[this.refKeys[0]];
+        if (!tableRef || !tableRef.$refs.scrollView || this.isScrollLoading) {
+          return;
+        }
+        
+        const scrollView = tableRef.$refs.scrollView;
+        const scrollTop = scrollView.scrollTop;
+        const scrollHeight = scrollView.scrollHeight;
+        const clientHeight = scrollView.clientHeight;
+        
+        // 检查是否滚动到底部
+        const isAtBottom = scrollTop + clientHeight >= scrollHeight - this.scrollLoadThreshold;
+        
+        // 只有在向下滚动且到达底部时才添加行
+        if (isAtBottom && scrollTop > this.lastScrollTop) {
+          this.addMoreRows();
+        }
+        
+        this.lastScrollTop = scrollTop;
+      },
+      
+      // 添加更多行
+      addMoreRows() {
+        if (this.isScrollLoading) return;
+        
+        this.isScrollLoading = true;
+        const tableRef = this.$refs[this.refKeys[0]];
+        if (tableRef) {
+          tableRef.add(this.scrollLoadRowCount);
+          
+          // 防抖，稍后重置状态
+          setTimeout(() => {
+            this.isScrollLoading = false;
+          }, 300);
+        }
+      },
+      
+      // 滚动到顶部
+      scrollToTop() {
+        // 多次尝试确保滚动到顶部
+        const attemptScroll = () => {
+          const tableRef = this.$refs[this.refKeys[0]];
+          if (tableRef && tableRef.$refs.scrollView) {
+            tableRef.$refs.scrollView.scrollTop = 0;
+            // 再次检查是否成功
+            setTimeout(() => {
+              if (tableRef.$refs.scrollView.scrollTop > 0) {
+                attemptScroll(); // 如果还没有滚动到顶部，再试一次
+              }
+            }, 100);
+          }
+        };
+        
+        this.$nextTick(() => {
+          attemptScroll();
+          // 再等待一段时间后再次尝试
+          setTimeout(attemptScroll, 500);
+          setTimeout(attemptScroll, 1000);
+        });
+      },
+    },
+    beforeDestroy() {
+      // 移除滚动监听器
+      const tableRef = this.$refs[this.refKeys[0]];
+      if (tableRef && tableRef.$refs.scrollView) {
+        tableRef.$refs.scrollView.removeEventListener('scroll', this.handleTableScroll);
+      }
     }
   }
 </script>
