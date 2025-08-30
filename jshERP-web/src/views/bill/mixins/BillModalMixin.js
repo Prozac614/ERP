@@ -300,11 +300,11 @@ export const BillModalMixin = {
     manyAccountModalFormOk(idList, moneyList, allPrice) {
       this.accountIdList = idList
       this.accountMoneyList = moneyList
-      let discountLastMoney = this.form.getFieldValue('discountLastMoney') - 0
-      let otherMoney = this.form.getFieldValue('otherMoney') ? this.form.getFieldValue('otherMoney') - 0 : 0
-      let debt = (discountLastMoney + otherMoney - allPrice).toFixed(2)
+      let discountLastMoney = parseFloat(this.form.getFieldValue('discountLastMoney')) || 0
+      let otherMoney = this.form.getFieldValue('otherMoney') ? parseFloat(this.form.getFieldValue('otherMoney')) || 0 : 0
+      let debt = parseFloat((discountLastMoney + otherMoney - (parseFloat(allPrice) || 0)).toFixed(2)) || 0
       this.$nextTick(() => {
-        this.form.setFieldsValue({ 'changeAmount': allPrice, 'debt': debt })
+        this.form.setFieldsValue({ 'changeAmount': parseFloat(allPrice) || 0, 'debt': debt })
       });
     },
     addSupplier() {
@@ -735,15 +735,16 @@ export const BillModalMixin = {
     },
     //改变优惠、本次付款、欠款的值
     autoChangePrice(target) {
-      let allTaxLastMoney = target.statisticsColumns.taxLastMoney - 0
-      let discount = this.form.getFieldValue('discount') - 0
-      let otherMoney = this.form.getFieldValue('otherMoney') ? this.form.getFieldValue('otherMoney') - 0 : 0
-      let deposit = this.form.getFieldValue('deposit')
-      let discountMoney = (discount * 0.01 * allTaxLastMoney).toFixed(2) - 0
-      let discountLastMoney = (allTaxLastMoney - discountMoney).toFixed(2) - 0
-      let changeAmountNew = (discountLastMoney + otherMoney).toFixed(2) - 0
+      let allTaxLastMoney = target && target.statisticsColumns && target.statisticsColumns.taxLastMoney ?
+        parseFloat(target.statisticsColumns.taxLastMoney) || 0 : 0
+      let discount = parseFloat(this.form.getFieldValue('discount')) || 0
+      let otherMoney = this.form.getFieldValue('otherMoney') ? parseFloat(this.form.getFieldValue('otherMoney')) || 0 : 0
+      let deposit = this.form.getFieldValue('deposit') ? parseFloat(this.form.getFieldValue('deposit')) || 0 : 0
+      let discountMoney = parseFloat((discount * 0.01 * allTaxLastMoney).toFixed(2)) || 0
+      let discountLastMoney = parseFloat((allTaxLastMoney - discountMoney).toFixed(2)) || 0
+      let changeAmountNew = parseFloat((discountLastMoney + otherMoney).toFixed(2)) || 0
       if (deposit) {
-        changeAmountNew = (changeAmountNew - deposit).toFixed(2) - 0
+        changeAmountNew = parseFloat((changeAmountNew - deposit).toFixed(2)) || 0
       }
       this.$nextTick(() => {
         changeAmountNew = this.prefixNo === 'CGDD' || this.prefixNo === 'XSDD' ? 0 : changeAmountNew
@@ -756,15 +757,17 @@ export const BillModalMixin = {
     },
     //改变优惠率
     onChangeDiscount(e) {
-      const value = e.target.value - 0
-      let otherMoney = this.form.getFieldValue('otherMoney') ? this.form.getFieldValue('otherMoney') - 0 : 0
-      let deposit = this.form.getFieldValue('deposit')
-      let allTaxLastMoney = this.$refs.materialDataTable.statisticsColumns.taxLastMoney - 0
-      let discountMoneyNew = (allTaxLastMoney * value * 0.01).toFixed(2) - 0
-      let discountLastMoneyNew = (allTaxLastMoney - discountMoneyNew).toFixed(2) - 0
-      let changeAmountNew = (discountLastMoneyNew + otherMoney).toFixed(2) - 0
+      const value = parseFloat(e.target.value) || 0
+      let otherMoney = this.form.getFieldValue('otherMoney') ? parseFloat(this.form.getFieldValue('otherMoney')) || 0 : 0
+      let deposit = this.form.getFieldValue('deposit') ? parseFloat(this.form.getFieldValue('deposit')) || 0 : 0
+      let allTaxLastMoney = this.$refs.materialDataTable && this.$refs.materialDataTable.statisticsColumns &&
+        this.$refs.materialDataTable.statisticsColumns.taxLastMoney ?
+        parseFloat(this.$refs.materialDataTable.statisticsColumns.taxLastMoney) || 0 : 0
+      let discountMoneyNew = parseFloat((allTaxLastMoney * value * 0.01).toFixed(2)) || 0
+      let discountLastMoneyNew = parseFloat((allTaxLastMoney - discountMoneyNew).toFixed(2)) || 0
+      let changeAmountNew = parseFloat((discountLastMoneyNew + otherMoney).toFixed(2)) || 0
       if (deposit) {
-        changeAmountNew = (changeAmountNew - deposit).toFixed(2) - 0
+        changeAmountNew = parseFloat((changeAmountNew - deposit).toFixed(2)) || 0
       }
       this.$nextTick(() => {
         changeAmountNew = this.prefixNo === 'CGDD' || this.prefixNo === 'XSDD' ? 0 : changeAmountNew
@@ -777,15 +780,17 @@ export const BillModalMixin = {
     },
     //改变付款优惠
     onChangeDiscountMoney(e) {
-      const value = e.target.value - 0
-      let otherMoney = this.form.getFieldValue('otherMoney') ? this.form.getFieldValue('otherMoney') - 0 : 0
-      let deposit = this.form.getFieldValue('deposit')
-      let allTaxLastMoney = this.$refs.materialDataTable.statisticsColumns.taxLastMoney - 0
-      let discountNew = (value / allTaxLastMoney * 100).toFixed(2) - 0
-      let discountLastMoneyNew = (allTaxLastMoney - value).toFixed(2) - 0
-      let changeAmountNew = (discountLastMoneyNew + otherMoney).toFixed(2) - 0
+      const value = parseFloat(e.target.value) || 0
+      let otherMoney = this.form.getFieldValue('otherMoney') ? parseFloat(this.form.getFieldValue('otherMoney')) || 0 : 0
+      let deposit = this.form.getFieldValue('deposit') ? parseFloat(this.form.getFieldValue('deposit')) || 0 : 0
+      let allTaxLastMoney = this.$refs.materialDataTable && this.$refs.materialDataTable.statisticsColumns &&
+        this.$refs.materialDataTable.statisticsColumns.taxLastMoney ?
+        parseFloat(this.$refs.materialDataTable.statisticsColumns.taxLastMoney) || 0 : 0
+      let discountNew = allTaxLastMoney > 0 ? parseFloat((value / allTaxLastMoney * 100).toFixed(2)) || 0 : 0
+      let discountLastMoneyNew = parseFloat((allTaxLastMoney - value).toFixed(2)) || 0
+      let changeAmountNew = parseFloat((discountLastMoneyNew + otherMoney).toFixed(2)) || 0
       if (deposit) {
-        changeAmountNew = (changeAmountNew - deposit).toFixed(2) - 0
+        changeAmountNew = parseFloat((changeAmountNew - deposit).toFixed(2)) || 0
       }
       this.$nextTick(() => {
         changeAmountNew = this.prefixNo === 'CGDD' || this.prefixNo === 'XSDD' ? 0 : changeAmountNew
@@ -798,12 +803,12 @@ export const BillModalMixin = {
     },
     //其它费用
     onChangeOtherMoney(e) {
-      const value = e.target.value - 0
-      let discountLastMoney = this.form.getFieldValue('discountLastMoney') - 0
-      let deposit = this.form.getFieldValue('deposit')
-      let changeAmountNew = (discountLastMoney + value).toFixed(2) - 0
+      const value = parseFloat(e.target.value) || 0
+      let discountLastMoney = parseFloat(this.form.getFieldValue('discountLastMoney')) || 0
+      let deposit = this.form.getFieldValue('deposit') ? parseFloat(this.form.getFieldValue('deposit')) || 0 : 0
+      let changeAmountNew = parseFloat((discountLastMoney + value).toFixed(2)) || 0
       if (deposit) {
-        changeAmountNew = (changeAmountNew - deposit).toFixed(2) - 0
+        changeAmountNew = parseFloat((changeAmountNew - deposit).toFixed(2)) || 0
       }
       this.$nextTick(() => {
         this.form.setFieldsValue({ 'changeAmount': changeAmountNew, 'debt': 0 })
@@ -812,12 +817,12 @@ export const BillModalMixin = {
     },
     //改变扣除订金
     onChangeDeposit(e) {
-      const value = e.target.value - 0
-      let discountLastMoney = this.form.getFieldValue('discountLastMoney') - 0
-      let otherMoney = this.form.getFieldValue('otherMoney') ? this.form.getFieldValue('otherMoney') - 0 : 0
-      let changeAmountNew = (discountLastMoney + otherMoney).toFixed(2) - 0
+      const value = parseFloat(e.target.value) || 0
+      let discountLastMoney = parseFloat(this.form.getFieldValue('discountLastMoney')) || 0
+      let otherMoney = this.form.getFieldValue('otherMoney') ? parseFloat(this.form.getFieldValue('otherMoney')) || 0 : 0
+      let changeAmountNew = parseFloat((discountLastMoney + otherMoney).toFixed(2)) || 0
       if (value) {
-        changeAmountNew = (changeAmountNew - value).toFixed(2) - 0
+        changeAmountNew = parseFloat((changeAmountNew - value).toFixed(2)) || 0
       }
       this.$nextTick(() => {
         this.form.setFieldsValue({ 'changeAmount': changeAmountNew, 'debt': 0 })
@@ -826,13 +831,13 @@ export const BillModalMixin = {
     },
     //改变本次付款
     onChangeChangeAmount(e) {
-      const value = e.target.value - 0
-      let discountLastMoney = this.form.getFieldValue('discountLastMoney') - 0
-      let otherMoney = this.form.getFieldValue('otherMoney') ? this.form.getFieldValue('otherMoney') - 0 : 0
-      let deposit = this.form.getFieldValue('deposit')
-      let debtNew = (discountLastMoney + otherMoney - value).toFixed(2) - 0
+      const value = parseFloat(e.target.value) || 0
+      let discountLastMoney = parseFloat(this.form.getFieldValue('discountLastMoney')) || 0
+      let otherMoney = this.form.getFieldValue('otherMoney') ? parseFloat(this.form.getFieldValue('otherMoney')) || 0 : 0
+      let deposit = this.form.getFieldValue('deposit') ? parseFloat(this.form.getFieldValue('deposit')) || 0 : 0
+      let debtNew = parseFloat((discountLastMoney + otherMoney - value).toFixed(2)) || 0
       if (deposit) {
-        debtNew = (debtNew - deposit).toFixed(2) - 0
+        debtNew = parseFloat((debtNew - deposit).toFixed(2)) || 0
       }
       this.$nextTick(() => {
         this.form.setFieldsValue({ 'debt': debtNew })
@@ -886,17 +891,17 @@ export const BillModalMixin = {
               this.materialTable.dataSource = newDetailArr
               //更新优惠后金额、本次付款等信息
               for (let newDetail of newDetailArr) {
-                allLastMoney = allLastMoney + (newDetail.allPrice - 0)
-                allTaxLastMoney = allTaxLastMoney + (newDetail.taxLastMoney - 0)
+                allLastMoney = allLastMoney + (parseFloat(newDetail.allPrice) || 0)
+                allTaxLastMoney = allTaxLastMoney + (parseFloat(newDetail.taxLastMoney) || 0)
               }
-              let discount = this.form.getFieldValue('discount') - 0
-              let otherMoney = this.form.getFieldValue('otherMoney') ? this.form.getFieldValue('otherMoney') - 0 : 0
-              let deposit = this.form.getFieldValue('deposit')
-              let discountMoney = (discount * 0.01 * allTaxLastMoney).toFixed(2) - 0
-              let discountLastMoney = (allTaxLastMoney - discountMoney).toFixed(2) - 0
-              let changeAmountNew = (discountLastMoney + otherMoney).toFixed(2) - 0
+              let discount = parseFloat(this.form.getFieldValue('discount')) || 0
+              let otherMoney = this.form.getFieldValue('otherMoney') ? parseFloat(this.form.getFieldValue('otherMoney')) || 0 : 0
+              let deposit = this.form.getFieldValue('deposit') ? parseFloat(this.form.getFieldValue('deposit')) || 0 : 0
+              let discountMoney = parseFloat((discount * 0.01 * allTaxLastMoney).toFixed(2)) || 0
+              let discountLastMoney = parseFloat((allTaxLastMoney - discountMoney).toFixed(2)) || 0
+              let changeAmountNew = parseFloat((discountLastMoney + otherMoney).toFixed(2)) || 0
               if (deposit) {
-                changeAmountNew = (changeAmountNew - deposit).toFixed(2) - 0
+                changeAmountNew = parseFloat((changeAmountNew - deposit).toFixed(2)) || 0
               }
               this.$nextTick(() => {
                 changeAmountNew = this.prefixNo === 'XSDD' ? 0 : changeAmountNew
@@ -1016,17 +1021,17 @@ export const BillModalMixin = {
               this.materialTable.dataSource = newDetailArr
               //更新优惠后金额、本次付款等信息
               for (let newDetail of newDetailArr) {
-                allLastMoney = allLastMoney + (newDetail.allPrice - 0)
-                allTaxLastMoney = allTaxLastMoney + (newDetail.taxLastMoney - 0)
+                allLastMoney = allLastMoney + (parseFloat(newDetail.allPrice) || 0)
+                allTaxLastMoney = allTaxLastMoney + (parseFloat(newDetail.taxLastMoney) || 0)
               }
-              let discount = this.form.getFieldValue('discount') - 0
-              let otherMoney = this.form.getFieldValue('otherMoney') ? this.form.getFieldValue('otherMoney') - 0 : 0
-              let deposit = this.form.getFieldValue('deposit')
-              let discountMoney = (discount * 0.01 * allTaxLastMoney).toFixed(2) - 0
-              let discountLastMoney = (allTaxLastMoney - discountMoney).toFixed(2) - 0
-              let changeAmountNew = (discountLastMoney + otherMoney).toFixed(2) - 0
+              let discount = parseFloat(this.form.getFieldValue('discount')) || 0
+              let otherMoney = this.form.getFieldValue('otherMoney') ? parseFloat(this.form.getFieldValue('otherMoney')) || 0 : 0
+              let deposit = this.form.getFieldValue('deposit') ? parseFloat(this.form.getFieldValue('deposit')) || 0 : 0
+              let discountMoney = parseFloat((discount * 0.01 * allTaxLastMoney).toFixed(2)) || 0
+              let discountLastMoney = parseFloat((allTaxLastMoney - discountMoney).toFixed(2)) || 0
+              let changeAmountNew = parseFloat((discountLastMoney + otherMoney).toFixed(2)) || 0
               if (deposit) {
-                changeAmountNew = (changeAmountNew - deposit).toFixed(2) - 0
+                changeAmountNew = parseFloat((changeAmountNew - deposit).toFixed(2)) || 0
               }
               if (this.prefixNo === 'LSCK' || this.prefixNo === 'LSTH') {
                 this.$nextTick(() => {
@@ -1065,7 +1070,7 @@ export const BillModalMixin = {
       this.$nextTick(() => {
         let discountLastMoney = 0
         for (let i = 0; i < data.length; i++) {
-          discountLastMoney += data[i].taxLastMoney
+          discountLastMoney += parseFloat(data[i].taxLastMoney) || 0
           this.changeColumnShow(data[i])
         }
         this.form.setFieldsValue({ 'discountLastMoney': discountLastMoney })

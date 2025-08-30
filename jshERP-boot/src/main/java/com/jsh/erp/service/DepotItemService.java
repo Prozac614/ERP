@@ -776,9 +776,11 @@ public class DepotItemService {
                 updateCurrentStock(depotItem);
                 // 更新当前成本价
                 updateCurrentUnitPrice(depotItem);
-                // 更新商品的价格
-                updateMaterialExtendPrice(materialExtend.getId(), depotHead.getSubType(), depotHead.getBillType(),
-                        rowObj);
+                // 更新商品的价格（只有在单据已审核的情况下才更新）
+                if (BusinessConstants.BILLS_STATUS_AUDIT.equals(depotHead.getStatus())) {
+                    updateMaterialExtendPrice(materialExtend.getId(), depotHead.getSubType(), depotHead.getBillType(),
+                            rowObj);
+                }
             }
             // 如果关联单据号非空则更新订单的状态,单据类型：采购入库单、销售出库单、盘点复盘单、其它入库单、其它出库单
             if (BusinessConstants.SUB_TYPE_PURCHASE.equals(depotHead.getSubType())
@@ -1002,22 +1004,52 @@ public class DepotItemService {
                 BigDecimal unitPrice = rowObj.getBigDecimal("unitPrice");
                 MaterialExtend materialExtend = new MaterialExtend();
                 materialExtend.setId(meId);
+                // 只有采购入库单据才能修改零售价
                 if (BusinessConstants.SUB_TYPE_PURCHASE.equals(subType)) {
-                    materialExtend.setPurchaseDecimal(unitPrice);
-                }
-                if (BusinessConstants.SUB_TYPE_SALES.equals(subType)) {
-                    materialExtend.setWholesaleDecimal(unitPrice);
-                }
-                if (BusinessConstants.SUB_TYPE_RETAIL.equals(subType)) {
                     materialExtend.setCommodityDecimal(unitPrice);
+                    materialExtendService.updateMaterialExtend(materialExtend);
                 }
-                // 其它入库-生产入库的情况更新采购单价
+                // 其它入库-生产入库的情况更新采购单价（保留原有逻辑）
                 if (BusinessConstants.SUB_TYPE_OTHER.equals(subType)) {
                     if (BusinessConstants.BILL_TYPE_PRODUCE_IN.equals(billType)) {
                         materialExtend.setPurchaseDecimal(unitPrice);
+                        materialExtendService.updateMaterialExtend(materialExtend);
                     }
                 }
-                materialExtendService.updateMaterialExtend(materialExtend);
+            }
+        }
+    }
+
+    /**
+     * 审核单据时更新商品价格
+     * 
+     * @param headerId 单据头ID
+     * @throws Exception
+     */
+    @Transactional(value = "transactionManager", rollbackFor = Exception.class)
+    public void updateMaterialExtendPriceOnAudit(Long headerId) throws Exception {
+        if (systemConfigService.getUpdateUnitPriceFlag()) {
+            DepotHead depotHead = depotHeadMapper.selectByPrimaryKey(headerId);
+            if (depotHead != null) {
+                List<DepotItem> depotItems = getListByHeaderId(headerId);
+                for (DepotItem depotItem : depotItems) {
+                    if (depotItem.getUnitPrice() != null && depotItem.getMaterialExtendId() != null) {
+                        MaterialExtend materialExtend = new MaterialExtend();
+                        materialExtend.setId(depotItem.getMaterialExtendId());
+                        // 只有采购入库单据才能修改零售价
+                        if (BusinessConstants.SUB_TYPE_PURCHASE.equals(depotHead.getSubType())) {
+                            materialExtend.setCommodityDecimal(depotItem.getUnitPrice());
+                            materialExtendService.updateMaterialExtend(materialExtend);
+                        }
+                        // 其它入库-生产入库的情况更新采购单价（保留原有逻辑）
+                        if (BusinessConstants.SUB_TYPE_OTHER.equals(depotHead.getSubType())) {
+                            if (BusinessConstants.BILL_TYPE_PRODUCE_IN.equals(depotHead.getBillType())) {
+                                materialExtend.setPurchaseDecimal(depotItem.getUnitPrice());
+                                materialExtendService.updateMaterialExtend(materialExtend);
+                            }
+                        }
+                    }
+                }
             }
         }
     }

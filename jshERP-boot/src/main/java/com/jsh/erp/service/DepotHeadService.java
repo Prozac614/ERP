@@ -733,6 +733,8 @@ public class DepotHeadService {
                 if ("0".equals(depotHead.getStatus())) {
                     dhIds.add(id);
                     dhIdsNeedStockUpdate.add(id); // 审核操作需要更新库存
+                    // 审核时更新商品价格
+                    depotItemService.updateMaterialExtendPriceOnAudit(id);
                 } else {
                     throw new BusinessRunTimeException(ExceptionConstants.DEPOT_HEAD_UN_AUDIT_TO_AUDIT_FAILED_CODE,
                             String.format(ExceptionConstants.DEPOT_HEAD_UN_AUDIT_TO_AUDIT_FAILED_MSG));
