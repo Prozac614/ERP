@@ -114,7 +114,7 @@
             </a-form-item>
           </a-col>
         </a-row>
-        <a-row class="form-row" :gutter="24">
+        <a-row class="form-row" :gutter="24" v-if="false">
           <a-col :lg="6" :md="12" :sm="24">
             <a-form-item :labelCol="labelCol" :wrapperCol="wrapperCol" label="优惠率" data-step="5" data-title="优惠率"
                          data-intro="针对单据明细中商品总金额进行优惠的比例">
@@ -140,7 +140,7 @@
             </a-form-item>
           </a-col>
         </a-row>
-        <a-row class="form-row" :gutter="24">
+        <a-row class="form-row" :gutter="24" v-if="false">
           <a-col :lg="6" :md="12" :sm="24">
             <a-form-item :labelCol="labelCol" :wrapperCol="wrapperCol" label="结算账户" data-step="9" data-title="结算账户"
                          data-intro="如果在下拉框中选择多账户，则可以通过多个结算账户进行结算">
@@ -178,7 +178,7 @@
             </a-form-item>
           </a-col>
         </a-row>
-        <a-row class="form-row" :gutter="24">
+        <a-row class="form-row" :gutter="24" v-if="false">
           <a-col :lg="6" :md="12" :sm="24">
             <a-form-item :labelCol="labelCol" :wrapperCol="wrapperCol" label="销售人员" data-step="11" data-title="销售人员"
                          data-intro="销售人员的数据来自【经手人管理】菜单中的销售员">
@@ -192,7 +192,7 @@
           <a-col :lg="6" :md="12" :sm="24">
           </a-col>
         </a-row>
-        <a-row class="form-row" :gutter="24">
+        <a-row class="form-row" :gutter="24" v-if="false">
           <a-col :lg="6" :md="12" :sm="24">
             <a-form-item :labelCol="labelCol" :wrapperCol="wrapperCol" label="附件" data-step="12" data-title="附件"
                          data-intro="可以上传与单据相关的图片、文档，支持多个文件">
@@ -315,7 +315,7 @@
               validateRules: [{ required: true, message: '${title}不能为空' }]
             },
             { title: '单价', key: 'unitPrice', width: '4%', type: FormTypes.normal},
-            { title: '金额', key: 'allPrice', width: '5%', type: FormTypes.normal, statistics: true },
+            { title: '金额', key: 'allPrice', width: '5%', type: FormTypes.inputNumber, statistics: true },
             { title: '税率', key: 'taxRate', width: '4%', type: FormTypes.normal },
             { title: '税额', key: 'taxMoney', width: '5%', type: FormTypes.normal, statistics: true },
             { title: '价税合计', key: 'taxLastMoney', width: '7%', type: FormTypes.normal, statistics: true },
@@ -374,6 +374,13 @@
           this.addInit(this.prefixNo)
           this.personList.value = ''
           this.fileList = []
+          // Hide specified columns for new documents
+          this.changeFormTypes(this.materialTable.columns, 'standard', 0)
+          this.changeFormTypes(this.materialTable.columns, 'unit', 0)
+          this.changeFormTypes(this.materialTable.columns, 'taxRate', 0)
+          this.changeFormTypes(this.materialTable.columns, 'taxMoney', 0)
+          this.changeFormTypes(this.materialTable.columns, 'taxLastMoney', 0)
+          this.changeFormTypes(this.materialTable.columns, 'remark', 0)
           this.$nextTick(() => {
             handleIntroJs(this.prefixNo, 1)
             if(this.transferParam && this.transferParam.number) {
@@ -424,7 +431,7 @@
           this.copyAddInit(this.prefixNo)
         }
         this.initSystemConfig()
-        this.initCustomer(0)
+        this.initCustomer(1)
         this.initSalesman()
         this.initDepot()
         this.initAccount(0)
