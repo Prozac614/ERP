@@ -113,7 +113,7 @@
             </a-form-item>
           </a-col>
         </a-row>
-        <a-row class="form-row" :gutter="24" v-if="false">
+        <a-row class="form-row" :gutter="24" style="display: none;">
           <a-col :lg="6" :md="12" :sm="24">
             <a-form-item :labelCol="labelCol" :wrapperCol="wrapperCol" label="优惠率" data-step="5" data-title="优惠率"
                          data-intro="针对单据明细中商品总金额进行优惠的比例">
@@ -139,7 +139,7 @@
             </a-form-item>
           </a-col>
         </a-row>
-        <a-row class="form-row" :gutter="24" v-if="false">
+        <a-row class="form-row" :gutter="24" style="display: none;">
           <a-col :lg="6" :md="12" :sm="24">
             <a-form-item :labelCol="labelCol" :wrapperCol="wrapperCol" label="结算账户" data-step="9" data-title="结算账户"
                          data-intro="如果在下拉框中选择多账户，则可以通过多个结算账户进行结算">
@@ -177,7 +177,7 @@
             </a-form-item>
           </a-col>
         </a-row>
-        <a-row class="form-row" :gutter="24" v-if="false">
+        <a-row class="form-row" :gutter="24" style="display: none;">
           <a-col :lg="6" :md="12" :sm="24">
             <a-form-item :labelCol="labelCol" :wrapperCol="wrapperCol" label="附件" data-step="11" data-title="附件"
                          data-intro="可以上传与单据相关的图片、文档，支持多个文件">
@@ -365,6 +365,7 @@
           this.changeFormTypes(this.materialTable.columns, 'taxMoney', 0)
           this.changeFormTypes(this.materialTable.columns, 'taxLastMoney', 0)
           this.changeFormTypes(this.materialTable.columns, 'remark', 0)
+
           this.$nextTick(() => {
             handleIntroJs(this.prefixNo, 1)
             if(this.transferParam && this.transferParam.number) {
