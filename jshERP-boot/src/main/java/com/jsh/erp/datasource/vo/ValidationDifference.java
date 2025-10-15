@@ -45,6 +45,11 @@ public class ValidationDifference {
     private String materialName;
 
     /**
+     * 商店名称
+     */
+    private String shopName;
+
+    /**
      * 用户数量映射表 - 结构化数据
      * key: 用户名, value: 该用户的数量
      */
@@ -113,6 +118,14 @@ public class ValidationDifference {
 
     public void setMaterialName(String materialName) {
         this.materialName = materialName;
+    }
+
+    public String getShopName() {
+        return shopName;
+    }
+
+    public void setShopName(String shopName) {
+        this.shopName = shopName;
     }
 
     public Map<String, BigDecimal> getUserQuantities() {

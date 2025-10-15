@@ -15,7 +15,7 @@
 
               <a-col :md="12" :sm="24">
                 <a-form-item label="数据维度" :labelCol="labelCol" :wrapperCol="wrapperCol">
-                  <a-space>
+                  <div style="display: flex; gap: 8px;">
                     <a-select
                       v-model="queryParam.dimensionType"
                       @change="onDimensionChange"
@@ -74,7 +74,7 @@
                         :key="'year-picker'"
                       />
                     </template>
-                  </a-space>
+                  </div>
                 </a-form-item>
               </a-col>
 
@@ -90,6 +90,21 @@
                     <a-select-option v-for="item in stockAlertStatusOptions" :key="item.value" :value="item.value">
                       {{ item.label }}
                     </a-select-option>
+                  </a-select>
+                </a-form-item>
+              </a-col>
+              <!-- 销售店铺筛选（仅影响首页销售统计相关接口时使用） -->
+              <a-col :md="6" :sm="24">
+                <a-form-item label="销售店铺" :labelCol="labelCol" :wrapperCol="wrapperCol">
+                  <a-select
+                    mode="multiple"
+                    placeholder="默认全部店铺"
+                    v-model="queryParam.shopNames"
+                    allowClear
+                    :maxTagCount="3"
+                    style="width:100%"
+                  >
+                    <a-select-option v-for="(name,idx) in shopList" :key="idx" :value="name">{{ name }}</a-select-option>
                   </a-select>
                 </a-form-item>
               </a-col>
@@ -261,14 +276,13 @@
 import { getAction, postAction, downFile } from '@/api/manage'
   import JEllipsis from '@/components/jeecg/JEllipsis'
   import StockChartModal from '@/components/charts/StockChartModal'
-  import { Space } from 'ant-design-vue'
+  // import space removed
 
   export default {
     name: "IndexChart",
     components: {
       JEllipsis,
-      StockChartModal,
-      ASpace: Space
+      StockChartModal
     },
             data () {
       return {
@@ -277,8 +291,10 @@ import { getAction, postAction, downFile } from '@/api/manage'
           materialParam: "",
           createTimeRange: [moment().subtract(1, 'months'), moment()],
           stockAlertStatus: "",
-          dimensionType: "daily" // 新增维度类型
+          dimensionType: "daily", // 新增维度类型
+          shopNames: []
         },
+        shopList: [],
         loadingRequest: null,
         debouncedLoadDataTimer: null,
         domCheckTimer: null,
@@ -454,6 +470,7 @@ import { getAction, postAction, downFile } from '@/api/manage'
     },
     created() {
       this.generateDateColumns()
+      this.initShopList()
       this.loadStockData()
     },
     beforeDestroy() {
@@ -1011,6 +1028,8 @@ import { getAction, postAction, downFile } from '@/api/manage'
         }
 
         // 直接请求实时数据，无缓存机制
+        // 仅当后续对首页“销售统计”接口进行调用时，才需要把 shopNames 传给该接口。
+        // 当前页面是库存统计，不依赖店铺，所以这里不传 shopNames。
         this.loadingRequest = getAction('/depotItem/getMaterialStockWithDailyOutOptimized', params)
         this.loadingRequest.then((res) => {
           if (res.code === 200) {
@@ -1026,6 +1045,15 @@ import { getAction, postAction, downFile } from '@/api/manage'
         }).finally(() => {
           this.loading = false
           this.loadingRequest = null
+        })
+      },
+      // 初始化店铺列表（首页筛选）
+      initShopList() {
+        getAction('/shop/list').then(res => {
+          if (res && res.code === 200 && res.data && Array.isArray(res.data.rows)) {
+            this.shopList = res.data.rows
+            // 默认全选为空数组，由后端按“全部店铺”处理；如需显式传全选请改为 this.queryParam.shopNames = [...this.shopList]
+          }
         })
       },
 

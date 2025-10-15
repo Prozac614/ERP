@@ -33,6 +33,11 @@ public class CrossValidationRequest {
      */
     private String subType;
 
+    /**
+     * 店铺名称集合（为空或缺省表示当前租户下全部店铺）
+     */
+    private List<String> shopNames;
+
     public List<String> getCurrentUserIds() {
         return currentUserIds;
     }
@@ -71,5 +76,13 @@ public class CrossValidationRequest {
 
     public void setSubType(String subType) {
         this.subType = subType;
+    }
+
+    public List<String> getShopNames() {
+        return shopNames;
+    }
+
+    public void setShopNames(List<String> shopNames) {
+        this.shopNames = shopNames;
     }
 }

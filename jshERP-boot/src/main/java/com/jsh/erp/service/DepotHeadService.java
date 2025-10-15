@@ -102,7 +102,7 @@ public class DepotHeadService {
     public List<DepotHeadVo4List> select(String type, String subType, String hasDebt, String status,
             String purchaseStatus, String number, String linkApply, String linkNumber,
             String beginTime, String endTime, String materialParam, Long organId, Long creator, Long depotId,
-            Long accountId, String remark) throws Exception {
+            Long accountId, String remark, String shopName) throws Exception {
         List<DepotHeadVo4List> list = new ArrayList<>();
         try {
             HttpServletRequest request = ((ServletRequestAttributes) RequestContextHolder.getRequestAttributes())
@@ -124,7 +124,7 @@ public class DepotHeadService {
             PageUtils.startPage();
             list = depotHeadMapperEx.selectByConditionDepotHead(type, subType, creatorArray, hasDebt,
                     statusArray, purchaseStatusArray, number, linkApply, linkNumber, beginTime, endTime,
-                    materialParam, organId, organArray, creator, depotId, depotArray, accountId, remark);
+                    materialParam, organId, organArray, creator, depotId, depotArray, accountId, remark, shopName);
             if (null != list) {
                 List<Long> idList = new ArrayList<>();
                 List<String> numberList = new ArrayList<>();
@@ -1320,6 +1320,14 @@ public class DepotHeadService {
             throw new BusinessRunTimeException(ExceptionConstants.DEPOT_HEAD_BILL_NUMBER_EXIST_CODE,
                     String.format(ExceptionConstants.DEPOT_HEAD_BILL_NUMBER_EXIST_MSG));
         }
+        // 销售出库必须选择店铺
+        if (BusinessConstants.DEPOTHEAD_TYPE_OUT.equals(depotHead.getType())
+                && BusinessConstants.SUB_TYPE_SALES.equals(depotHead.getSubType())) {
+            if (StringUtil.isEmpty(depotHead.getShopName())) {
+                throw new BusinessRunTimeException(ExceptionConstants.DEPOT_HEAD_SHOP_REQUIRED_CODE,
+                        ExceptionConstants.DEPOT_HEAD_SHOP_REQUIRED_MSG);
+            }
+        }
         // 校验是否同时录入关联请购单号和关联订单号
         if (StringUtil.isNotEmpty(depotHead.getLinkNumber()) && StringUtil.isNotEmpty(depotHead.getLinkApply())) {
             throw new BusinessRunTimeException(ExceptionConstants.DEPOT_ITEM_EXIST_REPEAT_NO_FAILED_CODE,
@@ -1426,6 +1434,14 @@ public class DepotHeadService {
             throw new BusinessRunTimeException(ExceptionConstants.DEPOT_HEAD_BILL_NUMBER_EXIST_CODE,
                     String.format(ExceptionConstants.DEPOT_HEAD_BILL_NUMBER_EXIST_MSG));
         }
+        // 销售出库必须选择店铺
+        if (BusinessConstants.DEPOTHEAD_TYPE_OUT.equals(depotHead.getType())
+                && BusinessConstants.SUB_TYPE_SALES.equals(depotHead.getSubType())) {
+            if (StringUtil.isEmpty(depotHead.getShopName())) {
+                throw new BusinessRunTimeException(ExceptionConstants.DEPOT_HEAD_SHOP_REQUIRED_CODE,
+                        ExceptionConstants.DEPOT_HEAD_SHOP_REQUIRED_MSG);
+            }
+        }
         // 校验是否同时录入关联请购单号和关联订单号
         if (StringUtil.isNotEmpty(depotHead.getLinkNumber()) && StringUtil.isNotEmpty(depotHead.getLinkApply())) {
             throw new BusinessRunTimeException(ExceptionConstants.DEPOT_ITEM_EXIST_REPEAT_NO_FAILED_CODE,
@@ -1515,13 +1531,13 @@ public class DepotHeadService {
 
     public Map<String, Object> getBuyAndSaleStatistics(String today, String monthFirstDay, String yesterdayBegin,
             String yesterdayEnd,
-            String yearBegin, String yearEnd, HttpServletRequest request) throws Exception {
+            String yearBegin, String yearEnd, HttpServletRequest request, List<String> shopNames) throws Exception {
         Long userId = userService.getUserId(request);
         String priceLimit = userService.getRoleTypeByUserId(userId).getPriceLimit();
         Boolean forceFlag = systemConfigService.getForceApprovalFlag();
         String[] creatorArray = getCreatorArray();
         List<InOutPriceVo> inOutPriceVoList = depotHeadMapperEx.getBuyAndSaleStatisticsList(yearBegin, yearEnd,
-                creatorArray, forceFlag);
+                creatorArray, forceFlag, shopNames);
 
         String[] periods = { "today", "month", "yesterday", "year" };
         String[] types = { "Buy", "BuyBack", "Sale", "SaleBack", "RetailSale", "RetailSaleBack" };

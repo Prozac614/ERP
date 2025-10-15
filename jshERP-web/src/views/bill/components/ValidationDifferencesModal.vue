@@ -9,11 +9,21 @@
     <div>
       <a-alert
         message="校验失败"
-        description="发现以下单据内容不一致，请核实后重新录入单据。"
+        :description="getAlertDescription()"
         type="error"
         show-icon
         style="margin-bottom: 16px"
       />
+      
+      <!-- 单据数量不一致时显示的提示信息 -->
+      <div v-if="hasBillCountInconsistency()" class="bill-count-message">
+        <a-alert
+          :message="getBillCountMessage()"
+          type="warning"
+          show-icon
+          style="margin-bottom: 16px"
+        />
+      </div>
       
       <a-table
         :columns="matrixColumns"
@@ -32,10 +42,12 @@
         </template>
         
         <!-- 动态渲染用户列 -->
-        <template v-for="(user, index) in allUsers" :slot="`user_${index}`" slot-scope="text, record">
-          <div :key="`user_${index}`" :style="getDifferenceStyle(record, user, index)">
-            {{ formatUserData(record, user, index) }}
-          </div>
+        <template v-for="(user, index) in allUsers">
+          <template :slot="`user_${index}`" slot-scope="text, record">
+            <div :key="`user_${index}`" :style="getDifferenceStyle(record, user, index)">
+              {{ formatUserData(record, user, index) }}
+            </div>
+          </template>
         </template>
       </a-table>
       
@@ -80,6 +92,24 @@ export default {
       this.allUsers = []
       this.modalWidth = 600
     },
+
+    getAlertDescription() {
+      if (this.hasBillCountInconsistency()) {
+        return '发现用户间单据数量不一致，请确保所有用户都录入了相应的单据。'
+      }
+      return '发现以下单据内容不一致，请核实后重新录入单据。'
+    },
+
+    hasBillCountInconsistency() {
+      return this.differences.some(diff => diff.diffType === 'BILL_COUNT_INCONSISTENT')
+    },
+
+    getBillCountMessage() {
+      if (!this.differences || this.differences.length === 0) return ''
+      
+      const diff = this.differences.find(d => d.diffType === 'BILL_COUNT_INCONSISTENT')
+      return diff ? diff.description : ''
+    },
     
     processMatrixData() {
       if (!this.differences || this.differences.length === 0) {
@@ -100,15 +130,26 @@ export default {
             allUsersSet.add(user.trim())
           }
         })
-        materialsData.set(materialKey, {
-          materialKey: materialKey,
+        // 使用商品和商店的组合作为唯一键
+        const shopKey = diff.shopName || ''
+        const combinedKey = `${materialKey}_${shopKey}`
+        materialsData.set(combinedKey, {
+          materialKey: combinedKey,
           materialName: diff.materialName || '未知商品',
           materialBarCode: diff.materialBarCode || '',
+          shopName: diff.shopName || '',
           userQuantities: userQuantities
         })
       })
       this.allUsers = Array.from(allUsersSet).sort()
       this.matrixColumns = [
+        {
+          title: '销售店铺',
+          dataIndex: 'shopName',
+          width: 120,
+          align: 'center',
+          customRender: (text) => text || '未指定商店'
+        },
         {
           title: '商品信息',
           dataIndex: 'materialInfo',
@@ -126,11 +167,46 @@ export default {
           scopedSlots: { customRender: userColumnKey }
         })
       })
-      this.matrixData = Array.from(materialsData.values()).map(item => {
+      // 将Map转换为数组并排序
+      this.matrixData = Array.from(materialsData.values())
+        .sort((a, b) => {
+          // 首先按店铺排序
+          const shopA = a.shopName || '';
+          const shopB = b.shopName || '';
+          if (shopA !== shopB) {
+            // 空店铺排在最后
+            if (!shopA) return 1;
+            if (!shopB) return -1;
+            return shopA.localeCompare(shopB);
+          }
+
+          // 然后按唛头排序
+          const barCodeA = a.materialBarCode || '';
+          const barCodeB = b.materialBarCode || '';
+          
+          // 提取唛头的字母和数字部分
+          const [, letterA = '', numberA = ''] = barCodeA.match(/^([WB])?(\d+)/) || [];
+          const [, letterB = '', numberB = ''] = barCodeB.match(/^([WB])?(\d+)/) || [];
+          
+          // W在前，B在后
+          if (letterA !== letterB) {
+            if (letterA === 'W') return -1;
+            if (letterB === 'W') return 1;
+            if (letterA === 'B') return -1;
+            if (letterB === 'B') return 1;
+          }
+          
+          // 按数字部分排序
+          const numA = parseInt(numberA) || 0;
+          const numB = parseInt(numberB) || 0;
+          return numA - numB;
+        })
+        .map(item => {
         const rowData = {
           materialKey: item.materialKey,
           materialName: item.materialName,
           materialBarCode: item.materialBarCode,
+          shopName: item.shopName,
           userQuantities: item.userQuantities
         }
         this.allUsers.forEach((user, index) => {
@@ -154,8 +230,8 @@ export default {
     },
     
     calculateModalWidth() {
-      // 基础宽度：商品信息列(160px) + 边距和滚动条(60px)
-      const baseWidth = 160 + 60
+      // 基础宽度：店铺列(120px) + 商品信息列(160px) + 边距和滚动条(60px)
+      const baseWidth = 120 + 160 + 60
       // 用户列宽度：每个用户列150px
       const userColumnsWidth = this.allUsers.length * 150
       // 计算总宽度
@@ -352,6 +428,13 @@ export default {
   line-height: 1.4;
 }
 
+/* 店铺列样式 */
+.ant-table-tbody > tr > td:first-child {
+  font-weight: 500;
+  color: #1890ff;
+  background-color: #f0f7ff;
+}
+
 /* 保证表格内容正确对齐 */
 .ant-table-small .ant-table-tbody > tr > td {
   padding: 4px;
@@ -367,5 +450,9 @@ export default {
 .difference-highlight:hover {
   box-shadow: 0 2px 6px rgba(198, 40, 40, 0.3);
   transform: translateY(-1px);
+}
+
+.bill-count-message {
+  margin-bottom: 16px;
 }
 </style> 

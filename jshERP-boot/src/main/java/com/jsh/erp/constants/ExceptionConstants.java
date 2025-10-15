@@ -448,6 +448,9 @@ public class ExceptionConstants {
     // 单据录入-单据在该状态不能强制结单
     public static final int DEPOT_HEAD_FORCE_CLOSE_FAILED_CODE = 8500031;
     public static final String DEPOT_HEAD_FORCE_CLOSE_FAILED_MSG = "抱歉，单据:%s在该状态不能强制结单";
+    // 单据录入-销售出库需选择店铺
+    public static final int DEPOT_HEAD_SHOP_REQUIRED_CODE = 8500032;
+    public static final String DEPOT_HEAD_SHOP_REQUIRED_MSG = "销售出库需选择店铺";
 
     /**
      * 单据明细信息

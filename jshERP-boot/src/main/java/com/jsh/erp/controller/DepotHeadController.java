@@ -101,9 +101,10 @@ public class DepotHeadController extends BaseController {
         Long depotId = StringUtil.parseStrLong(StringUtil.getInfo(search, "depotId"));
         Long accountId = StringUtil.parseStrLong(StringUtil.getInfo(search, "accountId"));
         String remark = StringUtil.getInfo(search, "remark");
+        String shopName = StringUtil.getInfo(search, "shopName");
         List<DepotHeadVo4List> list = depotHeadService.select(type, subType, hasDebt, status, purchaseStatus, number,
                 linkApply, linkNumber,
-                beginTime, endTime, materialParam, organId, creator, depotId, accountId, remark);
+                beginTime, endTime, materialParam, organId, creator, depotId, accountId, remark, shopName);
         return getDataTable(list);
     }
 
@@ -660,7 +661,8 @@ public class DepotHeadController extends BaseController {
      */
     @GetMapping(value = "/getBuyAndSaleStatistics")
     @ApiOperation(value = "统计今日采购额、昨日采购额、本月采购额、今年采购额|销售额|零售额")
-    public BaseResponseInfo getBuyAndSaleStatistics(HttpServletRequest request) {
+    public BaseResponseInfo getBuyAndSaleStatistics(
+            @RequestParam(value = "shopNames", required = false) List<String> shopNames, HttpServletRequest request) {
         BaseResponseInfo res = new BaseResponseInfo();
         try {
             Map<String, Object> map = new HashMap<>();
@@ -674,7 +676,7 @@ public class DepotHeadController extends BaseController {
                 String yearBegin = Tools.getYearBegin() + BusinessConstants.DAY_FIRST_TIME;
                 String yearEnd = Tools.getYearEnd() + BusinessConstants.DAY_LAST_TIME;
                 map = depotHeadService.getBuyAndSaleStatistics(today, monthFirstDay, yesterdayBegin, yesterdayEnd,
-                        yearBegin, yearEnd, request);
+                        yearBegin, yearEnd, request, shopNames);
             }
             res.code = 200;
             res.data = map;
@@ -884,6 +886,10 @@ public class DepotHeadController extends BaseController {
             String validationDate = jsonObject.getString("validationDate");
             String type = jsonObject.getString("type");
             String subType = jsonObject.getString("subType");
+            List<String> shopNames = new ArrayList<>();
+            if (jsonObject.get("shopNames") != null) {
+                shopNames = com.alibaba.fastjson.JSONArray.parseArray(jsonObject.getString("shopNames"), String.class);
+            }
 
             // 向后兼容：如果type和subType为null，默认使用销售出库的参数
             if (type == null || type.trim().isEmpty()) {
@@ -899,7 +905,7 @@ public class DepotHeadController extends BaseController {
 
             logger.info("准备调用crossValidationService.checkTodayUsers方法");
             CrossValidationCheckResult checkResult = crossValidationService.checkTodayUsers(validationDate, type,
-                    subType);
+                    subType, shopNames);
             logger.info("crossValidationService.checkTodayUsers方法调用完成，结果: {}", checkResult);
 
             result = ExceptionConstants.standardSuccess();

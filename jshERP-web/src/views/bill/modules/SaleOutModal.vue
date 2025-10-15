@@ -44,6 +44,14 @@
             </a-form-item>
           </a-col>
           <a-col :lg="6" :md="12" :sm="24">
+            <a-form-item :labelCol="labelCol" :wrapperCol="wrapperCol" label="销售店铺">
+              <a-select placeholder="请选择店铺" v-decorator="[ 'shopName', validatorRules.shopName ]" :disabled="!rowCanEdit"
+                        :loading="shopLoading" allow-clear showSearch :filterOption="true" optionFilterProp="children">
+                <a-select-option v-for="shop in shopList" :key="shop.id" :value="shop.name">{{ shop.name }}</a-select-option>
+              </a-select>
+            </a-form-item>
+          </a-col>
+          <a-col :lg="6" :md="12" :sm="24">
             <a-form-item :labelCol="labelCol" :wrapperCol="wrapperCol" label="单据日期">
               <j-date v-decorator="['operTime', validatorRules.operTime]" :show-time="true"/>
             </a-form-item>
@@ -281,6 +289,8 @@
         fileList:[],
         rowCanEdit: true,
         model: {},
+        shopList: [],
+        shopLoading: false,
         labelCol: {
           xs: { span: 24 },
           sm: { span: 8 },
@@ -339,6 +349,11 @@
           organId:{
             rules: [
               { required: true, message: '请选择客户！' }
+            ]
+          },
+          shopName:{
+            rules: [
+              { required: true, message: '请选择销售店铺！' }
             ]
           },
           accountId:{
@@ -424,7 +439,7 @@
           this.fileList = this.model.fileName
           this.$nextTick(() => {
             this.form.setFieldsValue(pick(this.model,'organId', 'operTime', 'number', 'linkNumber', 'remark',
-              'discount','discountMoney','discountLastMoney','otherMoney','accountId','deposit','changeAmount','debt','salesMan'))
+              'discount','discountMoney','discountLastMoney','otherMoney','accountId','deposit','changeAmount','debt','salesMan','shopName'))
           });
           // 加载子表数据
           let params = {
@@ -442,6 +457,7 @@
           this.copyAddInit(this.prefixNo)
         }
         this.initSystemConfig()
+        this.initShopList()
         this.initCustomer(1)
         this.initSalesman()
         this.initDepot()
@@ -471,6 +487,8 @@
         });
         billMain.type = '出库'
         billMain.subType = '销售'
+        // 销售店铺
+        billMain.shopName = this.form.getFieldValue('shopName')
         for(let item of detailArr){
           totalPrice += item.allPrice-0
         }
@@ -494,6 +512,16 @@
           info: JSON.stringify(billMain),
           rows: JSON.stringify(detailArr),
         }
+      },
+      initShopList() {
+        this.shopLoading = true
+        getAction('/shop/list').then(res => {
+          if (res && res.code === 200 && res.data && Array.isArray(res.data.rows)) {
+            this.shopList = res.data.rows
+          }
+        }).finally(() => {
+          this.shopLoading = false
+        })
       },
       handleHistoryBillList() {
         let organId = this.form.getFieldValue('organId')

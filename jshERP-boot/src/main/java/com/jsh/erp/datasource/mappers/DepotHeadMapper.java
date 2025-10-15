@@ -50,7 +50,8 @@ public interface DepotHeadMapper {
          */
         List<TodayUserBillSummary> getUserBillSummaryByDate(@Param("validationDate") String validationDate,
                         @Param("tenantId") Long tenantId, @Param("currentUserId") Long currentUserId,
-                        @Param("type") String type, @Param("subType") String subType);
+                        @Param("type") String type, @Param("subType") String subType,
+                        @Param("shopNames") List<String> shopNames);
 
         /**
          * 获取今日指定用户的单据列表
@@ -74,7 +75,8 @@ public interface DepotHeadMapper {
                         @Param("tenantId") Long tenantId,
                         @Param("userIds") List<Long> userIds,
                         @Param("type") String type,
-                        @Param("subType") String subType);
+                        @Param("subType") String subType,
+                        @Param("shopNames") List<String> shopNames);
 
         /**
          * 获取指定日期和用户的销售出库单据列表
@@ -89,5 +91,6 @@ public interface DepotHeadMapper {
                         @Param("tenantId") Long tenantId,
                         @Param("userIds") List<Long> userIds,
                         @Param("type") String type,
-                        @Param("subType") String subType);
+                        @Param("subType") String subType,
+                        @Param("shopNames") List<String> shopNames);
 }

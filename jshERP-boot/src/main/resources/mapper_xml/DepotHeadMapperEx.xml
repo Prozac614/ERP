@@ -157,6 +157,9 @@
             <bind name="bindRemark" value="'%'+remark+'%'"/>
             and (dh.remark like #{bindRemark} or di.remark like #{bindRemark})
         </if>
+        <if test="shopName != null and shopName != ''">
+            and dh.shop_name = #{shopName}
+        </if>
         and ifnull(dh.delete_flag,'0') !='1'
         group by dh.id
         order by dh.id desc) tb
@@ -262,6 +265,9 @@
         <if test="remark != null and remark !=''">
             <bind name="bindRemark" value="'%'+remark+'%'"/>
             and (dh.remark like #{bindRemark} or di.remark like #{bindRemark})
+        </if>
+        <if test="shopName != null and shopName != ''">
+            and dh.shop_name = #{shopName}
         </if>
         and dh.sub_type!='调拨'
         and ifnull(dh.delete_flag,'0') !='1'
@@ -1142,6 +1148,17 @@
                 #{creator}
             </foreach>
             )
+        </if>
+        <!-- 仅对销售子类型应用店铺过滤：若提供shopNames则限制在列表内，否则要求非空 -->
+        <if test="shopNames != null and shopNames.size() > 0">
+            and (dh.sub_type != '销售' or dh.shop_name in
+            <foreach collection="shopNames" item="shopName" open="(" close=")" separator=",">
+                #{shopName}
+            </foreach>
+            )
+        </if>
+        <if test="shopNames == null or shopNames.size() == 0">
+            and (dh.sub_type != '销售' or dh.shop_name is not null)
         </if>
         and ifnull(dh.delete_flag,'0') !='1'
     </select>

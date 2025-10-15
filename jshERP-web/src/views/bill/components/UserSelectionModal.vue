@@ -99,7 +99,9 @@ export default {
         selectedUserIds: this.selectedUserIds,
         validationDate: this.validationDate,
         type: requestType,
-        subType: requestSubType
+        subType: requestSubType,
+        // 前端当前未做自定义店铺选择，多选默认全选：传空数组表示后端按“全部店铺”处理
+        shopNames: []
       }
       
       postAction('/depotHead/performCrossValidation', request).then((res) => {

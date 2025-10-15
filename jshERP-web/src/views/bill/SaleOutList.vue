@@ -14,6 +14,21 @@
                 </a-form-item>
               </a-col>
               <a-col :md="6" :sm="24">
+                <a-form-item label="销售店铺" :labelCol="labelCol" :wrapperCol="wrapperCol">
+                  <a-select 
+                    placeholder="请选择店铺" 
+                    v-model="queryParam.shopName" 
+                    allow-clear 
+                    showSearch 
+                    :filterOption="true" 
+                    optionFilterProp="children"
+                    :maxTagCount="3"
+                  >
+                    <a-select-option v-for="(name,idx) in shopList" :key="idx" :value="name">{{ name }}</a-select-option>
+                  </a-select>
+                </a-form-item>
+              </a-col>
+              <a-col :md="6" :sm="24">
                 <a-form-item label="商品信息" :labelCol="labelCol" :wrapperCol="wrapperCol">
                   <a-input placeholder="请输入唛头、名称、助记码、规格、型号等信息" v-model="queryParam.materialParam"></a-input>
                 </a-form-item>
@@ -254,7 +269,7 @@
   import JEllipsis from '@/components/jeecg/JEllipsis'
   import JDate from '@/components/jeecg/JDate'
   import Vue from 'vue'
-  import { postAction } from '@/api/manage'
+  import { postAction, getAction } from '@/api/manage'
   import moment from 'moment'
   export default {
     name: "SaleOutList",
@@ -284,8 +299,10 @@
           accountId: undefined,
           hasDebt: undefined,
           status: undefined,
-          remark: ""
+          remark: "",
+          shopName: undefined
         },
+        shopList: [],
         prefixNo: 'XSCK',
         //出入库管理开关，适合独立仓管场景
         inOutManageFlag: false,
@@ -367,6 +384,7 @@
     },
     created() {
       this.initSystemConfig()
+      this.initShopList()
       this.initCustomer()
       this.getDepotData()
       this.initUser()
@@ -375,6 +393,17 @@
       this.getDepotByCurrentUser()
     },
     methods: {
+      initShopList() {
+        console.log('Initializing shop list...');
+        this.loading = true
+        getAction('/shop/list').then(res => {
+          console.log('Shop list response:', res);
+          if (res && res.code === 200 && res.data && Array.isArray(res.data.rows)) {
+            this.shopList = res.data.rows.map(row => row.name).filter(name => name)
+            console.log('Shop list updated:', this.shopList);
+          }
+        }).finally(() => this.loading = false)
+      },
       batchValidation() {
         console.log('===== batchValidation 被调用 =====');
         let that = this;
@@ -394,14 +423,17 @@
         // 执行校验逻辑
         this.loading = true;
         const requestData = {
-          validationDate: validationDate
+          validationDate: validationDate,
+          type: '出库',
+          subType: '销售',
+          shopNames: this.shopList && this.shopList.length ? JSON.stringify(this.shopList) : "[]"
         };
         postAction('/depotHead/checkTodayUsers', requestData).then((res) => {
           console.log('checkTodayUsers响应:', res);
           if(res.code === 200) {
             if(res.data.hasOtherUsers) {
               // 有其他用户，显示用户选择界面
-              this.showUserSelectionModal(res.data, validationDate);
+              this.showUserSelectionModal(res.data, validationDate, '出库', '销售');
             } else {
               this.$message.error("校验失败：" + validationDate + " 没有其他用户保存销售出库单据！");
             }

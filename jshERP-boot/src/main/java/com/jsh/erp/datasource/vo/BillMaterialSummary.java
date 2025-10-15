@@ -44,6 +44,12 @@ public class BillMaterialSummary {
      */
     private Date createTime;
 
+    /**
+     * 销售商店名称
+     * 为空表示未指定商店的销售
+     */
+    private String shopName;
+
     public Long getUserId() {
         return userId;
     }
@@ -98,5 +104,13 @@ public class BillMaterialSummary {
 
     public void setCreateTime(Date createTime) {
         this.createTime = createTime;
+    }
+
+    public String getShopName() {
+        return shopName;
+    }
+
+    public void setShopName(String shopName) {
+        this.shopName = shopName;
     }
 }

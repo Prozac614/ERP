@@ -40,6 +40,8 @@ public class DepotHead {
 
     private String salesMan;
 
+    private String shopName;
+
     private String accountIdList;
 
     private String accountMoneyList;
@@ -210,6 +212,14 @@ public class DepotHead {
 
     public void setSalesMan(String salesMan) {
         this.salesMan = salesMan == null ? null : salesMan.trim();
+    }
+
+    public String getShopName() {
+        return shopName;
+    }
+
+    public void setShopName(String shopName) {
+        this.shopName = shopName == null ? null : shopName.trim();
     }
 
     public String getAccountIdList() {
