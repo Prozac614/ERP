@@ -517,7 +517,12 @@
         this.shopLoading = true
         getAction('/shop/list').then(res => {
           if (res && res.code === 200 && res.data && Array.isArray(res.data.rows)) {
-            this.shopList = res.data.rows
+            // 添加未指定店铺选项
+            const defaultShop = {
+              id: 0,
+              name: '未指定店铺'
+            }
+            this.shopList = [defaultShop, ...res.data.rows]
           }
         }).finally(() => {
           this.shopLoading = false

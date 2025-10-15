@@ -1320,10 +1320,15 @@ public class DepotHeadService {
             throw new BusinessRunTimeException(ExceptionConstants.DEPOT_HEAD_BILL_NUMBER_EXIST_CODE,
                     String.format(ExceptionConstants.DEPOT_HEAD_BILL_NUMBER_EXIST_MSG));
         }
-        // 销售出库必须选择店铺
+        // 销售出库的店铺处理
         if (BusinessConstants.DEPOTHEAD_TYPE_OUT.equals(depotHead.getType())
                 && BusinessConstants.SUB_TYPE_SALES.equals(depotHead.getSubType())) {
-            if (StringUtil.isEmpty(depotHead.getShopName())) {
+            // 如果是"未指定店铺"，则设置为空字符串
+            if ("未指定店铺".equals(depotHead.getShopName())) {
+                depotHead.setShopName("");
+            }
+            // 否则检查是否有选择店铺
+            else if (StringUtil.isEmpty(depotHead.getShopName())) {
                 throw new BusinessRunTimeException(ExceptionConstants.DEPOT_HEAD_SHOP_REQUIRED_CODE,
                         ExceptionConstants.DEPOT_HEAD_SHOP_REQUIRED_MSG);
             }
@@ -1434,10 +1439,15 @@ public class DepotHeadService {
             throw new BusinessRunTimeException(ExceptionConstants.DEPOT_HEAD_BILL_NUMBER_EXIST_CODE,
                     String.format(ExceptionConstants.DEPOT_HEAD_BILL_NUMBER_EXIST_MSG));
         }
-        // 销售出库必须选择店铺
+        // 销售出库的店铺处理
         if (BusinessConstants.DEPOTHEAD_TYPE_OUT.equals(depotHead.getType())
                 && BusinessConstants.SUB_TYPE_SALES.equals(depotHead.getSubType())) {
-            if (StringUtil.isEmpty(depotHead.getShopName())) {
+            // 如果是"未指定店铺"，则设置为空字符串
+            if ("未指定店铺".equals(depotHead.getShopName())) {
+                depotHead.setShopName("");
+            }
+            // 否则检查是否有选择店铺
+            else if (StringUtil.isEmpty(depotHead.getShopName())) {
                 throw new BusinessRunTimeException(ExceptionConstants.DEPOT_HEAD_SHOP_REQUIRED_CODE,
                         ExceptionConstants.DEPOT_HEAD_SHOP_REQUIRED_MSG);
             }
