@@ -318,7 +318,7 @@
         },
         // 默认索引
         defDataIndex:['action','organName','number','materialsList','operTimeStr','userName','materialCount','totalPrice','totalTaxLastMoney',
-          'needOutMoney','changeAmount','debt','status'],
+          'needOutMoney','changeAmount','debt','shopName','status'],
         // 默认列
         defColumns: [
           {
@@ -326,6 +326,11 @@
             dataIndex: 'action',
             align:"center", width: 180,
             scopedSlots: { customRender: 'action' },
+          },
+          { title: '销售店铺', dataIndex: 'shopName',width:120,
+            customRender:function (text) {
+              return text || ''
+            }
           },
           { title: '客户', dataIndex: 'organName',width:120, ellipsis:true},
           { title: '单据编号', dataIndex: 'number',width:160,
