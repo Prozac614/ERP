@@ -364,6 +364,7 @@ public interface DepotItemMapperEx {
         void insertOrUpdateDailyOutSummary(
                         @Param("materialId") Long materialId,
                         @Param("targetDate") String targetDate,
+                        @Param("shopName") String shopName,
                         @Param("tenantId") Long tenantId);
 
         /**
@@ -372,6 +373,7 @@ public interface DepotItemMapperEx {
         void insertOrUpdateDailyOutSummarySimple(
                         @Param("materialId") Long materialId,
                         @Param("targetDate") String targetDate,
+                        @Param("shopName") String shopName,
                         @Param("tenantId") Long tenantId);
 
         /**

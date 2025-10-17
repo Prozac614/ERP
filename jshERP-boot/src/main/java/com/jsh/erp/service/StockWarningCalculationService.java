@@ -245,7 +245,7 @@ public class StockWarningCalculationService {
                     // 1. 先更新该商品在所有仓库的当前库存
                     for (Depot depot : depots) {
                         try {
-                            depotItemService.updateCurrentStockFun(material.getId(), depot.getId(), new Date());
+                            depotItemService.updateCurrentStockFun(material.getId(), depot.getId(), new Date(), null);
                         } catch (Exception e) {
                             logger.warn("更新商品{}在仓库{}的当前库存失败: {}",
                                     material.getId(), depot.getId(), e.getMessage());

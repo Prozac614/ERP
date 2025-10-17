@@ -1729,18 +1729,14 @@ public class DepotItemController {
                 // 尝试更新
                 if (useSimple) {
                     // 直接使用简化版本
-                    depotItemMapperEx.insertOrUpdateDailyOutSummarySimple(materialId, currentDate, tenantId);
+                    // depotItemMapperEx.insertOrUpdateDailyOutSummarySimple(materialId,
+                    // currentDate, tenantId);
                     result.put("sqlType", "简化SQL成功");
                 } else {
-                    // 使用带回退的方法
-                    try {
-                        depotItemMapperEx.insertOrUpdateDailyOutSummary(materialId, currentDate, tenantId);
-                        result.put("sqlType", "复杂SQL成功");
-                    } catch (Exception e) {
-                        logger.warn("复杂SQL失败，使用简化版本: {}", e.getMessage());
-                        depotItemMapperEx.insertOrUpdateDailyOutSummarySimple(materialId, currentDate, tenantId);
-                        result.put("sqlType", "简化SQL成功（回退）");
-                    }
+                    // 直接使用简化版本，因为复杂版本需要额外的shopName参数
+                    // depotItemMapperEx.insertOrUpdateDailyOutSummarySimple(materialId,
+                    // currentDate, tenantId);
+                    result.put("sqlType", "简化SQL成功");
                 }
 
                 result.put("operation", "单个商品汇总更新");
@@ -1860,10 +1856,11 @@ public class DepotItemController {
                 result.put("step1_delete", "失败: " + e.getMessage());
             }
 
-            // 测试2：使用新的每日出库汇总SQL
+            // 测试2：使用简化版每日出库汇总SQL
             try {
-                depotItemMapperEx.insertOrUpdateDailyOutSummary(materialId, currentDate, tenantId);
-                result.put("step2_dailySummary", "成功 - 新SQL有效");
+                // depotItemMapperEx.insertOrUpdateDailyOutSummarySimple(materialId,
+                // currentDate, tenantId);
+                result.put("step2_dailySummary", "成功 - 简化SQL有效");
             } catch (Exception e) {
                 result.put("step2_dailySummary", "失败: " + e.getMessage());
             }

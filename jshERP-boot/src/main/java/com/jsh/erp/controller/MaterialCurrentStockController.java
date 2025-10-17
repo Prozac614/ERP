@@ -93,7 +93,7 @@ public class MaterialCurrentStockController {
                         boolean exists = checkCurrentStockExists(material.getId(), depot.getId());
 
                         // 更新或创建当前库存记录
-                        depotItemService.updateCurrentStockFun(material.getId(), depot.getId(), new Date());
+                        depotItemService.updateCurrentStockFun(material.getId(), depot.getId(), new Date(), null);
 
                         if (exists) {
                             updatedCount++;

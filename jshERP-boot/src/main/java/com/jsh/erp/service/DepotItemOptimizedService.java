@@ -147,7 +147,7 @@ public class DepotItemOptimizedService {
 
             for (Map<String, Object> dailyOut : dailyOutList) {
                 String barCode = (String) dailyOut.get("barCode");
-                String outDate = (String) dailyOut.get("outDate");
+                String outDate = dailyOut.get("outDate").toString();
                 BigDecimal quantity = (BigDecimal) dailyOut.get("totalOutQuantity");
                 dailyOutMap.computeIfAbsent(barCode, k -> new HashMap<>()).put(outDate, quantity);
             }

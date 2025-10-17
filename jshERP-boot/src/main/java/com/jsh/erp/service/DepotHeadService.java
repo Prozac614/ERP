@@ -848,7 +848,7 @@ public class DepotHeadService {
                         }
                         Long mId = Long.valueOf(parts[0]);
                         Long dId = Long.valueOf(parts[1]);
-                        depotItemService.updateCurrentStockFun(mId, dId, operTime);
+                        depotItemService.updateCurrentStockFun(mId, dId, operTime, dhId);
                     }
                     long t3 = System.nanoTime();
                     long applyMs = (t3 - t2) / 1_000_000L;

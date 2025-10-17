@@ -239,7 +239,7 @@ public class MaterialService {
                                     lowSafeStock, highSafeStock);
                         }
                         // 更新当前库存
-                        depotItemService.updateCurrentStockFun(material.getId(), depotId, new Date());
+                        depotItemService.updateCurrentStockFun(material.getId(), depotId, new Date(), null);
                     }
                 }
             }
@@ -1621,7 +1621,7 @@ public class MaterialService {
         List<Depot> depotList = depotService.getAllList();
         for (Long mId : idList) {
             for (Depot depot : depotList) {
-                depotItemService.updateCurrentStockFun(mId, depot.getId(), new Date());
+                depotItemService.updateCurrentStockFun(mId, depot.getId(), new Date(), null);
                 res = 1;
             }
         }
