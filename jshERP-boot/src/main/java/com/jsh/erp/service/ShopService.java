@@ -3,7 +3,6 @@ package com.jsh.erp.service;
 import com.jsh.erp.datasource.entities.Shop;
 import com.jsh.erp.datasource.entities.User;
 import com.jsh.erp.datasource.mappers.ShopMapper;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
@@ -14,8 +13,6 @@ import java.util.List;
 
 @Service
 public class ShopService {
-    @Value("${shop.default.names}")
-    private String defaultShopNames;
 
     @Resource
     private ShopMapper shopMapper;
