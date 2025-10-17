@@ -104,7 +104,7 @@
                     :maxTagCount="3"
                     style="width:100%"
                   >
-                    <a-select-option v-for="(name,idx) in shopList" :key="idx" :value="name">{{ name }}</a-select-option>
+                    <a-select-option v-for="shop in shopList" :key="shop.id" :value="shop.name">{{ shop.name }}</a-select-option>
                   </a-select>
                 </a-form-item>
               </a-col>
