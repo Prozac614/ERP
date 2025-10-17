@@ -40,7 +40,12 @@ public class DepotItemOptimizedService {
      */
     public Map<String, Object> getOptimizedMaterialStockWithDailyOut(
             Integer currentPage, Integer pageSize, String materialParam,
-            String beginTime, String endTime, String stockAlertStatus, HttpServletRequest request) throws Exception {
+            String beginTime, String endTime, String stockAlertStatus,
+            List<String> shopNames, HttpServletRequest request) throws Exception {
+
+        logger.info(
+                "开始获取优化库存数据，参数：currentPage={}, pageSize={}, materialParam={}, beginTime={}, endTime={}, stockAlertStatus={}, shopNames={}",
+                currentPage, pageSize, materialParam, beginTime, endTime, stockAlertStatus, shopNames);
 
         Map<String, Object> resultMap = new HashMap<>();
 
@@ -59,7 +64,7 @@ public class DepotItemOptimizedService {
             if (StringUtil.isNotEmpty(beginTime) && StringUtil.isNotEmpty(endTime)) {
                 // 有日期范围时，使用汇总表快速查询
                 resultMap = getOptimizedDataWithDateRange(currentPage, pageSize, materialParam,
-                        beginTime, endTime, stockAlertStatus, tenantId);
+                        beginTime, endTime, stockAlertStatus, shopNames, tenantId);
             } else {
                 // 无日期范围时，使用期间汇总表
                 resultMap = getOptimizedDataWithoutDateRange(currentPage, pageSize, materialParam, stockAlertStatus,
@@ -121,7 +126,8 @@ public class DepotItemOptimizedService {
      */
     private Map<String, Object> getOptimizedDataWithDateRange(
             Integer currentPage, Integer pageSize, String materialParam,
-            String beginTime, String endTime, String stockAlertStatus, Long tenantId) throws Exception {
+            String beginTime, String endTime, String stockAlertStatus,
+            List<String> shopNames, Long tenantId) throws Exception {
 
         Map<String, Object> resultMap = new HashMap<>();
 
@@ -142,8 +148,11 @@ public class DepotItemOptimizedService {
             }
 
             // 从汇总表快速获取每日出库数据（用于动态列展示）
+            logger.info(
+                    "准备调用getDailyOutStockFromSummary，参数：materialIds={}, beginTime={}, endTime={}, shopNames={}, tenantId={}",
+                    materialIds, beginTime, endTime, shopNames, tenantId);
             List<Map<String, Object>> dailyOutList = depotItemMapperEx.getDailyOutStockFromSummary(
-                    materialIds, beginTime, endTime, tenantId);
+                    materialIds, beginTime, endTime, shopNames, tenantId);
 
             for (Map<String, Object> dailyOut : dailyOutList) {
                 String barCode = (String) dailyOut.get("barCode");

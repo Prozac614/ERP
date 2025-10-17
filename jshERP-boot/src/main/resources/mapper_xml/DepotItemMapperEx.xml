@@ -1427,32 +1427,48 @@
 
     <!-- 从汇总表获取每日出库数据 -->
     <select id="getDailyOutStockFromSummary" resultType="java.util.Map">
-        select 
-            dos.bar_code as barCode,
-            dos.material_name as materialName,
-            date_format(dos.out_date, '%Y-%m-%d') as outDate,
-            dos.total_out_quantity as totalOutQuantity,
-            dos.depot_count as depotCount,
-            dos.bill_count as billCount
-        from jsh_daily_out_summary dos
-        where ifnull(dos.delete_flag,'0') != '1'
-        <if test="tenantId != null">
-            and dos.tenant_id = #{tenantId}
-        </if>
-        <if test="materialIds != null and materialIds.size() > 0">
-            and dos.material_id in
-            <foreach collection="materialIds" item="materialId" open="(" close=")" separator=",">
-                #{materialId}
-            </foreach>
-        </if>
-        <if test="beginTime != null and beginTime != ''">
-            and dos.out_date >= #{beginTime}
-        </if>
-        <if test="endTime != null and endTime != ''">
-            and dos.out_date &lt;= #{endTime}
-        </if>
-        and dos.total_out_quantity > 0
-        order by dos.out_date asc, dos.bar_code asc
+        SELECT 
+            m.id as materialId,
+            me.bar_code as barCode,
+            m.name as materialName,
+            dos.out_date as outDate,
+            SUM(dos.total_out_quantity) as totalOutQuantity
+        FROM jsh_material m
+        INNER JOIN jsh_material_extend me ON me.material_id = m.id 
+            AND me.default_flag = 1 
+            AND ifnull(me.delete_flag,'0') != '1'
+        LEFT JOIN jsh_daily_out_summary dos ON dos.material_id = m.id
+            AND ifnull(dos.delete_flag,'0') != '1'
+        WHERE 1=1
+            AND ifnull(m.delete_flag,'0') != '1'
+            <if test="materialIds != null and materialIds.size() > 0">
+                AND m.id IN
+                <foreach collection="materialIds" item="materialId" open="(" close=")" separator=",">
+                    #{materialId}
+                </foreach>
+            </if>
+            <if test="tenantId != null">
+                AND m.tenant_id = #{tenantId}
+            </if>
+            <if test="beginTime != null and beginTime != ''">
+                AND dos.out_date >= #{beginTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND dos.out_date &lt;= #{endTime}
+            </if>
+            <if test="shopNames != null and shopNames.size() > 0">
+                AND dos.shop_name IN
+                <foreach collection="shopNames" item="shopName" open="(" close=")" separator=",">
+                    #{shopName}
+                </foreach>
+            </if>
+        GROUP BY 
+            m.id,
+            me.bar_code,
+            m.name,
+            dos.out_date
+        HAVING totalOutQuantity > 0
+        ORDER BY dos.out_date ASC, me.bar_code ASC
     </select>
 
     <!-- 调用存储过程刷新商品期间汇总 -->

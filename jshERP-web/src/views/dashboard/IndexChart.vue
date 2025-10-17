@@ -466,7 +466,13 @@ import { getAction, postAction, downFile } from '@/api/manage'
       }
     },
     watch: {
-      
+      'queryParam.shopNames': {
+        handler(newVal) {
+          console.log('店铺选择变化:', newVal)
+          this.searchQuery()
+        },
+        deep: true
+      }
     },
     created() {
       this.generateDateColumns()
@@ -905,7 +911,8 @@ import { getAction, postAction, downFile } from '@/api/manage'
             materialParam: "",
             createTimeRange: [moment().subtract(1, 'months'), moment()],
             stockAlertStatus: "",
-            dimensionType: "daily" // 重置维度类型
+            dimensionType: "daily", // 重置维度类型
+            shopNames: [] // 重置店铺选择
           }
           this.setDefaultTimeRange()
           this.generateDateColumns()
@@ -1005,14 +1012,23 @@ import { getAction, postAction, downFile } from '@/api/manage'
           this.loadingRequest.abort()
         }
         
+        // 调试日志
+        console.log('当前查询参数:', this.queryParam)
+        console.log('店铺选择:', this.queryParam.shopNames)
+        console.log('店铺列表:', this.shopList)
+        
         this.loading = true
         const params = {
           currentPage: this.ipagination.current,
           pageSize: this.ipagination.pageSize,
           materialParam: this.queryParam.materialParam || '',
           stockAlertStatus: this.queryParam.stockAlertStatus || '',
-          dimensionType: this.queryParam.dimensionType || 'daily'
+          dimensionType: this.queryParam.dimensionType || 'daily',
+          shopNames: this.queryParam.shopNames ? this.queryParam.shopNames.join(',') : ''
         }
+        
+        // 调试日志
+        console.log('发送请求参数:', params)
         
         // 根据维度类型处理时间参数
         if (this.queryParam.createTimeRange && this.queryParam.createTimeRange.length === 2) {
@@ -1028,8 +1044,6 @@ import { getAction, postAction, downFile } from '@/api/manage'
         }
 
         // 直接请求实时数据，无缓存机制
-        // 仅当后续对首页“销售统计”接口进行调用时，才需要把 shopNames 传给该接口。
-        // 当前页面是库存统计，不依赖店铺，所以这里不传 shopNames。
         this.loadingRequest = getAction('/depotItem/getMaterialStockWithDailyOutOptimized', params)
         this.loadingRequest.then((res) => {
           if (res.code === 200) {
@@ -1049,11 +1063,17 @@ import { getAction, postAction, downFile } from '@/api/manage'
       },
       // 初始化店铺列表（首页筛选）
       initShopList() {
+        console.log('开始初始化店铺列表')
         getAction('/shop/list').then(res => {
           if (res && res.code === 200 && res.data && Array.isArray(res.data.rows)) {
             this.shopList = res.data.rows
-            // 默认全选为空数组，由后端按“全部店铺”处理；如需显式传全选请改为 this.queryParam.shopNames = [...this.shopList]
+            console.log('店铺列表初始化完成:', this.shopList)
+            // 默认全选为空数组，由后端按"全部店铺"处理；如需显式传全选请改为 this.queryParam.shopNames = [...this.shopList]
+          } else {
+            console.warn('店铺列表初始化失败:', res)
           }
+        }).catch(error => {
+          console.error('店铺列表请求失败:', error)
         })
       },
 

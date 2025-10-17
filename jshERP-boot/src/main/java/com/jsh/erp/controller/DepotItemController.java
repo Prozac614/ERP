@@ -40,6 +40,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -1125,6 +1126,7 @@ public class DepotItemController {
             @RequestParam(value = "beginTime", required = false) String beginTime,
             @RequestParam(value = "endTime", required = false) String endTime,
             @RequestParam(value = "stockAlertStatus", required = false) String stockAlertStatus,
+            @RequestParam(value = "shopNames", required = false) String shopNamesStr,
             @RequestParam(value = "dimensionType", defaultValue = "daily") String dimensionType,
             @RequestParam(value = "calculateAll", defaultValue = "false") Boolean calculateAll,
             HttpServletRequest request) throws Exception {
@@ -1147,8 +1149,14 @@ public class DepotItemController {
                 endTime = endTime + BusinessConstants.DAY_LAST_TIME;
             }
 
+            List<String> shopNames = null;
+            if (StringUtil.isNotEmpty(shopNamesStr)) {
+                shopNames = Arrays.asList(shopNamesStr.split(","));
+            }
+            logger.info("Controller处理后的参数：shopNamesStr={}, shopNames={}", shopNamesStr, shopNames);
+
             Map<String, Object> result = depotItemOptimizedService.getOptimizedMaterialStockWithDailyOut(
-                    currentPage, pageSize, materialParam, beginTime, endTime, stockAlertStatus, request);
+                    currentPage, pageSize, materialParam, beginTime, endTime, stockAlertStatus, shopNames, request);
 
             // 添加维度类型到结果中
             result.put("dimensionType", dimensionType);

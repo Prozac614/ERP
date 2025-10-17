@@ -297,6 +297,7 @@ public interface DepotItemMapperEx {
                         @Param("materialIds") List<Long> materialIds,
                         @Param("beginTime") String beginTime,
                         @Param("endTime") String endTime,
+                        @Param("shopNames") List<String> shopNames,
                         @Param("tenantId") Long tenantId);
 
         /**
