@@ -1856,10 +1856,11 @@ public class DepotItemService {
                     materialId, currentAlertStatus, newAlertStatus);
 
             // 6. 应用业务规则：如果新的预警状态是库存告警且原有的状态是忽略告警，不用更新库存状态
-            if ("STOCK_ALERT".equals(newAlertStatus) && "RISK_IGNORED".equals(currentAlertStatus)) {
-                logger.debug("新状态为库存告警且原状态为忽略告警，跳过更新，materialId={}", materialId);
-                return false;
-            }
+            // if ("STOCK_ALERT".equals(newAlertStatus) &&
+            // "RISK_IGNORED".equals(currentAlertStatus)) {
+            // logger.debug("新状态为库存告警且原状态为忽略告警，跳过更新，materialId={}", materialId);
+            // return false;
+            // }
 
             // 7. 等值短路：若状态和值均未变化则跳过
             if (newAlertStatus != null && newAlertStatus.equals(currentAlertStatus)
