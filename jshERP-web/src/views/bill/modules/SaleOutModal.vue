@@ -24,7 +24,7 @@
     </template>
     <a-spin :spinning="confirmLoading">
       <a-form :form="form">
-        <a-row class="form-row" :gutter="24">
+        <a-row class="form-row hide-fields" :gutter="24">
           <a-col :lg="6" :md="12" :sm="24">
             <a-form-item :labelCol="labelCol" :wrapperCol="wrapperCol" label="客户" data-step="1" data-title="客户"
                          data-intro="客户必须选择，如果发现需要选择的客户尚未录入，可以在下拉框中点击新增客户进行录入。
@@ -56,13 +56,13 @@
               <j-date v-decorator="['operTime', validatorRules.operTime]" :show-time="true"/>
             </a-form-item>
           </a-col>
-          <a-col :lg="6" :md="12" :sm="24">
+          <a-col :lg="6" :md="12" :sm="24" class="number-field">
             <a-form-item :labelCol="labelCol" :wrapperCol="wrapperCol" label="单据编号" data-step="2" data-title="单据编号"
                          data-intro="单据编号自动生成、自动累加、开头是单据类型的首字母缩写，累加的规则是每次打开页面会自动占用一个新的编号">
               <a-input placeholder="请输入单据编号" v-decorator.trim="[ 'number' ]" />
             </a-form-item>
           </a-col>
-          <a-col :lg="6" :md="12" :sm="24">
+          <a-col :lg="6" :md="12" :sm="24" class="link-number-field">
             <a-form-item :labelCol="labelCol" :wrapperCol="wrapperCol" label="关联订单" data-step="3" data-title="关联订单"
               data-intro="销售出库单据可以通过关联订单来选择已录入的订单，选择之后会自动加载订单的内容，然后继续录入仓库等信息完成单据的提交，
               提交之后原来的销售订单会对应的改变单据状态。另外本系统支持订单多次出库，只需选择订单之后修改对应的商品数量即可">
@@ -729,5 +729,9 @@
   }
 </script>
 <style scoped>
-
+/* 暂时隐藏单据编号和关联订单字段 */
+.hide-fields .number-field,
+.hide-fields .link-number-field {
+  display: none !important;
+}
 </style>
