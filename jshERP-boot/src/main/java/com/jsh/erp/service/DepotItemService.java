@@ -1781,7 +1781,12 @@ public class DepotItemService {
         // 2) 更新库存预警状态（物料级，仅首次执行；并带等值短路）
         if (materialFirstTime) {
             try {
-                boolean updated = updateStockAlertStatusForMaterial(materialId, tenantId);
+                // 获取当前操作的单据头信息
+                DepotHead depotHead = depotHeadMapper.selectByPrimaryKey(headerId);
+                // 判断是否是销售出库：必须同时满足出库类型且子类型为销售出库
+                boolean isSalesOut = BusinessConstants.DEPOTHEAD_TYPE_OUT.equals(depotHead.getType())
+                        && BusinessConstants.SUB_TYPE_SALES.equals(depotHead.getSubType());
+                boolean updated = updateStockAlertStatusForMaterial(materialId, tenantId, isSalesOut);
                 if (updated) {
                     markWriteHappened();
                 }
@@ -1815,7 +1820,7 @@ public class DepotItemService {
      * @param materialId 商品ID
      * @param tenantId   租户ID
      */
-    private boolean updateStockAlertStatusForMaterial(Long materialId, Long tenantId) {
+    private boolean updateStockAlertStatusForMaterial(Long materialId, Long tenantId, boolean isSalesOut) {
         try {
             logger.debug("开始更新商品库存预警状态，materialId={}, tenantId={}", materialId, tenantId);
 
@@ -1855,12 +1860,13 @@ public class DepotItemService {
             logger.debug("预警状态计算结果，materialId={}, currentStatus={}, newStatus={}",
                     materialId, currentAlertStatus, newAlertStatus);
 
-            // 6. 应用业务规则：如果新的预警状态是库存告警且原有的状态是忽略告警，不用更新库存状态
-            // if ("STOCK_ALERT".equals(newAlertStatus) &&
-            // "RISK_IGNORED".equals(currentAlertStatus)) {
-            // logger.debug("新状态为库存告警且原状态为忽略告警，跳过更新，materialId={}", materialId);
-            // return false;
-            // }
+            // 6. 应用业务规则：如果新的预警状态是库存告警且原有的状态是忽略告警，且是销售出库操作时，不用更新库存状态
+            if ("STOCK_ALERT".equals(newAlertStatus) &&
+                    "RISK_IGNORED".equals(currentAlertStatus) &&
+                    isSalesOut) {
+                logger.debug("销售出库操作且新状态为库存告警，原状态为忽略告警，跳过更新，materialId={}", materialId);
+                return false;
+            }
 
             // 7. 等值短路：若状态和值均未变化则跳过
             if (newAlertStatus != null && newAlertStatus.equals(currentAlertStatus)
@@ -1872,8 +1878,8 @@ public class DepotItemService {
 
             materialService.updateStockAlertStatus(materialId, newAlertStatus, sixMonthsSales);
             logger.info(
-                    "库存预警状态更新成功，materialId={}, oldStatus={}, newStatus={}, currentStock={}, sixMonthsSales={}",
-                    materialId, currentAlertStatus, newAlertStatus, currentStock, sixMonthsSales);
+                    "库存预警状态更新成功，materialId={}, oldStatus={}, newStatus={}, currentStock={}, sixMonthsSales={}, isSalesOut={}",
+                    materialId, currentAlertStatus, newAlertStatus, currentStock, sixMonthsSales, isSalesOut);
             return true;
 
         } catch (Exception e) {
