@@ -1212,6 +1212,22 @@ public class DepotItemService {
      */
     @Transactional(value = "transactionManager", rollbackFor = Exception.class)
     public void updateCurrentStock(DepotItem depotItem) throws Exception {
+        // 在强制审核模式下，未审核单据的保存阶段不参与库存更新，直接跳过
+        try {
+            if (systemConfigService.getForceApprovalFlag() && depotItem.getHeaderId() != null) {
+                DepotHead header = depotHeadMapper.selectByPrimaryKey(depotItem.getHeaderId());
+                if (header != null && !"1".equals(header.getStatus())) {
+                    logger.debug(
+                            "skip updateCurrentStock on save: headerId={}, status={}, materialId={}, depotId={}, forceApproval=true",
+                            depotItem.getHeaderId(), header.getStatus(), depotItem.getMaterialId(),
+                            depotItem.getDepotId());
+                    return;
+                }
+            }
+        } catch (Exception e) {
+            logger.debug("updateCurrentStock skip-check failed, fallback to default flow, headerId={}, error={}",
+                    depotItem != null ? depotItem.getHeaderId() : null, e.getMessage());
+        }
         // 查询单据头获取操作时间
         Date operTime = new Date(); // 默认使用当前时间
         try {
@@ -1752,6 +1768,22 @@ public class DepotItemService {
      * @param depotId    仓库ID
      */
     private void updateSummaryTablesAfterStockChange(Long materialId, Long depotId, Date operTime, Long headerId) {
+        // 保存阶段不执行每日出库汇总与库存预警（仅在已审核单据时执行）
+        try {
+            if (headerId == null) {
+                logger.debug("skip summary/alert: headerId is null, materialId={}, depotId={}", materialId, depotId);
+                return;
+            }
+            DepotHead header = depotHeadMapper.selectByPrimaryKey(headerId);
+            if (header == null || !"1".equals(header.getStatus())) {
+                logger.debug("skip summary/alert: headerId={}, status={}, materialId={}, depotId={}",
+                        headerId, header != null ? header.getStatus() : null, materialId, depotId);
+                return;
+            }
+        } catch (Exception e) {
+            logger.debug("summary/alert audit-check failed, fallback to default flow, headerId={}, error={}", headerId,
+                    e.getMessage());
+        }
         logger.debug("开始更新汇总表，materialId={}, depotId={}, operTime={}", materialId, depotId, operTime);
 
         // 获取当前用户的租户ID
