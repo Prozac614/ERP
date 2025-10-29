@@ -331,7 +331,7 @@
               validateRules: [{ required: true, message: '${title}不能为空' }]
             },
             { title: '单价', key: 'unitPrice', width: '4%', type: FormTypes.normal},
-            { title: '金额', key: 'allPrice', width: '5%', type: FormTypes.inputNumber, statistics: true },
+            { title: '金额', key: 'allPrice', width: '5%', type: FormTypes.normal, statistics: true },
             { title: '税率', key: 'taxRate', width: '4%', type: FormTypes.normal },
             { title: '税额', key: 'taxMoney', width: '5%', type: FormTypes.normal, statistics: true },
             { title: '价税合计', key: 'taxLastMoney', width: '7%', type: FormTypes.normal, statistics: true },
