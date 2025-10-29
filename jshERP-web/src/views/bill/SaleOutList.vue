@@ -317,8 +317,7 @@
           offset: 1
         },
         // 默认索引
-        defDataIndex:['action','organName','number','materialsList','operTimeStr','userName','materialCount','totalPrice','totalTaxLastMoney',
-          'needOutMoney','changeAmount','debt','shopName','status'],
+        defDataIndex:['action','operTimeStr','totalPrice','status','shopName','userName','materialsList','materialCount'],
         // 默认列
         defColumns: [
           {
