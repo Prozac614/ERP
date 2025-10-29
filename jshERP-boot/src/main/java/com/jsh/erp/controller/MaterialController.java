@@ -639,15 +639,22 @@ public class MaterialController extends BaseController {
                     } else if ("CGDD".equals(prefixNo) || "CGTH".equals(prefixNo)) {
                         // 采购价
                         mvo.setBillPrice(mvo.getPurchaseDecimal());
-                    } else if ("QTRK".equals(prefixNo) || "DBCK".equals(prefixNo) || "ZZD".equals(prefixNo)
+                    } else if ("QTRK".equals(prefixNo)) {
+                        // 其它入库：零售价-按采购维度屏蔽
+                        mvo.setBillPrice(roleService.parseBillPriceByLimit(mvo.getCommodityDecimal(), "buy", priceLimit,
+                                request));
+                    } else if ("DBCK".equals(prefixNo) || "ZZD".equals(prefixNo)
                             || "CXD".equals(prefixNo)
                             || "PDLR".equals(prefixNo) || "PDFP".equals(prefixNo)) {
-                        // 采购价-给录入界面按权限屏蔽
+                        // 其他类型保持现状：采购价-按采购维度屏蔽
                         mvo.setBillPrice(roleService.parseBillPriceByLimit(mvo.getPurchaseDecimal(), "buy", priceLimit,
                                 request));
                     }
-                    if ("XSDD".equals(prefixNo) || "XSTH".equals(prefixNo)
-                            || "QTCK".equals(prefixNo)) {
+                    if ("QTCK".equals(prefixNo)) {
+                        // 其它出库：零售价-按销售维度屏蔽（不使用最近一次销售价）
+                        mvo.setBillPrice(roleService.parseBillPriceByLimit(mvo.getCommodityDecimal(), "sale",
+                                priceLimit, request));
+                    } else if ("XSDD".equals(prefixNo) || "XSTH".equals(prefixNo)) {
                         // 销售价
                         if (organId == null) {
                             mvo.setBillPrice(mvo.getWholesaleDecimal());
@@ -661,11 +668,6 @@ public class MaterialController extends BaseController {
                                         mvo.getMeId(), prefixNo);
                                 mvo.setBillPrice(lastUnitPrice != null ? lastUnitPrice : mvo.getWholesaleDecimal());
                             }
-                        }
-                        // 销售价-给录入界面按权限屏蔽价格
-                        if ("QTCK".equals(prefixNo)) {
-                            mvo.setBillPrice(roleService.parseBillPriceByLimit(mvo.getWholesaleDecimal(), "sale",
-                                    priceLimit, request));
                         }
                     }
                     // 仓库id

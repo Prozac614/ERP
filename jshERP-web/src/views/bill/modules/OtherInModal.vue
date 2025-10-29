@@ -465,9 +465,12 @@
             let info = selectBillDetailRows[j];
             if(info.finishNumber>0) {
               info.operNumber = info.preNumber - info.finishNumber
+              // 计算金额与税额
+              let taxRate = info.taxRate-0
+              info.allPrice = (info.operNumber * info.unitPrice).toFixed(2)-0
+              info.taxMoney = (info.allPrice*taxRate/100).toFixed(2)-0
+              info.taxLastMoney = (info.allPrice + info.taxMoney).toFixed(2)-0
             }
-            info.unitPrice = 0
-            info.allPrice = 0
             info.linkId = info.id
             listEx.push(info)
             this.changeColumnShow(info)
