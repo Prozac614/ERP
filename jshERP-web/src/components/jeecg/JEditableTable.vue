@@ -2448,6 +2448,12 @@
 
         // 触发valueChange 事件
         this.elemValueChange(FormTypes.popupJsh, row, column, value)
+        // 如果是唛头(barCode)，选择完成后跳转到当前行数量(operNumber)
+        if (column && column.key === 'barCode' && row && row.id) {
+          this.$nextTick(() => {
+            this.focusOperNumberInput(row.id)
+          })
+        }
       },
       handleChangeJDateCommon(value, id, row, column, showTime) {
         this.jdateValues = this.bindValuesChange(value, id, 'jdateValues')
@@ -2874,27 +2880,127 @@
           e = event || window.event || arguments.callee.caller.arguments[0];
           //捕捉是否按键为回车键，可百度JS键盘事件了解更多
           if(e && e.keyCode==13) {
-            //捕捉inputDom下的文本输入框的个数
-            let inputs = inputDom.find("input:visible:not(:checkbox)");
-            let idx = inputs.index(this); // 获取当前焦点输入框所处的位置
-            if (idx == inputs.length - 1) { // 判断是否是最后一个输入框
-              let curKey = e.which;
-              if (curKey == 13) {
-                //新增行
+            // 在当前行内判断是否还有下一个输入框
+            let curInput = $(this);
+            let curRow = curInput.closest('.tr');
+            let rowInputs = curRow.find("input:visible:not(:checkbox)");
+            let idxInRow = rowInputs.index(this);
+
+            // 如果当前行没有更多的输入框，则跳到下一行的唛头
+            if (idxInRow === rowInputs.length - 1) {
+              let nextRow = curRow.next('.tr');
+              if (nextRow && nextRow.length) {
+                // 聚焦下一行唛头
+                if (!that.focusRowBarCode(nextRow)) {
+                  // 回退：若未找到唛头，尝试聚焦下一行第一个输入
+                  let nextRowFirstInput = nextRow.find("input:visible:not(:checkbox)").first();
+                  if (nextRowFirstInput && nextRowFirstInput.length) {
+                    nextRowFirstInput[0].focus();
+                    if (typeof nextRowFirstInput[0].select === 'function') {
+                      nextRowFirstInput[0].select();
+                    }
+                  }
+                }
+              } else {
+                // 已是最后一行：新增一行并聚焦新行唛头
                 that.handleClickAdd();
-                //进行下一行的自动聚焦
                 setTimeout(function() {
-                  inputs = inputDom.find("input:visible:not(:checkbox)");
-                  inputs[idx + 1].focus(); // 设置焦点
-                  inputs[idx + 1].select(); // 选中文字
-                },100)
+                  that.focusLastRowBarCode();
+                }, 100);
               }
             } else {
-              inputs[idx + 1].focus(); // 设置焦点
-              inputs[idx + 1].select(); // 选中文字
+              // 行内仍有后续输入，跳到当前行的下一个输入
+              let nextInRow = rowInputs[idxInRow + 1];
+              if (nextInRow) {
+                nextInRow.focus();
+                if (typeof nextInRow.select === 'function') {
+                  nextInRow.select();
+                }
+              }
             }
           }
         })
+      },
+      /** 聚焦指定行的唛头(barCode)，成功返回true */
+      focusRowBarCode(rowEl) {
+        try {
+          if (!rowEl || rowEl.length === 0) {
+            return false;
+          }
+          let bar = rowEl.find("[id^='barCode']").first();
+          if (!bar || bar.length === 0) {
+            return false;
+          }
+          let cell = bar.closest('.td');
+          if (!cell || cell.length === 0) {
+            return false;
+          }
+          let selector = cell.find('.ant-select, .ant-select-selection, .ant-select-selector').first();
+          if (!selector || selector.length === 0) {
+            return false;
+          }
+          selector.click();
+          setTimeout(function() {
+            let inp = selector.find('input');
+            if (inp && inp.length > 0) {
+              inp[0].focus();
+              if (typeof inp[0].select === 'function') {
+                inp[0].select();
+              }
+            }
+          }, 50);
+          return true;
+        } catch (e) {
+          return false;
+        }
+      },
+      /** 聚焦最后一行的唛头(barCode)选择器，成功返回true */
+      focusLastRowBarCode() {
+        try {
+          let inputDom = $(".ant-modal-cust-warp:visible").find("#billModal");
+          let barCodes = inputDom.find("[id^='barCode']");
+          if (!barCodes || barCodes.length === 0) {
+            return false;
+          }
+          let last = $(barCodes[barCodes.length - 1]);
+          let cell = last.closest('.td');
+          if (!cell || cell.length === 0) {
+            return false;
+          }
+          let selector = cell.find('.ant-select, .ant-select-selection, .ant-select-selector').first();
+          if (!selector || selector.length === 0) {
+            return false;
+          }
+          selector.click();
+          setTimeout(function() {
+            let inp = selector.find('input');
+            if (inp && inp.length > 0) {
+              inp[0].focus();
+              if (typeof inp[0].select === 'function') {
+                inp[0].select();
+              }
+            }
+          }, 50);
+          return true;
+        } catch (e) {
+          return false;
+        }
+      },
+      /** 聚焦当前行数量(operNumber)输入框，成功返回true */
+      focusOperNumberInput(rowId) {
+        try {
+          let el = document.getElementById('operNumber' + rowId);
+          if (el) {
+            el.focus();
+            if (typeof el.select === 'function') {
+              el.select();
+            }
+            return true;
+          }
+          return false;
+        } catch (e) {
+          return false;
+        }
       },
       /** 自动选中特殊的key **/
       autoSelectBySpecialKey(specialKey, orderNum) {
