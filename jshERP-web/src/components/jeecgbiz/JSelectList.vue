@@ -11,7 +11,7 @@
                @mousedown="e => e.preventDefault()">此处最多显示20条，如需更多请点击放大镜查询</div>
         </div>
         <a-select-option v-for="item in materialData" :key="item.barCode">
-          {{ item.materialStr }}
+          {{ item.barCode }}
         </a-select-option>
       </a-select>
       <a-button icon="search" @click="onSearch" />
