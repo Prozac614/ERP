@@ -21,7 +21,7 @@ export function getStockHistory(params) {
         console.log('getDailyOutStock接口响应:', response)
         if (response.code === 200) {
             // 将现有接口数据转换为图表所需格式
-            return transformToStockHistoryData(response.data, params)
+            return transformToStockHistoryData(response.data, params, params.dimensionType || 'daily')
         }
         return response
     }).catch(error => {
@@ -46,7 +46,7 @@ export function getOutboundFlow(params) {
     }).then(response => {
         if (response.code === 200) {
             // 将现有接口数据转换为图表所需格式
-            return transformToChartData(response.data, params)
+            return transformToChartData(response.data, params, params.dimensionType || 'daily')
         }
         return response
     })
@@ -56,7 +56,60 @@ export function getOutboundFlow(params) {
  * 将现有接口数据转换为库存历史图表格式
  * 使用真实的库存数据而不是模拟数据
  */
-function transformToStockHistoryData(dailyOutList, params) {
+// 将日期映射到聚合桶
+function getBucketInfo(dateMoment, dimensionType) {
+    const year = dateMoment.year()
+    if (dimensionType === 'monthly') {
+        const label = dateMoment.format('YYYY-MM')
+        return { key: label, label }
+    }
+    if (dimensionType === 'quarter') {
+        const q = dateMoment.quarter()
+        return { key: `${year}-Q${q}`, label: `${year}-Q${q}` }
+    }
+    if (dimensionType === 'halfYear') {
+        const h = dateMoment.month() < 6 ? 'H1' : 'H2'
+        return { key: `${year}-${h}`, label: `${year}-${h}` }
+    }
+    if (dimensionType === 'year') {
+        const label = String(year)
+        return { key: label, label }
+    }
+    // daily 直接返回具体日期
+    const label = dateMoment.format('YYYY-MM-DD')
+    return { key: label, label }
+}
+
+function aggregateDailyOutByBuckets(dailyOutList, startDate, endDate, dimensionType) {
+    const outMap = new Map()
+    dailyOutList.forEach(item => {
+        const d = item.outDate
+        const q = parseFloat(item.outQuantity) || 0
+        outMap.set(d, (outMap.get(d) || 0) + q)
+    })
+
+    const labels = []
+    const bucketTotalsMap = new Map()
+
+    let cursor = startDate.clone()
+    while (cursor.isSameOrBefore(endDate)) {
+        const { key, label } = getBucketInfo(cursor, dimensionType)
+        if (!bucketTotalsMap.has(key)) {
+            bucketTotalsMap.set(key, 0)
+            labels.push(label)
+        }
+        // 仅在 daily 维度下逐日取值，其它维度累加到桶
+        const dayKey = cursor.format('YYYY-MM-DD')
+        const dayOut = outMap.get(dayKey) || 0
+        bucketTotalsMap.set(key, bucketTotalsMap.get(key) + dayOut)
+        cursor.add(1, 'day')
+    }
+
+    const bucketTotals = labels.map(label => bucketTotalsMap.get(label) || 0)
+    return { labels, bucketTotals }
+}
+
+function transformToStockHistoryData(dailyOutList, params, dimensionType) {
     console.log('转换图表数据，原始数据:', dailyOutList)
 
     // 生成日期序列
@@ -68,65 +121,75 @@ function transformToStockHistoryData(dailyOutList, params) {
 
     // 添加日期范围保护，避免无限循环
     const daysDiff = endDate.diff(startDate, 'days')
-    if (daysDiff > 365) {
-        console.warn('日期范围过大，限制为365天')
-        endDate = startDate.clone().add(365, 'days')
+    // 使用受限变量，避免对 const 变量重赋值
+    let limitedEndDate = endDate.clone()
+    // 仅在日维度下限制为365天，其它维度使用完整范围并在桶内聚合
+    if ((dimensionType || 'daily') === 'daily' && daysDiff > 365) {
+        console.warn('日期范围过大，限制为365天（daily）')
+        limitedEndDate = startDate.clone().add(365, 'days')
     }
-
-    // 创建出库数据映射，便于快速查找
-    const outDataMap = new Map()
-    dailyOutList.forEach(item => {
-        const date = item.outDate
-        const quantity = parseFloat(item.outQuantity) || 0
-        outDataMap.set(date, quantity)
-    })
-
-    let currentDate = startDate.clone()
-    let dayCount = 0
 
     // 计算合理的初始库存
-    // 方法1：根据总出库量估算
-    const totalOut = dailyOutList.reduce((sum, item) => sum + (parseFloat(item.outQuantity) || 0), 0)
-
-    // 方法2：使用传入的当前库存信息（如果有的话）
-    let initialStock = 100 // 默认初始库存
+    const totalOutAll = dailyOutList.reduce((sum, item) => sum + (parseFloat(item.outQuantity) || 0), 0)
+    let initialStock = 100
     if (params.currentPeriodStock && params.currentPeriodStock > 0) {
-        // 如果有当前库存信息，以此为基础计算初始库存
-        initialStock = parseFloat(params.currentPeriodStock) + totalOut
-    } else if (totalOut > 0) {
-        // 否则根据总出库量估算：假设初始库存是总出库量的1.5倍
-        initialStock = Math.max(totalOut * 1.5, 100)
+        initialStock = parseFloat(params.currentPeriodStock) + totalOutAll
+    } else if (totalOutAll > 0) {
+        initialStock = Math.max(totalOutAll * 1.5, 100)
     }
 
-    let currentStock = initialStock
+    if (dimensionType === 'daily') {
+        // 创建出库数据映射，便于快速查找
+        const outDataMap = new Map()
+        dailyOutList.forEach(item => {
+            const date = item.outDate
+            const quantity = parseFloat(item.outQuantity) || 0
+            outDataMap.set(date, quantity)
+        })
 
-    while (currentDate.isSameOrBefore(endDate) && dayCount < 1000) {
-        const dateStr = currentDate.format('YYYY-MM-DD')
-        dates.push(dateStr)
-
-        // 获取该日期的出库数据
-        const dailyOut = outDataMap.get(dateStr) || 0
-
-        // 库存变化：减去出库量
-        currentStock = Math.max(0, currentStock - dailyOut)
-
-        // 模拟补货逻辑：
-        // 1. 当库存低于平均日出库量的3倍时考虑补货
-        // 2. 或者当库存为0且有出库时必须补货
-        const avgDailyOut = totalOut / Math.max(daysDiff, 1)
+        let currentDate = startDate.clone()
+        let dayCount = 0
+        let currentStock = initialStock
+        const avgDailyOut = totalOutAll / Math.max(daysDiff, 1)
         const lowStockThreshold = avgDailyOut * 3
 
-        if ((currentStock < lowStockThreshold && dailyOut > 0) || (currentStock === 0 && dailyOut > 0)) {
-            // 补货量：平均日出库量的7-10天
-            const replenishment = Math.max(avgDailyOut * (7 + Math.random() * 3), dailyOut * 2)
-            currentStock += replenishment
+        while (currentDate.isSameOrBefore(limitedEndDate) && dayCount < 1000) {
+            const dateStr = currentDate.format('YYYY-MM-DD')
+            dates.push(dateStr)
+
+            const dailyOut = outDataMap.get(dateStr) || 0
+            currentStock = Math.max(0, currentStock - dailyOut)
+
+            if ((currentStock < lowStockThreshold && dailyOut > 0) || (currentStock === 0 && dailyOut > 0)) {
+                const replenishment = Math.max(avgDailyOut * (7 + Math.random() * 3), dailyOut * 2)
+                currentStock += replenishment
+            }
+
+            stockDataArray.push(Math.round(currentStock * 100) / 100)
+            dailyOutData.push(dailyOut)
+
+            currentDate.add(1, 'day')
+            dayCount++
         }
+    } else {
+        // 非日维度：按桶聚合
+        const { labels, bucketTotals } = aggregateDailyOutByBuckets(dailyOutList, startDate, limitedEndDate, dimensionType)
+        dates.push(...labels)
+        dailyOutData.push(...bucketTotals)
 
-        stockDataArray.push(Math.round(currentStock * 100) / 100) // 保留2位小数
-        dailyOutData.push(dailyOut)
-
-        currentDate.add(1, 'day')
-        dayCount++
+        // 以桶为步长模拟库存变化
+        let currentStock = initialStock
+        const avgPerBucket = bucketTotals.reduce((a, b) => a + b, 0) / Math.max(bucketTotals.length, 1)
+        const lowThreshold = avgPerBucket * 3
+        for (let i = 0; i < bucketTotals.length; i++) {
+            const outVal = bucketTotals[i]
+            currentStock = Math.max(0, currentStock - outVal)
+            if ((currentStock < lowThreshold && outVal > 0) || (currentStock === 0 && outVal > 0)) {
+                const replenishment = Math.max(avgPerBucket * (3 + Math.random() * 2), outVal * 1.5)
+                currentStock += replenishment
+            }
+            stockDataArray.push(Math.round(currentStock * 100) / 100)
+        }
     }
 
     console.log('转换后的图表数据:', { dates, stockData: stockDataArray, dailyOutData })
@@ -145,7 +208,7 @@ function transformToStockHistoryData(dailyOutList, params) {
 /**
  * 将现有接口数据转换为出库流水图表格式
  */
-function transformToChartData(dailyOutList, params) {
+function transformToChartData(dailyOutList, params, dimensionType) {
     // 生成日期序列
     const startDate = moment(params.beginDate)
     const endDate = moment(params.endDate)
@@ -155,29 +218,42 @@ function transformToChartData(dailyOutList, params) {
 
     // 添加日期范围保护，避免无限循环
     const daysDiff = endDate.diff(startDate, 'days')
-    if (daysDiff > 365) {
-        console.warn('日期范围过大，限制为365天')
-        endDate = startDate.clone().add(365, 'days')
+    // 使用受限变量，避免对 const 变量重赋值
+    let limitedEndDate = endDate.clone()
+    // 仅在日维度下限制为365天，其它维度使用完整范围并在桶内聚合
+    if ((dimensionType || 'daily') === 'daily' && daysDiff > 365) {
+        console.warn('日期范围过大，限制为365天（daily）')
+        limitedEndDate = startDate.clone().add(365, 'days')
     }
 
-    let currentDate = startDate.clone()
-    let cumulativeOut = 0
-    let dayCount = 0
+    if (dimensionType === 'daily') {
+        let currentDate = startDate.clone()
+        let cumulativeOut = 0
+        let dayCount = 0
+        while (currentDate.isSameOrBefore(limitedEndDate) && dayCount < 1000) {
+            const dateStr = currentDate.format('YYYY-MM-DD')
+            dates.push(dateStr)
 
-    while (currentDate.isSameOrBefore(endDate) && dayCount < 1000) {
-        const dateStr = currentDate.format('YYYY-MM-DD')
-        dates.push(dateStr)
+            const dayData = dailyOutList.find(item => item.outDate === dateStr)
+            const dailyOut = dayData ? parseFloat(dayData.outQuantity) : 0
 
-        // 查找该日期的出库数据
-        const dayData = dailyOutList.find(item => item.outDate === dateStr)
-        const dailyOut = dayData ? parseFloat(dayData.outQuantity) : 0
+            outboundData.push(dailyOut)
+            cumulativeOut += dailyOut
+            cumulativeData.push(cumulativeOut)
 
-        outboundData.push(dailyOut)
-        cumulativeOut += dailyOut
-        cumulativeData.push(cumulativeOut)
-
-        currentDate.add(1, 'day')
-        dayCount++
+            currentDate.add(1, 'day')
+            dayCount++
+        }
+    } else {
+        const { labels, bucketTotals } = aggregateDailyOutByBuckets(dailyOutList, startDate, limitedEndDate, dimensionType)
+        dates.push(...labels)
+        let cumulativeOut = 0
+        for (let i = 0; i < bucketTotals.length; i++) {
+            const val = bucketTotals[i]
+            outboundData.push(val)
+            cumulativeOut += val
+            cumulativeData.push(cumulativeOut)
+        }
     }
 
     return {

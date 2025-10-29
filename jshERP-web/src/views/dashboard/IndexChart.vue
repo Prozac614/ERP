@@ -258,6 +258,7 @@
             :visible="chartModal.visible"
             :materialInfo="chartModal.currentMaterial"
             :dateRange="queryParam.createTimeRange"
+            :dimensionType="queryParam.dimensionType"
             @cancel="handleChartModalCancel"
           />
           

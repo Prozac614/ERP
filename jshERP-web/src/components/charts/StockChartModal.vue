@@ -112,6 +112,11 @@ export default {
     dateRange: {
       type: Array,
       default: () => []
+    },
+    dimensionType: {
+      type: String,
+      default: 'daily',
+      validator: value => ['daily', 'monthly', 'quarter', 'halfYear', 'year'].includes(value)
     }
   },
   data() {
@@ -153,6 +158,11 @@ export default {
       }
     },
     chartType() {
+      if (this.visible) {
+        this.loadChartData()
+      }
+    },
+    dimensionType() {
       if (this.visible) {
         this.loadChartData()
       }
@@ -344,6 +354,7 @@ export default {
           beginDate: beginDate,
           endDate: endDate,
           chartType: this.chartType,
+          dimensionType: this.dimensionType,
           // 传递库存信息用于更准确的图表计算
           currentPeriodStock: this.materialInfo.currentPeriodStock,
           previousPeriodStock: this.materialInfo.previousPeriodStock,
@@ -488,7 +499,12 @@ export default {
           },
           axisLabel: {
             rotate: 45,
-            formatter: (value) => moment(value).format('MM-DD'),
+            formatter: (value) => {
+              if (this.dimensionType === 'daily') {
+                return moment(value).format('MM-DD')
+              }
+              return value
+            },
             fontSize: 11
           },
           axisLine: {
@@ -674,7 +690,12 @@ export default {
           },
           axisLabel: {
             rotate: 45,
-            formatter: (value) => moment(value).format('MM-DD')
+            formatter: (value) => {
+              if (this.dimensionType === 'daily') {
+                return moment(value).format('MM-DD')
+              }
+              return value
+            }
           }
         },
         yAxis: {
