@@ -262,6 +262,10 @@
         if (this.action === 'add') {
           this.addInit(this.prefixNo)
           this.fileList = []
+          // 隐藏规格、单位、备注列（新增时）
+          this.changeFormTypes(this.materialTable.columns, 'standard', 0)
+          this.changeFormTypes(this.materialTable.columns, 'unit', 0)
+          this.changeFormTypes(this.materialTable.columns, 'remark', 0)
           
           this.$nextTick(() => {
             // 初始化后滚动到顶部
