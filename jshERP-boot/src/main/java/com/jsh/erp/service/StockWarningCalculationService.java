@@ -16,7 +16,6 @@ import java.math.RoundingMode;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -51,9 +50,6 @@ public class StockWarningCalculationService {
 
     @Resource
     private MaterialExtendService materialExtendService;
-
-    @Resource(name = "stockWarningTaskExecutor")
-    private Executor stockWarningTaskExecutor;
 
     // 任务状态管理
     private static final Map<String, CalculationTask> taskMap = new ConcurrentHashMap<>();
