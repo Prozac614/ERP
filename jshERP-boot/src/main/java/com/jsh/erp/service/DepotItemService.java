@@ -775,7 +775,7 @@ public class DepotItemService {
                 // 更新当前库存
                 updateCurrentStock(depotItem);
                 // 更新当前成本价
-                updateCurrentUnitPrice(depotItem);
+                // updateCurrentUnitPrice(depotItem);
                 // 更新商品的价格（只有在单据已审核的情况下才更新）
                 if (BusinessConstants.BILLS_STATUS_AUDIT.equals(depotHead.getStatus())) {
                     updateMaterialExtendPrice(materialExtend.getId(), depotHead.getSubType(), depotHead.getBillType(),

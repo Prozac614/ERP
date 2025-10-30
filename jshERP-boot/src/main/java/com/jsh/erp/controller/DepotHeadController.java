@@ -235,11 +235,12 @@ public class DepotHeadController extends BaseController {
             endTime = Tools.parseDayToTime(endTime, BusinessConstants.DAY_LAST_TIME);
             Boolean forceFlag = systemConfigService.getForceApprovalFlag();
             Boolean inOutManageFlag = systemConfigService.getInOutManageFlag();
+            String shopName = null;
             List<DepotHeadVo4InDetail> list = depotHeadService.findInOutDetail(beginTime, endTime, type, creatorArray,
                     organArray, categoryList, forceFlag, inOutManageFlag,
                     StringUtil.toNull(materialParam), depotList, oId, StringUtil.toNull(number), creator, remark,
                     StringUtil.safeSqlParse(column), StringUtil.safeSqlParse(order), (currentPage - 1) * pageSize,
-                    pageSize);
+                    pageSize, shopName);
             int total = depotHeadService.findInOutDetailCount(beginTime, endTime, type, creatorArray, organArray,
                     categoryList, forceFlag, inOutManageFlag,
                     StringUtil.toNull(materialParam), depotList, oId, StringUtil.toNull(number), creator, remark);

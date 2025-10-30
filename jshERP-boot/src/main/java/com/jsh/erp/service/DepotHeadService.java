@@ -558,7 +558,7 @@ public class DepotHeadService {
                 // 更新当前库存
                 depotItemService.updateCurrentStock(depotItem);
                 // 更新当前成本价
-                depotItemService.updateCurrentUnitPrice(depotItem);
+                // depotItemService.updateCurrentUnitPrice(depotItem);
             }
         }
         // 路径列表
@@ -913,12 +913,13 @@ public class DepotHeadService {
             String[] creatorArray,
             String[] organArray, List<Long> categoryList, Boolean forceFlag, Boolean inOutManageFlag,
             String materialParam, List<Long> depotList, Integer oId, String number,
-            Long creator, String remark, String column, String order, Integer offset, Integer rows) throws Exception {
+            Long creator, String remark, String column, String order, Integer offset, Integer rows, String shopName)
+            throws Exception {
         List<DepotHeadVo4InDetail> list = null;
         try {
             list = depotHeadMapperEx.findInOutDetail(beginTime, endTime, type, creatorArray, organArray, categoryList,
                     forceFlag, inOutManageFlag,
-                    materialParam, depotList, oId, number, creator, remark, column, order, offset, rows);
+                    materialParam, depotList, oId, number, creator, remark, column, order, offset, rows, shopName);
         } catch (Exception e) {
             JshException.readFail(logger, e);
         }

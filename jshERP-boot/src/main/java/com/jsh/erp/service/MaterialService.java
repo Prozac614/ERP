@@ -1635,7 +1635,7 @@ public class MaterialService {
         for (Long mId : idList) {
             DepotItem depotItem = new DepotItem();
             depotItem.setMaterialId(mId);
-            depotItemService.updateCurrentUnitPrice(depotItem);
+            // depotItemService.updateCurrentUnitPrice(depotItem);
             res = 1;
         }
         return res;

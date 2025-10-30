@@ -61,7 +61,8 @@ public interface DepotHeadMapperEx {
                         @Param("column") String column,
                         @Param("order") String order,
                         @Param("offset") Integer offset,
-                        @Param("rows") Integer rows);
+                        @Param("rows") Integer rows,
+                        @Param("shopName") String shopName);
 
         int findInOutDetailCount(
                         @Param("beginTime") String beginTime,
