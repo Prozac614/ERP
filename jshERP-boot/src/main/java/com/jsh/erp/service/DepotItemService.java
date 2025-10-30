@@ -664,23 +664,27 @@ public class DepotItemService {
                     }
                 }
                 // 如果是销售出库、销售退货、零售出库、零售退货则给采购单价字段赋值（如果是批次商品，则要根据批号去找之前的入库价）
-                if (BusinessConstants.SUB_TYPE_SALES.equals(depotHead.getSubType()) ||
-                        BusinessConstants.SUB_TYPE_SALES_RETURN.equals(depotHead.getSubType()) ||
-                        BusinessConstants.SUB_TYPE_RETAIL.equals(depotHead.getSubType()) ||
-                        BusinessConstants.SUB_TYPE_RETAIL_RETURN.equals(depotHead.getSubType())) {
-                    boolean moveAvgPriceFlag = systemConfigService.getMoveAvgPriceFlag();
-                    BigDecimal currentUnitPrice = materialCurrentStockMapperEx
-                            .getCurrentUnitPriceByMId(materialExtend.getMaterialId());
-                    currentUnitPrice = unitService.parseUnitPriceByUnit(currentUnitPrice, unitInfo,
-                            depotItem.getMaterialUnit());
-                    BigDecimal unitPrice = moveAvgPriceFlag ? currentUnitPrice : materialExtend.getPurchaseDecimal();
-                    depotItem.setPurchaseUnitPrice(unitPrice);
-                    if (StringUtil.isNotEmpty(depotItem.getBatchNumber())) {
-                        depotItem.setPurchaseUnitPrice(
-                                getDepotItemByBatchNumber(depotItem.getMaterialExtendId(), depotItem.getBatchNumber())
-                                        .getUnitPrice());
-                    }
-                }
+                // 性能优化
+                // if (BusinessConstants.SUB_TYPE_SALES.equals(depotHead.getSubType()) ||
+                // BusinessConstants.SUB_TYPE_SALES_RETURN.equals(depotHead.getSubType()) ||
+                // BusinessConstants.SUB_TYPE_RETAIL.equals(depotHead.getSubType()) ||
+                // BusinessConstants.SUB_TYPE_RETAIL_RETURN.equals(depotHead.getSubType())) {
+                // boolean moveAvgPriceFlag = systemConfigService.getMoveAvgPriceFlag();
+                // BigDecimal currentUnitPrice = materialCurrentStockMapperEx
+                // .getCurrentUnitPriceByMId(materialExtend.getMaterialId());
+                // currentUnitPrice = unitService.parseUnitPriceByUnit(currentUnitPrice,
+                // unitInfo,
+                // depotItem.getMaterialUnit());
+                // BigDecimal unitPrice = moveAvgPriceFlag ? currentUnitPrice :
+                // materialExtend.getPurchaseDecimal();
+                // depotItem.setPurchaseUnitPrice(unitPrice);
+                // if (StringUtil.isNotEmpty(depotItem.getBatchNumber())) {
+                // depotItem.setPurchaseUnitPrice(
+                // getDepotItemByBatchNumber(depotItem.getMaterialExtendId(),
+                // depotItem.getBatchNumber())
+                // .getUnitPrice());
+                // }
+                // }
                 if (StringUtil.isExist(rowObj.get("taxUnitPrice"))) {
                     depotItem.setTaxUnitPrice(rowObj.getBigDecimal("taxUnitPrice"));
                 }
