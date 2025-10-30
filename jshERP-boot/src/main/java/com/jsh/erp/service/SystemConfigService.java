@@ -528,15 +528,16 @@ public class SystemConfigService {
      * @throws Exception
      */
     public boolean getMinusStockFlag() throws Exception {
-        boolean minusStockFlag = false;
-        List<SystemConfig> list = getSystemConfig();
-        if (list.size() > 0) {
-            String flag = list.get(0).getMinusStockFlag();
-            if (("1").equals(flag)) {
-                minusStockFlag = true;
-            }
-        }
-        return minusStockFlag;
+        return true;
+        // boolean minusStockFlag = false;
+        // List<SystemConfig> list = getSystemConfig();
+        // if (list.size() > 0) {
+        // String flag = list.get(0).getMinusStockFlag();
+        // if (("1").equals(flag)) {
+        // minusStockFlag = true;
+        // }
+        // }
+        // return minusStockFlag;
     }
 
     /**
