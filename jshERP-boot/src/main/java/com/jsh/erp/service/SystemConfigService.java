@@ -38,11 +38,8 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.file.*;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Date;
 import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 
 @Service
 public class SystemConfigService {
@@ -66,9 +63,6 @@ public class SystemConfigService {
     private String filePath;
 
     private static String DELETED = "deleted";
-    private static final Long DEFAULT_TENANT_CACHE_KEY = -1L;
-
-    private final ConcurrentMap<Long, List<SystemConfig>> systemConfigCache = new ConcurrentHashMap<>();
 
     public SystemConfig getSystemConfig(long id) throws Exception {
         SystemConfig result = null;
@@ -81,42 +75,6 @@ public class SystemConfigService {
     }
 
     public List<SystemConfig> getSystemConfig() throws Exception {
-        Long cacheKey = resolveTenantCacheKey();
-        try {
-            return new ArrayList<>(getCachedSystemConfigSnapshot(cacheKey));
-        } catch (Exception e) {
-            logger.debug("systemConfig cache read failed, fallback to direct query", e);
-            List<SystemConfig> fallbackList = loadSystemConfigFromDb();
-            overwriteSystemConfigCache(cacheKey, fallbackList);
-            return new ArrayList<>(fallbackList);
-        }
-    }
-
-    private Long resolveTenantCacheKey() {
-        try {
-            User currentUser = userService.getCurrentUser();
-            if (currentUser != null && currentUser.getTenantId() != null) {
-                return currentUser.getTenantId();
-            }
-        } catch (Exception e) {
-            logger.debug("resolveTenantCacheKey failed, fallback to default tenant key", e);
-        }
-        return DEFAULT_TENANT_CACHE_KEY;
-    }
-
-    private List<SystemConfig> getCachedSystemConfigSnapshot(Long cacheKey) throws Exception {
-        List<SystemConfig> cached = systemConfigCache.get(cacheKey);
-        if (cached != null) {
-            return cached;
-        }
-        List<SystemConfig> loaded = loadSystemConfigFromDb();
-        List<SystemConfig> immutableSnapshot = Collections
-                .unmodifiableList(new ArrayList<>(loaded == null ? Collections.emptyList() : loaded));
-        List<SystemConfig> previous = systemConfigCache.putIfAbsent(cacheKey, immutableSnapshot);
-        return previous != null ? previous : immutableSnapshot;
-    }
-
-    private List<SystemConfig> loadSystemConfigFromDb() throws Exception {
         SystemConfigExample example = new SystemConfigExample();
         example.createCriteria().andDeleteFlagNotEqualTo(BusinessConstants.DELETE_FLAG_DELETED);
         List<SystemConfig> list = null;
@@ -125,31 +83,7 @@ public class SystemConfigService {
         } catch (Exception e) {
             JshException.readFail(logger, e);
         }
-        if (list == null) {
-            list = new ArrayList<>();
-        }
         return list;
-    }
-
-    private void overwriteSystemConfigCache(Long cacheKey, List<SystemConfig> latest) {
-        if (cacheKey == null) {
-            cacheKey = DEFAULT_TENANT_CACHE_KEY;
-        }
-        List<SystemConfig> snapshot = latest == null ? Collections.emptyList() : latest;
-        systemConfigCache.put(cacheKey,
-                Collections.unmodifiableList(new ArrayList<>(snapshot)));
-    }
-
-    private void refreshSystemConfigCacheForCurrentTenant() {
-        Long cacheKey = resolveTenantCacheKey();
-        try {
-            List<SystemConfig> latest = loadSystemConfigFromDb();
-            overwriteSystemConfigCache(cacheKey, latest);
-            logger.debug("SystemConfig cache refreshed for tenantId={}", cacheKey);
-        } catch (Exception e) {
-            systemConfigCache.remove(cacheKey);
-            logger.warn("Failed to refresh SystemConfig cache for tenantId={}, cache cleared", cacheKey, e);
-        }
     }
 
     public List<SystemConfig> select(String companyName) throws Exception {
@@ -174,9 +108,6 @@ public class SystemConfigService {
             logService.insertLogWithUserId(userService.getCurrentUser().getId(),
                     userService.getCurrentUser().getTenantId(), "系统配置",
                     new StringBuffer(BusinessConstants.LOG_OPERATION_TYPE_ADD).append(logInfo).toString(), request);
-            if (result > 0) {
-                refreshSystemConfigCacheForCurrentTenant();
-            }
         } catch (Exception e) {
             JshException.writeFail(logger, e);
         }
@@ -194,9 +125,6 @@ public class SystemConfigService {
             logService.insertLogWithUserId(userService.getCurrentUser().getId(),
                     userService.getCurrentUser().getTenantId(), "系统配置",
                     new StringBuffer(BusinessConstants.LOG_OPERATION_TYPE_EDIT).append(logInfo).toString(), request);
-            if (result > 0) {
-                refreshSystemConfigCacheForCurrentTenant();
-            }
         } catch (Exception e) {
             JshException.writeFail(logger, e);
         }
@@ -224,9 +152,6 @@ public class SystemConfigService {
         try {
             result = systemConfigMapperEx.batchDeleteSystemConfigByIds(new Date(),
                     userInfo == null ? null : userInfo.getId(), idArray);
-            if (result > 0) {
-                refreshSystemConfigCacheForCurrentTenant();
-            }
         } catch (Exception e) {
             JshException.writeFail(logger, e);
         }
@@ -657,15 +582,8 @@ public class SystemConfigService {
      * @throws Exception
      */
     public boolean getForceApprovalFlag() throws Exception {
-        boolean forceApprovalFlag = false;
-        List<SystemConfig> list = getSystemConfig();
-        if (list.size() > 0) {
-            String flag = list.get(0).getForceApprovalFlag();
-            if (("1").equals(flag)) {
-                forceApprovalFlag = true;
-            }
-        }
-        return forceApprovalFlag;
+        // 强制审核开关已固定为关闭，避免额外数据库查询
+        return true;
     }
 
     /**
