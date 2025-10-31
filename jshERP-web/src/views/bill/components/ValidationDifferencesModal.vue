@@ -497,38 +497,39 @@ export default {
       const allQuantities = Object.values(userQuantities)
       const currentQuantity = userQuantities[user]
       
-      if (currentQuantity === undefined || allQuantities.length <= 1) {
-        const priceOnlyInconsistent = this.checkPriceInconsistency(record, user)
-        return priceOnlyInconsistent
-          ? {
-              backgroundColor: '#ffebee',
-              color: '#c62828',
-              fontWeight: 'bold',
-              borderRadius: '4px',
-              border: '1px solid #ffcdd2'
-            }
-          : {}
+      const baseStyle = {
+        backgroundColor: 'transparent'
       }
 
-      // 检查数量是否不一致
+      const priceOnlyInconsistent = this.checkPriceInconsistency(record, user)
+
+      if (currentQuantity === undefined || allQuantities.length <= 1) {
+        if (priceOnlyInconsistent) {
+          return Object.assign({}, baseStyle, {
+            backgroundColor: '#ffebee',
+            fontWeight: 'bold',
+            borderRadius: '4px',
+            border: '1px solid #ffcdd2'
+          })
+        }
+        return baseStyle
+      }
+
       const quantityInconsistent = allQuantities.some(q => 
         Math.floor(parseFloat(q || 0)) !== Math.floor(parseFloat(currentQuantity || 0))
       )
-      
-      // 检查单价是否不一致
-      const priceInconsistent = this.checkPriceInconsistency(record, user)
+      const priceInconsistent = priceOnlyInconsistent
 
       if (quantityInconsistent || priceInconsistent) {
-        return {
+        return Object.assign({}, baseStyle, {
           backgroundColor: '#ffebee',
-          color: '#c62828',
           fontWeight: 'bold',
           borderRadius: '4px',
           border: '1px solid #ffcdd2'
-        }
+        })
       }
       
-      return {}
+      return baseStyle
     },
     
     checkPriceInconsistency(record, user) {
@@ -614,6 +615,7 @@ export default {
   font-size: 12px;
   line-height: 1.5;
   text-align: left;
+  color: #333;
 }
 
 .detail-line {
@@ -638,11 +640,11 @@ export default {
   font-weight: 600;
 }
 
-.detail-quantity-match {
+:deep(.detail-quantity-match) {
   color: #2e7d32;
 }
 
-.detail-quantity-unmatch {
+:deep(.detail-quantity-unmatch) {
   color: #c62828;
 }
 
