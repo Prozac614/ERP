@@ -45,6 +45,7 @@ export default {
       validationDate: null,
       type: null,
       subType: null,
+      shopNames: [],
       columns: [
         {
           title: '用户名',
@@ -72,7 +73,7 @@ export default {
     }
   },
   methods: {
-    show(data, validationDate, type = null, subType = null) {
+    show(data, validationDate, type = null, subType = null, shopNames = []) {
       this.visible = true
       this.userList = data.otherUsers || []
       this.currentUserIds = data.currentUserIds || []
@@ -80,6 +81,7 @@ export default {
       this.validationDate = validationDate
       this.type = type
       this.subType = subType
+      this.shopNames = Array.isArray(shopNames) ? shopNames : []
     },
     
     handleOk() {
@@ -100,8 +102,7 @@ export default {
         validationDate: this.validationDate,
         type: requestType,
         subType: requestSubType,
-        // 前端当前未做自定义店铺选择，多选默认全选：传空数组表示后端按“全部店铺”处理
-        shopNames: []
+        shopNames: Array.isArray(this.shopNames) ? this.shopNames : []
       }
       
       postAction('/depotHead/performCrossValidation', request).then((res) => {
@@ -124,6 +125,7 @@ export default {
       this.userList = []
       this.currentUserIds = []
       this.validationDate = null
+      this.shopNames = []
     },
     
     onSelectChange(selectedRowKeys) {

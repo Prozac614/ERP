@@ -252,6 +252,20 @@
               style="width: 100%"
             />
           </div>
+          <a-form-item label="选择店铺">
+            <a-select
+              mode="multiple"
+              v-model="selectedValidationShops"
+              placeholder="请选择店铺"
+              style="width: 100%"
+              allow-clear
+              :maxTagCount="3"
+            >
+              <a-select-option v-for="(name, idx) in shopList" :key="idx" :value="name">
+                {{ name }}
+              </a-select-option>
+            </a-select>
+          </a-form-item>
         </a-modal>
       </a-card>
     </a-col>
@@ -309,6 +323,7 @@
         // 交叉验证日期选择
         validationDateVisible: false,
         selectedValidationDate: null,
+        selectedValidationShops: [],
         labelCol: {
           span: 5
         },
@@ -423,21 +438,21 @@
           }
         });
       },
-      handleValidation(validationDate) {
+      handleValidation(validationDate, selectedShops) {
         // 执行校验逻辑
         this.loading = true;
         const requestData = {
           validationDate: validationDate,
           type: '出库',
           subType: '销售',
-          shopNames: this.shopList && this.shopList.length ? JSON.stringify(this.shopList) : "[]"
+          shopNames: selectedShops && selectedShops.length ? JSON.stringify(selectedShops) : "[]"
         };
         postAction('/depotHead/checkTodayUsers', requestData).then((res) => {
           console.log('checkTodayUsers响应:', res);
           if(res.code === 200) {
             if(res.data.hasOtherUsers) {
               // 有其他用户，显示用户选择界面
-              this.showUserSelectionModal(res.data, validationDate, '出库', '销售');
+              this.showUserSelectionModal(res.data, validationDate, '出库', '销售', selectedShops);
             } else {
               this.$message.error("校验失败：" + validationDate + " 没有其他用户保存销售出库单据！");
             }
@@ -452,15 +467,16 @@
         });
       },
       
-      showUserSelectionModal(data, validationDate) {
+      showUserSelectionModal(data, validationDate, type = '出库', subType = '销售', shopNames = []) {
         // 显示用户选择界面
-        this.$refs.userSelectionModal.show(data, validationDate);
+        this.$refs.userSelectionModal.show(data, validationDate, type, subType, shopNames);
       },
       
       showDateSelector() {
         // 显示日期选择器
         console.log('showDateSelector 被调用');
         this.selectedValidationDate = moment().format('YYYY-MM-DD'); // 默认选择今天
+        this.selectedValidationShops = [];
         this.validationDateVisible = true;
         console.log('validationDateVisible 设置为:', this.validationDateVisible);
         console.log('selectedValidationDate 设置为:', this.selectedValidationDate);
@@ -471,14 +487,19 @@
           this.$message.warning('请选择校验日期！');
           return;
         }
+        if (!this.selectedValidationShops || this.selectedValidationShops.length === 0) {
+          this.$message.warning('请选择需要校验的店铺！');
+          return;
+        }
         console.log('确认选择的日期:', this.selectedValidationDate);
         this.validationDateVisible = false;
-        this.handleValidation(this.selectedValidationDate);
+        this.handleValidation(this.selectedValidationDate, this.selectedValidationShops);
       },
       
       handleDateCancel() {
         this.validationDateVisible = false;
         this.selectedValidationDate = null;
+        this.selectedValidationShops = [];
       },
       
       showValidationDifferences(differences) {
