@@ -37,6 +37,24 @@
           </template>
         </div>
       </a-col>
+      <a-col v-if="hasBarCodeColumn" style="flex: 0 0 auto;">
+        <div class="filter-bar">
+          <div class="filter-select">
+            <j-select-list
+              :disabled="loading"
+              :multi="false"
+              kind="material"
+              :rows="getFilterSelectedRow()"
+              :value="barCodeFilterInput"
+            :allowClear="true"
+            :width="barCodeFilterWidth"
+              placeholder="搜索唛头"
+              @change="handleBarCodeFilterChange"
+            />
+          </div>
+          
+        </div>
+      </a-col>
       <a-col>
         <slot name="buttonAfter" :target="getVM()"/>
       </a-col>
@@ -93,7 +111,7 @@
           <!-- 扩展高度 -->
           <div class="tr-expand" :style="`height:${getExpandHeight}px; z-index:${loading?'11':'9'};`"></div>
           <!-- 无数据时显示 -->
-          <div v-if="rows.length===0" class="tr-nodata">
+          <div v-if="activeRowCount===0" class="tr-nodata">
             <span>暂无数据</span>
           </div>
           <!-- v-model="rows"-->
@@ -108,15 +126,12 @@
             <template v-for="(row,rowIndex) in rows">
               <!-- tr 如果超出200条，则只加载可见的和预加载的总共十条数据 -->
               <div
-                v-if="rows.length<=200 ||
-                (rows.length>200 &&
-                rowIndex >= parseInt(`${(scrollTop-rowHeight) / rowHeight}`) &&
-                  (parseInt(`${scrollTop / rowHeight}`) + 9) > rowIndex)"
+                v-if="shouldRenderRow(rowIndex)"
                 :id="`${caseId}tbody-tr-${rowIndex}`"
                 :data-idx="rowIndex"
                 class="tr"
                 :class="selectedRowIds.indexOf(row.id) !== -1 ? 'tr-checked' : ''"
-                :style="buildTrStyle(rowIndex)"
+                :style="buildTrStyle(getDisplayIndex(rowIndex))"
                 :key="row.id">
                 <!-- 左侧固定td  -->
 
@@ -139,7 +154,7 @@
                 <div v-if="dragSortAndNumber" class="td td-ds" :style="style.tdLeftDs">
                   <a-dropdown :trigger="['click']" :getPopupContainer="getParentContainer">
                     <div class="td-ds-icons" title="点击不放可以拖动" style="text-align: center; line-height: 32px">
-                      <span>{{ rowIndex+1 }}</span>
+                      <span>{{ getDisplayIndex(rowIndex) + 1 }}</span>
                     </div>
 
                     <a-menu slot="overlay">
@@ -153,12 +168,12 @@
 
                 <div v-if="dragToInsert" class="td td-ds drag-handle" :style="style.tdLeftDs">
                   <div class="td-ds-icons" title="拖拽到下方新增行" style="text-align: center; line-height: 32px; cursor: move;">
-                    <span>{{ rowIndex+1 }}</span>
+                    <span>{{ getDisplayIndex(rowIndex) + 1 }}</span>
                   </div>
                 </div>
 
                 <div v-if="rowNumber" class="td td-num" :style="style.tdLeft">
-                  <span>{{ rowIndex+1 }}</span>
+                  <span>{{ getDisplayIndex(rowIndex) + 1 }}</span>
                 </div>
 
                 <div v-if="rowSelection" class="td td-cb" :style="style.tdLeft">
@@ -773,7 +788,7 @@
             v-if="showStatisticsRow"
             class="tr"
             :style="{
-              ...buildTrStyle(rows.length),
+              ...buildTrStyle(activeRowCount),
               height: '32px'
             }"
           >
@@ -924,6 +939,7 @@
     },
     data() {
       return {
+        defaultBarCodeFilterWidth: 300,
         // 是否首次运行
         isFirst: true,
         // 当前实例是否是行编辑
@@ -997,6 +1013,12 @@
         statisticsColumns: {},
         // 只有在行编辑被销毁时才主动清空GroupRequest的内存
         destroyCleanGroupRequest: false,
+        // 当前可见行序列，存储行在rows中的下标
+        visibleRowOrder: [],
+        // 唛头筛选值
+        barCodeFilter: '',
+        // 输入框绑定值
+        barCodeFilterInput: '',
       }
     },
     created() {
@@ -1007,9 +1029,54 @@
     },
     // 计算属性
     computed: {
+      activeRowCount() {
+        if (!this.rows || this.rows.length === 0) {
+          return 0
+        }
+        if (this.barCodeFilter && this.visibleRowOrder) {
+          return this.visibleRowOrder.length
+        }
+        if (this.visibleRowOrder && this.visibleRowOrder.length > 0) {
+          return this.visibleRowOrder.length
+        }
+        return this.rows.length
+      },
+      hasBarCodeColumn() {
+        if (!(this.columns instanceof Array)) {
+          return false
+        }
+        return this.columns.some(column => column && column.key === 'barCode')
+      },
+      barCodeFilterWidth() {
+        if (!this.columns || !(this.columns instanceof Array)) {
+          return `${this.defaultBarCodeFilterWidth}px`
+        }
+        const barCodeColumn = this.columns.find(column => column && column.key === 'barCode') || {}
+        const { filterWidth } = barCodeColumn
+        if (filterWidth || filterWidth === 0) {
+          if (typeof filterWidth === 'number') {
+            return `${filterWidth}px`
+          }
+          return filterWidth
+        }
+        return `${this.defaultBarCodeFilterWidth}px`
+      },
+      displayIndexMap() {
+        let map = {}
+        if (this.visibleRowOrder && this.visibleRowOrder.length > 0) {
+          this.visibleRowOrder.forEach((rowIdx, displayIdx) => {
+            map[rowIdx] = displayIdx
+          })
+        } else if (this.rows && this.rows.length > 0 && !this.barCodeFilter) {
+          this.rows.forEach((row, idx) => {
+            map[idx] = idx
+          })
+        }
+        return map
+      },
       // expandHeight = rows.length * rowHeight
       getExpandHeight() {
-        let length = this.rows.length * this.rowHeight
+        let length = this.activeRowCount * this.rowHeight
         if (this.showStatisticsRow) {
           length += 34
         }
@@ -1017,29 +1084,31 @@
       },
       // 是否显示统计行
       showStatisticsRow() {
-        return this.hasStatisticsColumn && this.rows.length > 0
+        return this.hasStatisticsColumn && this.activeRowCount > 0
       },
       // 获取是否选择了部分
       getSelectIndeterminate() {
-        return (this.selectedRowIds.length > 0 &&
-          this.selectedRowIds.length < this.rows.length)
+        let activeIds = this.getActiveRowIdList()
+        if (activeIds.length === 0) {
+          return false
+        }
+        let selectedCount = this.selectedRowIds.filter(id => activeIds.includes(id)).length
+        return selectedCount > 0 && selectedCount < activeIds.length
       },
       // 获取是否选择了全部
       getSelectAll() {
-        return (this.selectedRowIds.length === this.rows.length) && this.rows.length > 0
+        let activeIds = this.getActiveRowIdList()
+        if (activeIds.length === 0) {
+          return false
+        }
+        let selectedCount = this.selectedRowIds.filter(id => activeIds.includes(id)).length
+        return selectedCount === activeIds.length
       },
       tbodyStyle() {
         let style = Object.assign({}, this.style.tbody)
         // style['max-height'] = `${this.maxHeight}px`
         style['width'] = this.realTrWidth
         return style
-      },
-      showClearSelectButton() {
-        let count = 0
-        for (let key in this.disabledRows) {
-          if (this.disabledRows.hasOwnProperty(key)) count++
-        }
-        return count > 0
       },
       accessToken() {
         return Vue.ls.get(ACCESS_TOKEN)
@@ -1074,15 +1143,9 @@
       rows: {
         immediate: true,
         handler(val, old) {
-          // val.forEach(item => {
-          //   for (let inputValue of  this.inputValues) {
-          //     if (inputValue.id === item.id) {
-          //       item['dbFieldName'] = inputValue['dbFieldName']
-          //       break
-          //     }
-          //   }
-          // })
-          // console.log('watch.rows:', cloneObject({ val, old }))
+          this.$nextTick(() => {
+            this.recalculateVisibleRows()
+          })
         }
       },
       dataSource: {
@@ -1123,6 +1186,11 @@
       // 当selectRowIds改变时触发事件
       selectedRowIds(newValue) {
         this.$emit('selectRowChange', cloneObject(newValue).map(i => this.getCleanId(i)))
+      },
+      barCodeFilterInput(val) {
+        if (!val && this.barCodeFilter) {
+          this.applyBarCodeFilter('')
+        }
       }
     },
     mounted() {
@@ -1168,6 +1236,132 @@
         })
       },
 
+      getActiveRowIndices() {
+        if (!this.rows || this.rows.length === 0) {
+          return []
+        }
+        if (this.barCodeFilter) {
+          return this.visibleRowOrder.slice()
+        }
+        if (this.visibleRowOrder && this.visibleRowOrder.length > 0) {
+          return this.visibleRowOrder.slice()
+        }
+        return this.rows.map((row, idx) => idx)
+      },
+
+      getRowBarCode(idx) {
+        let row = this.rows[idx]
+        if (!row) {
+          return ''
+        }
+        let rawValue = ''
+        let popupKey = `barCode${row.id}`
+        if (this.popupJshValues && this.popupJshValues.hasOwnProperty(popupKey)) {
+          rawValue = this.popupJshValues[popupKey]
+        } else if (this.inputValues[idx] && this.inputValues[idx].hasOwnProperty('barCode')) {
+          rawValue = this.inputValues[idx]['barCode']
+        }
+        if (rawValue == null) {
+          return ''
+        }
+        if (rawValue instanceof Array) {
+          return rawValue.join(',')
+        }
+        return rawValue.toString()
+      },
+
+      getActiveRowIdList() {
+        let indices = this.getActiveRowIndices()
+        return indices.map(idx => (this.rows[idx] || {}).id).filter(id => !!id)
+      },
+
+      getFilterSelectedRow() {
+        if (!this.barCodeFilter) {
+          return ''
+        }
+        if (this.visibleRowOrder.length === 0) {
+          return ''
+        }
+        let idx = this.visibleRowOrder[0]
+        let row = this.rows[idx]
+        if (!row) {
+          return ''
+        }
+        let barCode = this.getRowBarCode(idx)
+        return barCode ? JSON.stringify({ barCode, id: this.getCleanId(row.id) }) : ''
+      },
+
+      getDisplayIndex(rowIndex) {
+        let displayIndex = this.displayIndexMap[rowIndex]
+        return typeof displayIndex === 'number' ? displayIndex : -1
+      },
+
+      shouldRenderRow(rowIndex) {
+        let displayIndex = this.getDisplayIndex(rowIndex)
+        if (displayIndex < 0) {
+          return false
+        }
+        let activeCount = this.activeRowCount
+        if (activeCount <= 200) {
+          return true
+        }
+        let start = parseInt(`${(this.scrollTop - this.rowHeight) / this.rowHeight}`)
+        if (isNaN(start) || start < 0) {
+          start = 0
+        }
+        let end = parseInt(`${this.scrollTop / this.rowHeight}`) + 9
+        return displayIndex >= start && end > displayIndex
+      },
+
+      applyBarCodeFilter(value) {
+        let target = (value || '').toString().trim()
+        this.barCodeFilter = target
+        this.barCodeFilterInput = target
+        this.recalculateVisibleRows({ resetScroll: true })
+        this.$nextTick(() => {
+          this.forceUpdateFormValues()
+        })
+      },
+
+      handleBarCodeFilterChange(value) {
+        if (value == null) {
+          this.applyBarCodeFilter('')
+        } else {
+          this.applyBarCodeFilter(value)
+        }
+      },
+
+      filterByBarCode(value) {
+        this.applyBarCodeFilter(value)
+      },
+
+      recalculateVisibleRows({ resetScroll = false } = {}) {
+        if (!(this.rows instanceof Array)) {
+          this.visibleRowOrder = []
+          this.recalcAllStatisticsColumns()
+          return
+        }
+        let filterVal = (this.barCodeFilter || '').toString().trim()
+        let filterLower = filterVal.toLowerCase()
+        let order = []
+        this.rows.forEach((row, idx) => {
+          if (!filterVal) {
+            order.push(idx)
+          } else {
+            let value = this.getRowBarCode(idx).toLowerCase().trim()
+            if (value && value === filterLower) {
+              order.push(idx)
+            }
+          }
+        })
+        this.visibleRowOrder = order
+        this.recalcAllStatisticsColumns()
+        if (resetScroll) {
+          this.scrollTop = 0
+          this.resetScrollTop(0)
+        }
+      },
+
       /** 初始化列表 */
       initialize() {
         this.visibleTrEls = []
@@ -1201,6 +1395,9 @@
           this.multiSelectValues = []
           this.searchSelectValues = []
           this.scrollTop = 0
+          this.visibleRowOrder = []
+          this.barCodeFilter = ''
+          this.barCodeFilterInput = ''
           this.$nextTick(() => {
             this.getElement('tbody').scrollTop = 0
           })
@@ -1217,6 +1414,9 @@
       /** 重置滚动条位置，参数留空则滚动到上次记录的位置 */
       resetScrollTop(top) {
         let { scrollView } = this.$refs
+        if (!scrollView) {
+          return
+        }
         if (top != null && typeof top === 'number') {
           scrollView.scrollTop = top
         } else {
@@ -2127,8 +2327,14 @@
         if (this.hasStatisticsColumn) {
           if (this.statisticsColumns.hasOwnProperty(key)) {
             // 计算合计值
+            let indices = this.getActiveRowIndices()
+            if (indices.length === 0) {
+              this.statisticsColumns[key] = '0.00'
+              return
+            }
             let count = 0
-            this.inputValues.forEach(item => {
+            for (let idx of indices) {
+              let item = this.inputValues[idx] || {}
               let value = item[key]
               if (value && count !== '-') {
                 try {
@@ -2137,8 +2343,8 @@
                   count = '-'
                 }
               }
-            })
-            this.statisticsColumns[key] = count.toFixed(2)
+            }
+            this.statisticsColumns[key] = count === '-' ? '-' : Number(count).toFixed(2)
           }
         }
       },
@@ -2157,8 +2363,10 @@
       handleChangeCheckedAll() {
         let selectedRowIds = []
         if (!this.getSelectAll) {
-          this.rows.forEach(row => {
-            if ((this.disabledRowIds || []).indexOf(row.id) === -1) {
+          let activeRowIndices = this.getActiveRowIndices()
+          activeRowIndices.forEach(idx => {
+            let row = this.rows[idx]
+            if (row && (this.disabledRowIds || []).indexOf(row.id) === -1) {
               selectedRowIds.push(row.id)
             }
           })
@@ -2448,6 +2656,11 @@
 
         // 触发valueChange 事件
         this.elemValueChange(FormTypes.popupJsh, row, column, value)
+        if (column && column.key === 'barCode' && this.barCodeFilter) {
+          this.$nextTick(() => {
+            this.recalculateVisibleRows()
+          })
+        }
         // 如果是唛头(barCode)，选择完成后跳转到当前行数量(operNumber)
         if (column && column.key === 'barCode' && row && row.id) {
           this.$nextTick(() => {
@@ -2539,6 +2752,11 @@
           Object.assign(row, values[0])
         }
         this.$emit('valueChange', { type, row, column, value, target: this })
+        if (this.barCodeFilter && column.key === 'barCode') {
+          this.$nextTick(() => {
+            this.recalculateVisibleRows()
+          })
+        }
       },
 
       /** 获取干净的ID（不包含任何杂质的ID） */
@@ -3039,6 +3257,68 @@
       padding-left: 8px;
     }
 
+  }
+
+  .filter-bar {
+    margin: 0 0 8px 16px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 360px;
+    flex: 0 0 auto;
+
+    .filter-select {
+      flex: 0 0 320px;
+      min-width: 320px;
+
+      ::v-deep .ant-input-group {
+        display: flex !important;
+        align-items: center !important;
+        width: 100% !important;
+      }
+
+      ::v-deep .ant-select {
+        flex: 1 1 auto !important;
+        width: 100% !important;
+        min-width: 0 !important;
+      }
+
+      ::v-deep .ant-input-group > .ant-select {
+        flex: 1 1 auto !important;
+        width: 100% !important;
+        min-width: 0 !important;
+      }
+
+      ::v-deep .ant-input-group > .ant-btn,
+      ::v-deep .ant-input-group-addon,
+      ::v-deep .ant-btn,
+      ::v-deep .ant-select {
+        height: 32px !important;
+        line-height: 32px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+      }
+
+      ::v-deep .ant-input-group > .ant-btn {
+        padding: 0 8px;
+      }
+
+      ::v-deep .ant-select-selection {
+        width: 100% !important;
+        flex: 1 1 auto !important;
+        display: flex !important;
+        height: 32px !important;
+        line-height: 32px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+      }
+
+      ::v-deep .ant-select-selection__rendered {
+        flex: 1 1 auto !important;
+        width: 100% !important;
+        line-height: 30px !important;
+      }
+    }
   }
 
   /* 设定边框参数 */

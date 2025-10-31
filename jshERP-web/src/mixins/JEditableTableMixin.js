@@ -66,9 +66,11 @@ export const JEditableTableMixin = {
       if (typeof this.editBefore === 'function') this.editBefore(record)
       this.visible = true
       this.activeKey = this.refKeys[0]
-      this.form.resetFields()
       this.model = Object.assign({}, record)
-      if (typeof this.editAfter === 'function') this.editAfter(this.model)
+      this.$nextTick(() => {
+        this.form.resetFields()
+        if (typeof this.editAfter === 'function') this.editAfter(this.model)
+      })
     },
     /** 关闭弹窗，并将所有JEditableTable实例回归到初始状态 */
     close() {

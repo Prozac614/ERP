@@ -2,6 +2,7 @@
   <div>
     <a-input-group v-if="kind === 'material'" compact style="width:100%;top:0px">
       <a-select placeholder="输入唛头或名称" :dropdownMatchSelectWidth="false" showSearch :showArrow="false"
+                :allowClear="allowClear"
                 v-model="names" optionFilterProp="children" :style="searchWidth" notFoundContent="需在商品管理先新增才能使用"
                 @search="handleSearch" @change="handleChange">
         <div slot="dropdownRender" slot-scope="menu">
@@ -45,6 +46,15 @@
         type: String,
         required: false
       },
+      allowClear: {
+        type: Boolean,
+        default: false
+      },
+      width: {
+        type: [String, Number],
+        required: false,
+        default: ''
+      },
       disabled: {
         type: Boolean,
         required: false,
@@ -79,14 +89,17 @@
     watch: {
       value(val) {
         this.ids = val
-      }
-    },
-    created () {
-      const currentWidth = window.screen.width
-      if(currentWidth<1500) {
-        this.searchWidth = 'width:75%'
-      } else {
-        this.searchWidth = 'width:81%'
+      },
+      width: {
+        immediate: true,
+        handler(val) {
+          if (val || val === 0) {
+            this.searchWidth = `width:${typeof val === 'number' ? `${val}px` : val}`
+          } else {
+            const currentWidth = window.screen.width
+            this.searchWidth = currentWidth < 1500 ? 'width:75%' : 'width:81%'
+          }
+        }
       }
     },
     model: {
