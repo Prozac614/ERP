@@ -198,7 +198,7 @@ export default {
         this.matrixColumns.push({
           title: user,
           dataIndex: userColumnKey,
-          width: 240,
+          width: 320,
           align: 'left'
         })
       })
@@ -395,12 +395,12 @@ export default {
     },
     
     calculateModalWidth() {
-      // 基础宽度：店铺列(120px) + 商品信息列(220px) + 边距和滚动条(140px)
-      const baseWidth = 120 + 220 + 140
-      // 用户列宽度：每个用户列240px
-      const userColumnsWidth = this.allUsers.length * 240
-      // 计算总宽度
-      const totalWidth = baseWidth + userColumnsWidth
+      const basePadding = 140
+      const columnsWidth = this.matrixColumns.reduce((sum, column) => {
+        const width = column && column.width ? Number(column.width) : 200
+        return sum + width
+      }, 0)
+      const totalWidth = columnsWidth + basePadding
       
       // 设置最小宽度900px，最大宽度为屏幕宽度的90%
       const minWidth = 900
