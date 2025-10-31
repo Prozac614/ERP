@@ -25,28 +25,36 @@
         />
       </div>
       
-      <a-table
-        :columns="matrixColumns"
-        :data-source="matrixData"
-        :pagination="false"
-        row-key="materialKey"
-        size="small"
-        bordered
-        style="width: 100%; margin: 0 auto;"
-      >
-        <template slot="materialInfo" slot-scope="text, record">
-          <div style="font-weight: bold;">{{ record.materialBarCode }}</div>
-        </template>
-        
-        <!-- 动态渲染用户列 -->
-        <template v-for="(user, index) in allUsers">
-          <template :slot="`user_${index}`" slot-scope="text, record">
-            <div :key="`user_${index}`" :style="getDifferenceStyle(record, user, index)">
-              {{ formatUserData(record, user, index) }}
-            </div>
-          </template>
-        </template>
-      </a-table>
+      <div class="diff-table-wrapper">
+        <table class="diff-table">
+          <thead>
+            <tr>
+              <th v-for="column in matrixColumns" :key="column.dataIndex" :style="getHeaderStyle(column)">
+                {{ column.title }}
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in matrixData" :key="row.materialKey">
+              <td class="shop-cell" :style="getBodyCellStyle(0)">{{ row.shopName || '未指定商店' }}</td>
+              <td class="material-cell" :style="getBodyCellStyle(1)">
+                <div class="material-info">{{ row.materialBarCode }}</div>
+              </td>
+              <td
+                v-for="(user, index) in allUsers"
+                :key="`${row.materialKey}_${user}`"
+                :style="getBodyCellStyle(index + 2)"
+              >
+                <div
+                  class="detail-container"
+                  :style="getDifferenceStyle(row, user, index)"
+                  v-html="row[`user_${index}`]"
+                ></div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
       
       <div style="text-align: center; margin-top: 16px;">
         <a-button type="primary" @click="handleCancel">
@@ -132,7 +140,6 @@ export default {
         })
         userQuantities = normalizedQuantities
         const userBillDetails = this.normalizeUserDetails(diff.userBillDetails)
-        console.log('[ValidationDifferencesModal] normalized details for', materialKey, userBillDetails)
 
         if (Object.keys(userBillDetails).length > 0 && Object.keys(userQuantities).length === 0) {
           const quantitiesFromDetails = {}
@@ -160,7 +167,6 @@ export default {
         // 使用商品和商店的组合作为唯一键
         const shopKey = diff.shopName || ''
         const combinedKey = `${materialKey}_${shopKey}`
-        console.log('normalized details', userBillDetails)
         materialsData.set(combinedKey, {
           materialKey: combinedKey,
           materialName: diff.materialName || '未知商品',
@@ -176,14 +182,13 @@ export default {
           title: '销售店铺',
           dataIndex: 'shopName',
           width: 120,
-          align: 'center',
-          customRender: (text) => text || '未指定商店'
+          align: 'center'
         },
         {
           title: '商品信息',
           dataIndex: 'materialInfo',
           width: 220,
-          scopedSlots: { customRender: 'materialInfo' }
+          align: 'center'
         }
       ]
       this.allUsers.forEach((user, index) => {
@@ -192,8 +197,7 @@ export default {
           title: user,
           dataIndex: userColumnKey,
           width: 240,
-          align: 'center',
-          scopedSlots: { customRender: userColumnKey }
+          align: 'left'
         })
       })
       // 将Map转换为数组并排序
@@ -239,29 +243,124 @@ export default {
           __userQuantities: item.userQuantities,
           __userBillDetails: item.userBillDetails
         }
+
+        const quantityCounts = new Map()
+        const normalizedDetailsByUser = new Map()
+
+        this.allUsers.forEach(user => {
+          const rawDetails = (item.userBillDetails && item.userBillDetails[user]) || []
+          const normalizedList = rawDetails.map(detail => {
+            const source = detail && typeof detail === 'object' ? detail : {}
+            const billNumber = source.billNumber ? String(source.billNumber) : '-'
+            let displayQuantity = '-'
+            let numericQuantity = null
+            if (source.quantity !== undefined && source.quantity !== null) {
+              const parsedQuantity = parseFloat(source.quantity)
+              if (!isNaN(parsedQuantity)) {
+                numericQuantity = Math.floor(parsedQuantity)
+                displayQuantity = String(Math.floor(parsedQuantity))
+              } else {
+                displayQuantity = String(source.quantity)
+              }
+            }
+
+            if (numericQuantity !== null) {
+              if (!quantityCounts.has(numericQuantity)) {
+                quantityCounts.set(numericQuantity, new Map())
+              }
+              const perUserMap = quantityCounts.get(numericQuantity)
+              perUserMap.set(user, (perUserMap.get(user) || 0) + 1)
+            }
+
+            return {
+              billNumber,
+              displayQuantity,
+              numericQuantity,
+              matched: false
+            }
+          })
+
+          normalizedDetailsByUser.set(user, normalizedList)
+        })
+
+        const allocationByUser = new Map()
+        this.allUsers.forEach(user => {
+          allocationByUser.set(user, new Map())
+        })
+
+        quantityCounts.forEach((perUserMap, quantityValue) => {
+          const counts = Array.from(perUserMap.entries()).filter(([, count]) => count > 0)
+          if (counts.length < 2) {
+            counts.forEach(([user]) => {
+              allocationByUser.get(user).set(quantityValue, 0)
+            })
+            return
+          }
+
+          const total = counts.reduce((sum, [, count]) => sum + count, 0)
+          counts.forEach(([user, count]) => {
+            const totalOthers = total - count
+            const unmatched = Math.max(0, count - totalOthers)
+            const matched = count - unmatched
+            allocationByUser.get(user).set(quantityValue, matched)
+          })
+        })
+
         this.allUsers.forEach((user, index) => {
           const userColumnKey = `user_${index}`
-          const details = (item.userBillDetails && item.userBillDetails[user]) || []
-          if (details.length > 0) {
-            rowData[userColumnKey] = details.map(detail => {
-              let displayQuantity = '-'
-              if (detail && detail.quantity !== undefined && detail.quantity !== null) {
-                const numericQuantity = parseFloat(detail.quantity)
-                displayQuantity = isNaN(numericQuantity) ? String(detail.quantity) : Math.floor(numericQuantity)
+          const normalizedList = normalizedDetailsByUser.get(user) || []
+          if (normalizedList.length > 0) {
+            const allocationMap = allocationByUser.get(user) || new Map()
+            const processedList = normalizedList.map(detail => {
+              if (detail.numericQuantity !== null) {
+                const remaining = allocationMap.get(detail.numericQuantity) || 0
+                if (remaining > 0) {
+                  allocationMap.set(detail.numericQuantity, remaining - 1)
+                  return Object.assign({}, detail, { matched: true })
+                }
               }
-              const billNumber = detail && detail.billNumber ? detail.billNumber : '-'
-              return `单号: ${billNumber} 数量: ${displayQuantity}`
-            }).join('\n')
+              return detail
+            })
+            const htmlContent = processedList.map(detail => {
+              const classes = ['detail-line']
+              if (detail.matched) {
+                classes.push('detail-matched')
+              } else {
+                classes.push('detail-unmatched')
+              }
+              const billNumber = detail.billNumber || '-'
+              const quantity = detail.displayQuantity !== undefined ? String(detail.displayQuantity) : '-'
+              return `
+                <div class="${classes.join(' ')}">
+                  <span class="detail-label">单号:</span>
+                  <span class="detail-value">${billNumber}</span>
+                  <span class="detail-label"> 数量:</span>
+                  <span class="detail-quantity ${detail.matched ? 'detail-quantity-match' : 'detail-quantity-unmatch'}">${quantity}</span>
+                </div>
+              `
+            }).join('')
+            rowData[userColumnKey] = htmlContent || '<div class="detail-line detail-placeholder">-</div>'
           } else {
             const userQuantities = item.userQuantities || {}
             const quantity = userQuantities[user]
             if (quantity !== undefined && quantity !== null) {
-              rowData[userColumnKey] = Math.floor(parseFloat(quantity)).toString()
+              const parsedQuantity = parseFloat(quantity)
+              const numericQuantity = isNaN(parsedQuantity) ? null : Math.floor(parsedQuantity)
+              const displayQuantity = isNaN(parsedQuantity) ? String(quantity) : String(Math.floor(parsedQuantity))
+              rowData[userColumnKey] = `
+                <div class="detail-line">
+                  <span class="detail-label">单号:</span>
+                  <span class="detail-value">-</span>
+                  <span class="detail-label"> 数量:</span>
+                  <span class="detail-quantity detail-quantity-unmatch">${displayQuantity}</span>
+                </div>
+              `
             } else {
-              rowData[userColumnKey] = '-'
+              rowData[userColumnKey] = '<div class="detail-line detail-placeholder">-</div>'
             }
           }
         })
+
         return rowData
       })
       
@@ -282,6 +381,30 @@ export default {
       const maxWidth = Math.floor(window.innerWidth * 0.9)
       
       this.modalWidth = Math.max(minWidth, Math.min(totalWidth, maxWidth))
+    },
+
+    getHeaderStyle(column) {
+      const style = {}
+      if (column.width) {
+        style.width = `${column.width}px`
+        style.minWidth = `${column.width}px`
+      }
+      style.textAlign = column.align || 'center'
+      return style
+    },
+
+    getBodyCellStyle(columnIndex) {
+      const column = this.matrixColumns[columnIndex]
+      if (!column) {
+        return {}
+      }
+      const style = {}
+      if (column.width) {
+        style.width = `${column.width}px`
+        style.minWidth = `${column.width}px`
+      }
+      style.textAlign = column.align || (columnIndex <= 1 ? 'center' : 'left')
+      return style
     },
     
     extractUserQuantities(description) {
@@ -369,20 +492,24 @@ export default {
       }, {})
     },
     
-    formatUserData(record, user, index) {
-      const userColumnKey = `user_${index}`
-      return record[userColumnKey] || '-'
-    },
-    
     getDifferenceStyle(record, user, index) {
       const userQuantities = record.__userQuantities || {}
       const allQuantities = Object.values(userQuantities)
       const currentQuantity = userQuantities[user]
       
       if (currentQuantity === undefined || allQuantities.length <= 1) {
-        return {}
+        const priceOnlyInconsistent = this.checkPriceInconsistency(record, user)
+        return priceOnlyInconsistent
+          ? {
+              backgroundColor: '#ffebee',
+              color: '#c62828',
+              fontWeight: 'bold',
+              borderRadius: '4px',
+              border: '1px solid #ffcdd2'
+            }
+          : {}
       }
-      
+
       // 检查数量是否不一致
       const quantityInconsistent = allQuantities.some(q => 
         Math.floor(parseFloat(q || 0)) !== Math.floor(parseFloat(currentQuantity || 0))
@@ -391,26 +518,17 @@ export default {
       // 检查单价是否不一致
       const priceInconsistent = this.checkPriceInconsistency(record, user)
 
-      const baseStyle = {
-        padding: '6px 8px',
-        whiteSpace: 'pre-wrap',
-        maxHeight: '160px',
-        overflowY: 'auto',
-        display: 'block',
-        textAlign: 'left'
-      }
-      
       if (quantityInconsistent || priceInconsistent) {
-        return Object.assign({}, baseStyle, {
+        return {
           backgroundColor: '#ffebee',
           color: '#c62828',
           fontWeight: 'bold',
           borderRadius: '4px',
           border: '1px solid #ffcdd2'
-        })
+        }
       }
       
-      return baseStyle
+      return {}
     },
     
     checkPriceInconsistency(record, user) {
@@ -432,39 +550,106 @@ export default {
 </script>
 
 <style scoped>
-.ant-table-tbody > tr > td {
-  padding: 4px 8px;
-  vertical-align: top;
+.diff-table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid #f0f0f0;
+  border-radius: 4px;
 }
 
-.ant-table-thead > tr > th {
+.diff-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  background: #fff;
+}
+
+.diff-table thead th {
   background-color: #fafafa;
   font-weight: 600;
   text-align: center;
-  padding: 8px 4px;
+  padding: 10px 8px;
+  border-bottom: 1px solid #e9e9e9;
+  border-right: 1px solid #f0f0f0;
+  font-size: 13px;
 }
 
-.ant-table-tbody > tr > td > div {
+.diff-table tbody td {
+  padding: 6px 8px;
+  border-bottom: 1px solid #f5f5f5;
+  border-right: 1px solid #f5f5f5;
+  vertical-align: top;
+  background: #fff;
+}
+
+.diff-table tbody tr:nth-child(even) td {
+  background: #fcfcfc;
+}
+
+.diff-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.shop-cell {
+  font-weight: 500;
+  color: #1890ff;
+  background-color: #f0f7ff;
+  text-align: center;
+}
+
+.material-cell {
+  text-align: center;
+}
+
+.material-info {
+  font-weight: 600;
+  color: #333;
+}
+
+.detail-container {
   min-height: 40px;
-  display: block;
+  padding: 6px 8px;
+  max-height: 200px;
+  overflow-y: auto;
   font-size: 12px;
   line-height: 1.5;
   text-align: left;
 }
 
-/* 店铺列样式 */
-.ant-table-tbody > tr > td:first-child {
-  font-weight: 500;
-  color: #1890ff;
-  background-color: #f0f7ff;
+.detail-line {
+  display: block;
+  margin-bottom: 4px;
+  color: #333;
 }
 
-/* 保证表格内容正确对齐 */
-.ant-table-small .ant-table-tbody > tr > td {
-  padding: 4px;
+.detail-line:last-child {
+  margin-bottom: 0;
 }
 
-/* 突出显示差异的样式增强 */
+.detail-label {
+  color: #666;
+}
+
+.detail-value {
+  margin-right: 6px;
+}
+
+.detail-quantity {
+  font-weight: 600;
+}
+
+.detail-quantity-match {
+  color: #2e7d32;
+}
+
+.detail-quantity-unmatch {
+  color: #c62828;
+}
+
+.detail-placeholder {
+  color: #999;
+}
+
 .difference-highlight {
   background: linear-gradient(135deg, #ffebee 0%, #fce4ec 100%);
   box-shadow: 0 1px 3px rgba(198, 40, 40, 0.2);
