@@ -35,10 +35,7 @@
         style="width: 100%; margin: 0 auto;"
       >
         <template slot="materialInfo" slot-scope="text, record">
-          <div>
-            <div style="font-weight: bold;">{{ record.materialName }}</div>
-            <div style="font-size: 12px; color: #666;">{{ record.materialBarCode }}</div>
-          </div>
+          <div style="font-weight: bold;">{{ record.materialBarCode }}</div>
         </template>
         
         <!-- 动态渲染用户列 -->
@@ -70,7 +67,7 @@ export default {
       matrixData: [],
       matrixColumns: [],
       allUsers: [],
-      modalWidth: 600
+      modalWidth: 900
     }
   },
   created() {
@@ -90,7 +87,7 @@ export default {
       this.matrixData = []
       this.matrixColumns = []
       this.allUsers = []
-      this.modalWidth = 600
+      this.modalWidth = 900
     },
 
     getAlertDescription() {
@@ -185,7 +182,7 @@ export default {
         {
           title: '商品信息',
           dataIndex: 'materialInfo',
-          width: 160,
+          width: 220,
           scopedSlots: { customRender: 'materialInfo' }
         }
       ]
@@ -194,7 +191,7 @@ export default {
         this.matrixColumns.push({
           title: user,
           dataIndex: userColumnKey,
-          width: 150,
+          width: 240,
           align: 'center',
           scopedSlots: { customRender: userColumnKey }
         })
@@ -273,15 +270,15 @@ export default {
     },
     
     calculateModalWidth() {
-      // 基础宽度：店铺列(120px) + 商品信息列(160px) + 边距和滚动条(60px)
-      const baseWidth = 120 + 160 + 60
-      // 用户列宽度：每个用户列150px
-      const userColumnsWidth = this.allUsers.length * 150
+      // 基础宽度：店铺列(120px) + 商品信息列(220px) + 边距和滚动条(140px)
+      const baseWidth = 120 + 220 + 140
+      // 用户列宽度：每个用户列240px
+      const userColumnsWidth = this.allUsers.length * 240
       // 计算总宽度
       const totalWidth = baseWidth + userColumnsWidth
       
-      // 设置最小宽度500px，最大宽度为屏幕宽度的90%
-      const minWidth = 500
+      // 设置最小宽度900px，最大宽度为屏幕宽度的90%
+      const minWidth = 900
       const maxWidth = Math.floor(window.innerWidth * 0.9)
       
       this.modalWidth = Math.max(minWidth, Math.min(totalWidth, maxWidth))
@@ -396,9 +393,11 @@ export default {
 
       const baseStyle = {
         padding: '6px 8px',
-        whiteSpace: 'pre-line',
+        whiteSpace: 'pre-wrap',
         maxHeight: '160px',
-        overflowY: 'auto'
+        overflowY: 'auto',
+        display: 'block',
+        textAlign: 'left'
       }
       
       if (quantityInconsistent || priceInconsistent) {
@@ -447,11 +446,10 @@ export default {
 
 .ant-table-tbody > tr > td > div {
   min-height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: block;
   font-size: 12px;
-  line-height: 1.4;
+  line-height: 1.5;
+  text-align: left;
 }
 
 /* 店铺列样式 */
