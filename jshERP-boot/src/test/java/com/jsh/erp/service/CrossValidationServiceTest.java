@@ -2,7 +2,7 @@ package com.jsh.erp.service;
 
 import com.jsh.erp.datasource.entities.User;
 import com.jsh.erp.datasource.mappers.DepotHeadMapper;
-import com.jsh.erp.datasource.vo.BillMaterialSummary;
+import com.jsh.erp.datasource.vo.ValidationBillDetail;
 import com.jsh.erp.datasource.vo.ValidationDifference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -12,8 +12,12 @@ import org.mockito.MockitoAnnotations;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.lang.reflect.Method;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -36,31 +40,40 @@ class CrossValidationServiceTest {
     }
 
     @Test
-    void validateQuantityConsistency_WithDifferentShops_ShouldValidateSeparately() {
+    void buildDifferencesFromDetails_WithDifferentShops_ShouldValidateSeparately() throws Exception {
         // 准备测试数据
-        List<BillMaterialSummary> summaries = new ArrayList<>();
+        List<ValidationBillDetail> details = new ArrayList<>();
 
         // 商店A的数据
-        BillMaterialSummary summary1 = createSummary(1L, "user1", "M001", "商品1", new BigDecimal("10"), "商店A");
-        BillMaterialSummary summary2 = createSummary(2L, "user2", "M001", "商品1", new BigDecimal("10"), "商店A");
+        ValidationBillDetail detail1 = createDetail(1L, "user1", "M001", "商品1", new BigDecimal("10"), "商店A");
+        ValidationBillDetail detail2 = createDetail(2L, "user2", "M001", "商品1", new BigDecimal("10"), "商店A");
 
         // 商店B的数据（数量不同）
-        BillMaterialSummary summary3 = createSummary(1L, "user1", "M001", "商品1", new BigDecimal("20"), "商店B");
-        BillMaterialSummary summary4 = createSummary(2L, "user2", "M001", "商品1", new BigDecimal("30"), "商店B");
+        ValidationBillDetail detail3 = createDetail(1L, "user1", "M001", "商品1", new BigDecimal("20"), "商店B");
+        ValidationBillDetail detail4 = createDetail(2L, "user2", "M001", "商品1", new BigDecimal("30"), "商店B");
 
         // 未指定商店的数据
-        BillMaterialSummary summary5 = createSummary(1L, "user1", "M001", "商品1", new BigDecimal("40"), null);
-        BillMaterialSummary summary6 = createSummary(2L, "user2", "M001", "商品1", new BigDecimal("40"), null);
+        ValidationBillDetail detail5 = createDetail(1L, "user1", "M001", "商品1", new BigDecimal("40"), null);
+        ValidationBillDetail detail6 = createDetail(2L, "user2", "M001", "商品1", new BigDecimal("40"), null);
 
-        summaries.add(summary1);
-        summaries.add(summary2);
-        summaries.add(summary3);
-        summaries.add(summary4);
-        summaries.add(summary5);
-        summaries.add(summary6);
+        details.add(detail1);
+        details.add(detail2);
+        details.add(detail3);
+        details.add(detail4);
+        details.add(detail5);
+        details.add(detail6);
 
-        // 调用私有方法进行测试
-        List<ValidationDifference> differences = crossValidationService.validateQuantityConsistency(summaries);
+        Method method = CrossValidationService.class.getDeclaredMethod("buildDifferencesFromDetails", List.class,
+                List.class, Map.class);
+        method.setAccessible(true);
+
+        Map<Long, String> userMap = new HashMap<>();
+        userMap.put(1L, "user1");
+        userMap.put(2L, "user2");
+
+        @SuppressWarnings("unchecked")
+        List<ValidationDifference> differences = (List<ValidationDifference>) method.invoke(crossValidationService,
+                details, Arrays.asList(1L, 2L), userMap);
 
         // 验证结果
         assertNotNull(differences);
@@ -75,21 +88,31 @@ class CrossValidationServiceTest {
     }
 
     @Test
-    void validateQuantityConsistency_WithEmptyShop_ShouldValidateTogether() {
+    void buildDifferencesFromDetails_WithEmptyShop_ShouldValidateTogether() throws Exception {
         // 准备测试数据
-        List<BillMaterialSummary> summaries = new ArrayList<>();
+        List<ValidationBillDetail> details = new ArrayList<>();
 
         // 未指定商店的数据
-        BillMaterialSummary summary1 = createSummary(1L, "user1", "M001", "商品1", new BigDecimal("10"), null);
-        BillMaterialSummary summary2 = createSummary(2L, "user2", "M001", "商品1", new BigDecimal("20"), "");
-        BillMaterialSummary summary3 = createSummary(3L, "user3", "M001", "商品1", new BigDecimal("10"), null);
+        ValidationBillDetail detail1 = createDetail(1L, "user1", "M001", "商品1", new BigDecimal("10"), null);
+        ValidationBillDetail detail2 = createDetail(2L, "user2", "M001", "商品1", new BigDecimal("20"), "");
+        ValidationBillDetail detail3 = createDetail(3L, "user3", "M001", "商品1", new BigDecimal("10"), null);
 
-        summaries.add(summary1);
-        summaries.add(summary2);
-        summaries.add(summary3);
+        details.add(detail1);
+        details.add(detail2);
+        details.add(detail3);
 
-        // 调用私有方法进行测试
-        List<ValidationDifference> differences = crossValidationService.validateQuantityConsistency(summaries);
+        Method method = CrossValidationService.class.getDeclaredMethod("buildDifferencesFromDetails", List.class,
+                List.class, Map.class);
+        method.setAccessible(true);
+
+        Map<Long, String> userMap = new HashMap<>();
+        userMap.put(1L, "user1");
+        userMap.put(2L, "user2");
+        userMap.put(3L, "user3");
+
+        @SuppressWarnings("unchecked")
+        List<ValidationDifference> differences = (List<ValidationDifference>) method.invoke(crossValidationService,
+                details, Arrays.asList(1L, 2L, 3L), userMap);
 
         // 验证结果
         assertNotNull(differences);
@@ -102,17 +125,18 @@ class CrossValidationServiceTest {
         assertEquals("QUANTITY_INCONSISTENT", difference.getDiffType());
     }
 
-    private BillMaterialSummary createSummary(Long userId, String userName, String barCode, String materialName,
+    private ValidationBillDetail createDetail(Long userId, String userName, String barCode, String materialName,
             BigDecimal quantity, String shopName) {
-        BillMaterialSummary summary = new BillMaterialSummary();
-        summary.setUserId(userId);
-        summary.setUserName(userName);
-        summary.setMaterialBarCode(barCode);
-        summary.setMaterialName(materialName);
-        summary.setTotalOutNumber(quantity);
-        summary.setUnitPrice(new BigDecimal("100"));
-        summary.setCreateTime(new Date());
-        summary.setShopName(shopName);
-        return summary;
+        ValidationBillDetail detail = new ValidationBillDetail();
+        detail.setUserId(userId);
+        detail.setUserName(userName);
+        detail.setMaterialBarCode(barCode);
+        detail.setMaterialName(materialName);
+        detail.setQuantity(quantity);
+        detail.setUnitPrice(new BigDecimal("100"));
+        detail.setBillDate(new Date().toString());
+        detail.setBillNumber("BN" + System.nanoTime());
+        detail.setShopName(shopName);
+        return detail;
     }
 }

@@ -4,12 +4,12 @@ import com.jsh.erp.datasource.entities.User;
 import com.jsh.erp.datasource.entities.DepotHead;
 import com.jsh.erp.datasource.entities.DepotHeadExample;
 import com.jsh.erp.datasource.mappers.DepotHeadMapper;
-import com.jsh.erp.datasource.vo.BillMaterialSummary;
 import com.jsh.erp.datasource.vo.CrossValidationCheckResult;
 import com.jsh.erp.datasource.vo.CrossValidationRequest;
 import com.jsh.erp.datasource.vo.CrossValidationResult;
 import com.jsh.erp.datasource.vo.TodayUserBillSummary;
 import com.jsh.erp.datasource.vo.ValidationDifference;
+import com.jsh.erp.datasource.vo.ValidationBillDetail;
 import com.jsh.erp.constants.BusinessConstants;
 import com.jsh.erp.constants.ExceptionConstants;
 import com.jsh.erp.exception.BusinessRunTimeException;
@@ -28,6 +28,9 @@ import java.util.Map;
 import java.util.HashMap;
 import java.util.Set;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.Objects;
 import java.util.stream.Collectors;
 import java.math.BigDecimal;
 import java.text.SimpleDateFormat;
@@ -165,23 +168,15 @@ public class CrossValidationService {
                 allUserIds.add(currentUser.getId());
             }
 
-            logger.info("准备查询商品唛头汇总数据，日期: {}, 租户ID: {}, 当前用户ID: {}, 选中用户列表: {}, 完整用户列表: {}",
+            logger.info("准备查询商品明细数据，日期: {}, 租户ID: {}, 当前用户ID: {}, 选中用户列表: {}, 完整用户列表: {}",
                     request.getValidationDate(), tenantId, currentUser.getId(), request.getSelectedUserIds(),
                     allUserIds);
 
-            List<BillMaterialSummary> materialSummaries = depotHeadMapper.getBillMaterialSummaryByDateAndUsers(
+            List<ValidationBillDetail> billDetails = depotHeadMapper.getBillDetailsByDateUsersAndMaterial(
                     request.getValidationDate(), tenantId, allUserIds, request.getType(), request.getSubType(),
                     request.getShopNames());
 
-            logger.info("查询到商品唛头汇总数据条数: {}", materialSummaries == null ? 0 : materialSummaries.size());
-
-            if (materialSummaries != null && !materialSummaries.isEmpty()) {
-                for (BillMaterialSummary summary : materialSummaries) {
-                    logger.info("商品数据详情: 用户ID={}, 用户名={}, 条形码={}, 商品名={}, 数量={}",
-                            summary.getUserId(), summary.getUserName(), summary.getMaterialBarCode(),
-                            summary.getMaterialName(), summary.getTotalOutNumber());
-                }
-            }
+            logger.info("查询到商品明细数据条数: {}", billDetails == null ? 0 : billDetails.size());
 
             // 先检查每个用户是否都有单据
             Map<Long, Integer> userBillCounts = new HashMap<>();
@@ -228,7 +223,7 @@ public class CrossValidationService {
             }
 
             // 如果所有用户都有单据，但没有商品明细数据，说明单据可能是空的
-            if (materialSummaries == null || materialSummaries.isEmpty()) {
+            if (billDetails == null || billDetails.isEmpty()) {
                 result.setConsistent(false);
                 List<ValidationDifference> differences = new ArrayList<>();
                 ValidationDifference difference = new ValidationDifference();
@@ -242,14 +237,36 @@ public class CrossValidationService {
                 return result;
             }
 
-            // 执行数量一致性校验
-            List<ValidationDifference> differences = validateQuantityConsistency(materialSummaries);
+            Map<Long, String> userIdToName = new HashMap<>();
+            userIdToName.put(currentUser.getId(), currentUser.getUsername());
 
-            // 统计校验的商品种类数量
-            Set<String> uniqueBarCodes = new HashSet<>();
-            for (BillMaterialSummary summary : materialSummaries) {
-                uniqueBarCodes.add(summary.getMaterialBarCode());
+            if (billDetails != null) {
+                for (ValidationBillDetail detail : billDetails) {
+                    if (detail != null && detail.getUserId() != null && !StringUtil.isEmpty(detail.getUserName())) {
+                        userIdToName.put(detail.getUserId(), detail.getUserName());
+                    }
+                }
             }
+
+            for (Long userId : allUserIds) {
+                userIdToName.computeIfAbsent(userId, id -> {
+                    try {
+                        User user = userService.getUser(id);
+                        return user != null ? user.getUsername() : "用户" + id;
+                    } catch (Exception ex) {
+                        logger.warn("根据用户ID获取用户名失败: {}", id, ex);
+                        return "用户" + id;
+                    }
+                });
+            }
+
+            List<ValidationDifference> differences = buildDifferencesFromDetails(billDetails, allUserIds,
+                    userIdToName);
+
+            Set<String> uniqueBarCodes = billDetails.stream()
+                    .map(ValidationBillDetail::getMaterialBarCode)
+                    .filter(code -> !StringUtil.isEmpty(code))
+                    .collect(Collectors.toSet());
             int totalMaterials = uniqueBarCodes.size();
 
             result.setConsistent(differences.isEmpty());
@@ -350,244 +367,151 @@ public class CrossValidationService {
         }
     }
 
-    /**
-     * 校验商品唛头的数量和单价一致性
-     * 
-     * @param materialSummaries 商品唛头汇总数据
-     * @return 校验差异列表
-     */
-    private List<ValidationDifference> validateQuantityConsistency(List<BillMaterialSummary> materialSummaries) {
+    private List<ValidationDifference> buildDifferencesFromDetails(List<ValidationBillDetail> billDetails,
+            List<Long> allUserIds, Map<Long, String> userIdToName) {
         List<ValidationDifference> differences = new ArrayList<>();
 
         try {
-            logger.info("开始校验数量一致性，输入数据条数: {}", materialSummaries == null ? 0 : materialSummaries.size());
+            logger.info("开始基于明细数据构建差异，输入数据条数: {}", billDetails == null ? 0 : billDetails.size());
 
-            if (materialSummaries == null || materialSummaries.isEmpty()) {
-                logger.info("没有数据需要校验，返回空的差异列表");
+            if (billDetails == null || billDetails.isEmpty()) {
                 return differences;
             }
 
-            // 步骤1: 收集所有参与校验的用户ID
-            Set<Long> allUserIds = new HashSet<>();
-            for (BillMaterialSummary summary : materialSummaries) {
-                allUserIds.add(summary.getUserId());
-            }
-            logger.info("收集到所有参与校验的用户ID: {}", allUserIds);
+            Map<String, Map<Long, List<ValidationBillDetail>>> detailMap = new LinkedHashMap<>();
+            Map<String, String> materialNameMap = new HashMap<>();
+            Map<String, String> shopNameMap = new HashMap<>();
 
-            // 步骤2: 收集所有参与校验用户当日未审核单据涉及的商品唛头（所有用户的商品并集）
-            Set<String> allBarCodes = new HashSet<>();
-            for (BillMaterialSummary summary : materialSummaries) {
-                allBarCodes.add(summary.getMaterialBarCode());
-            }
-            logger.info("收集到所有商品唛头: {}", allBarCodes);
-
-            // 步骤3: 构建用户ID到用户名的映射
-            Map<Long, String> userIdToNameMap = new HashMap<>();
-            for (BillMaterialSummary summary : materialSummaries) {
-                userIdToNameMap.put(summary.getUserId(), summary.getUserName());
+            for (ValidationBillDetail detail : billDetails) {
+                if (detail == null || StringUtil.isEmpty(detail.getMaterialBarCode()) || detail.getUserId() == null) {
+                    continue;
+                }
+                String shopName = detail.getShopName() == null ? "" : detail.getShopName();
+                String key = detail.getMaterialBarCode() + "||" + shopName;
+                materialNameMap.putIfAbsent(key, detail.getMaterialName());
+                shopNameMap.putIfAbsent(key, shopName);
+                detailMap.computeIfAbsent(key, k -> new LinkedHashMap<>())
+                        .computeIfAbsent(detail.getUserId(), k -> new ArrayList<>())
+                        .add(detail);
             }
 
-            // 步骤4: 构建商品唛头到商品名称的映射
-            Map<String, String> barCodeMaterialNameMap = new HashMap<>();
-            for (BillMaterialSummary summary : materialSummaries) {
-                barCodeMaterialNameMap.put(summary.getMaterialBarCode(), summary.getMaterialName());
-            }
+            for (Map.Entry<String, Map<Long, List<ValidationBillDetail>>> entry : detailMap.entrySet()) {
+                String key = entry.getKey();
+                Map<Long, List<ValidationBillDetail>> userDetailMap = entry.getValue();
 
-            // 步骤5: 构建完整的用户-商品-商店-数量和单价映射表
-            // 结构: Map<商品条码, Map<String, Map<Long, List<商品记录>>>>
-            // 第一层key是商品条码，第二层key是商店名称（空字符串表示未指定商店），第三层key是用户ID
-            Map<String, Map<String, Map<Long, List<BillMaterialSummary>>>> barCodeShopUserRecordsMap = new HashMap<>();
+                Map<Long, BigDecimal> userQuantityPerUser = new LinkedHashMap<>();
+                Map<Long, LinkedHashSet<BigDecimal>> userPricePerUser = new LinkedHashMap<>();
+                Map<String, BigDecimal> userQuantityByName = new LinkedHashMap<>();
+                Map<String, List<ValidationBillDetail>> detailByUserName = new LinkedHashMap<>();
 
-            // 按商品条码、商店和用户ID组织数据
-            for (BillMaterialSummary summary : materialSummaries) {
-                String barCode = summary.getMaterialBarCode();
-                String shopName = summary.getShopName() == null ? "" : summary.getShopName();
-                Long userId = summary.getUserId();
+                BigDecimal baselineQuantity = null;
+                boolean quantityConsistent = true;
+                BigDecimal baselinePrice = null;
+                boolean priceConsistent = true;
 
-                barCodeShopUserRecordsMap.computeIfAbsent(barCode, k -> new HashMap<>())
-                        .computeIfAbsent(shopName, k -> new HashMap<>())
-                        .computeIfAbsent(userId, k -> new ArrayList<>())
-                        .add(summary);
-            }
+                for (Long userId : allUserIds) {
+                    List<ValidationBillDetail> detailsForUser = userDetailMap.getOrDefault(userId, Collections.emptyList());
+                    BigDecimal totalQuantity = detailsForUser.stream()
+                            .map(ValidationBillDetail::getQuantity)
+                            .filter(Objects::nonNull)
+                            .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-            // 计算每个商店每个用户每个商品的总数量和统一单价
-            Map<String, Map<String, Map<Long, BigDecimal>>> barCodeShopUserQuantityMap = new HashMap<>();
-            Map<String, Map<String, Map<Long, BigDecimal>>> barCodeShopUserPriceMap = new HashMap<>();
+                    LinkedHashSet<BigDecimal> priceSet = detailsForUser.stream()
+                            .map(ValidationBillDetail::getUnitPrice)
+                            .filter(Objects::nonNull)
+                            .collect(Collectors.toCollection(LinkedHashSet::new));
 
-            for (String barCode : allBarCodes) {
-                Map<String, Map<Long, BigDecimal>> shopUserQuantityMap = new HashMap<>();
-                Map<String, Map<Long, BigDecimal>> shopUserPriceMap = new HashMap<>();
+                    if (baselineQuantity == null) {
+                        baselineQuantity = totalQuantity;
+                    } else if (baselineQuantity.compareTo(totalQuantity) != 0) {
+                        quantityConsistent = false;
+                    }
 
-                // 获取该商品的所有商店
-                Set<String> shopNames = barCodeShopUserRecordsMap.getOrDefault(barCode, new HashMap<>()).keySet();
-
-                for (String shopName : shopNames) {
-                    Map<Long, BigDecimal> userQuantityMap = new HashMap<>();
-                    Map<Long, BigDecimal> userPriceMap = new HashMap<>();
-
-                    for (Long userId : allUserIds) {
-                        List<BillMaterialSummary> userRecords = barCodeShopUserRecordsMap
-                                .getOrDefault(barCode, new HashMap<>())
-                                .getOrDefault(shopName, new HashMap<>())
-                                .getOrDefault(userId, new ArrayList<>());
-
-                        if (userRecords.isEmpty()) {
-                            // 用户在该商店没有该商品的记录
-                            userQuantityMap.put(userId, BigDecimal.ZERO);
-                            userPriceMap.put(userId, null);
-                        } else {
-                            // 计算该用户在该商店该商品的总数量
-                            BigDecimal totalQuantity = userRecords.stream()
-                                    .map(BillMaterialSummary::getTotalOutNumber)
-                                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-                            userQuantityMap.put(userId, totalQuantity);
-
-                            // 检查该用户在该商店该商品的单价是否一致
-                            Set<BigDecimal> prices = userRecords.stream()
-                                    .map(BillMaterialSummary::getUnitPrice)
-                                    .collect(java.util.stream.Collectors.toSet());
-
-                            if (prices.size() > 1) {
-                                // 同一用户同一商店同一商品有多个不同单价，记录为差异
-                                logger.warn("用户 {} 在商店 {} 的商品 {} 有多个不同单价: {}", userId, shopName, barCode, prices);
-                            }
-
-                            // 使用第一个记录的单价作为该用户该商品的单价
-                            userPriceMap.put(userId, userRecords.get(0).getUnitPrice());
+                    if (priceSet.size() > 1) {
+                        priceConsistent = false;
+                    }
+                    if (!priceSet.isEmpty()) {
+                        BigDecimal candidate = priceSet.iterator().next();
+                        if (baselinePrice == null) {
+                            baselinePrice = candidate;
+                        } else if (baselinePrice.compareTo(candidate) != 0) {
+                            priceConsistent = false;
                         }
                     }
 
-                    shopUserQuantityMap.put(shopName, userQuantityMap);
-                    shopUserPriceMap.put(shopName, userPriceMap);
+                    userQuantityPerUser.put(userId, totalQuantity);
+                    userPricePerUser.put(userId, priceSet);
+
+                    String userName = userIdToName.getOrDefault(userId, "用户" + userId);
+                    userQuantityByName.put(userName, totalQuantity);
+                    detailByUserName.put(userName, new ArrayList<>(detailsForUser));
                 }
 
-                barCodeShopUserQuantityMap.put(barCode, shopUserQuantityMap);
-                barCodeShopUserPriceMap.put(barCode, shopUserPriceMap);
-            }
-
-            logger.info("构建完整的用户-商品-数量映射表完成，商品数量: {}, 用户数量: {}", allBarCodes.size(), allUserIds.size());
-
-            // 步骤6: 严格校验每个商品在每个商店的所有用户间的数量和单价一致性
-            for (String barCode : allBarCodes) {
-                Map<String, Map<Long, BigDecimal>> shopUserQuantityMap = barCodeShopUserQuantityMap.get(barCode);
-                Map<String, Map<Long, BigDecimal>> shopUserPriceMap = barCodeShopUserPriceMap.get(barCode);
-
-                logger.info("开始校验商品 {} 的数量和单价一致性", barCode);
-
-                for (String shopName : shopUserQuantityMap.keySet()) {
-                    Map<Long, BigDecimal> userQuantityMap = shopUserQuantityMap.get(shopName);
-                    Map<Long, BigDecimal> userPriceMap = shopUserPriceMap.get(shopName);
-
-                    // 检查所有用户在该商店的数量是否一致
-                    BigDecimal firstQuantity = null;
-                    boolean quantityConsistent = true;
-
-                    for (BigDecimal quantity : userQuantityMap.values()) {
-                        if (firstQuantity == null) {
-                            firstQuantity = quantity;
-                        } else if (firstQuantity.compareTo(quantity) != 0) {
-                            quantityConsistent = false;
-                            break;
-                        }
-                    }
-
-                    // 检查所有用户在该商店的单价是否一致（排除没有该商品的用户）
-                    BigDecimal firstPrice = null;
-                    boolean priceConsistent = true;
-
-                    for (BigDecimal price : userPriceMap.values()) {
-                        if (price != null) { // 只比较有该商品的用户的单价
-                            if (firstPrice == null) {
-                                firstPrice = price;
-                            } else if (firstPrice.compareTo(price) != 0) {
-                                priceConsistent = false;
-                                break;
-                            }
-                        }
-                    }
-
-                    boolean isConsistent = quantityConsistent && priceConsistent;
-
-                    // 如果不一致，记录差异
-                    if (!isConsistent) {
-                        String materialName = barCodeMaterialNameMap.get(barCode);
-                        String shopDisplayName = shopName.isEmpty() ? "未指定商店" : shopName;
-
-                        logger.info("发现商店 {} 的商品数量或单价不一致: {}, 商品名称: {}, 数量一致: {}, 单价一致: {}",
-                                shopDisplayName, barCode, materialName, quantityConsistent, priceConsistent);
-
-                        // 构建差异描述
-                        StringBuilder description = new StringBuilder();
-                        description.append("商品唛头: ").append(barCode)
-                                .append(", 名称: ").append(materialName)
-                                .append(", 商店: ").append(shopDisplayName);
-
-                        if (!quantityConsistent && !priceConsistent) {
-                            description.append(", 各用户数量和单价均不一致: ");
-                        } else if (!quantityConsistent) {
-                            description.append(", 各用户数量不一致: ");
-                        } else {
-                            description.append(", 各用户单价不一致: ");
-                        }
-
-                        StringBuilder usersInfo = new StringBuilder();
-
-                        // 构建结构化的用户数量映射（key为用户名）
-                        Map<String, BigDecimal> userQuantitiesMap = new HashMap<>();
-
-                        for (Map.Entry<Long, BigDecimal> userEntry : userQuantityMap.entrySet()) {
-                            Long userId = userEntry.getKey();
-                            String userName = userIdToNameMap.get(userId);
-                            BigDecimal quantity = userEntry.getValue();
-                            BigDecimal price = userPriceMap.get(userId);
-
-                            // 设置结构化数据
-                            userQuantitiesMap.put(userName, quantity);
-
-                            description.append(userName).append("(ID:").append(userId).append(")")
-                                    .append(": 数量=").append(quantity)
-                                    .append(", 单价=").append(price == null ? "无" : price)
-                                    .append("; ");
-
-                            if (usersInfo.length() > 0) {
-                                usersInfo.append(", ");
-                            }
-                            usersInfo.append(userName);
-
-                            logger.info("用户 {} (ID: {}) 在商店 {} 的商品 {} 数量: {}, 单价: {}",
-                                    userName, userId, shopDisplayName, barCode, quantity, price);
-                        }
-
-                        ValidationDifference difference = new ValidationDifference();
-                        difference.setMaterialBarCode(barCode);
-                        difference.setMaterialName(materialName);
-                        difference.setShopName(shopDisplayName);
-
-                        if (!quantityConsistent && !priceConsistent) {
-                            difference.setDiffType("QUANTITY_PRICE_INCONSISTENT");
-                            difference.setDiffTypeName("数量单价不一致");
-                        } else if (!quantityConsistent) {
-                            difference.setDiffType("QUANTITY_INCONSISTENT");
-                            difference.setDiffTypeName("数量不一致");
-                        } else {
-                            difference.setDiffType("PRICE_INCONSISTENT");
-                            difference.setDiffTypeName("单价不一致");
-                        }
-
-                        difference.setDescription(description.toString());
-                        difference.setUsers(usersInfo.toString());
-                        difference.setAffectedBills(userQuantityMap.size());
-                        // 设置结构化的用户数量数据
-                        difference.setUserQuantities(userQuantitiesMap);
-                        differences.add(difference);
-                    }
+                if (quantityConsistent && priceConsistent) {
+                    continue;
                 }
+
+                String[] parts = key.split("\\|\\|", -1);
+                String materialBarCode = parts.length > 0 ? parts[0] : "";
+                String shopRaw = shopNameMap.getOrDefault(key, "");
+                String materialName = materialNameMap.get(key);
+                String shopDisplayName = StringUtil.isEmpty(shopRaw) ? "未指定商店" : shopRaw;
+
+                ValidationDifference difference = new ValidationDifference();
+                difference.setMaterialBarCode(materialBarCode);
+                difference.setMaterialName(materialName != null ? materialName : "未知商品");
+                difference.setShopNameRaw(shopRaw);
+                difference.setShopName(shopDisplayName);
+
+                StringBuilder description = new StringBuilder();
+                description.append("商品唛头: ").append(materialBarCode)
+                        .append(", 名称: ").append(difference.getMaterialName())
+                        .append(", 商店: ").append(shopDisplayName);
+
+                if (!quantityConsistent && !priceConsistent) {
+                    difference.setDiffType("QUANTITY_PRICE_INCONSISTENT");
+                    difference.setDiffTypeName("数量单价不一致");
+                    description.append(", 各用户数量和单价均不一致: ");
+                } else if (!quantityConsistent) {
+                    difference.setDiffType("QUANTITY_INCONSISTENT");
+                    difference.setDiffTypeName("数量不一致");
+                    description.append(", 各用户数量不一致: ");
+                } else {
+                    difference.setDiffType("PRICE_INCONSISTENT");
+                    difference.setDiffTypeName("单价不一致");
+                    description.append(", 各用户单价不一致: ");
+                }
+
+                StringBuilder usersInfo = new StringBuilder();
+                for (Long userId : allUserIds) {
+                    String userName = userIdToName.getOrDefault(userId, "用户" + userId);
+                    BigDecimal totalQuantity = userQuantityPerUser.getOrDefault(userId, BigDecimal.ZERO);
+                    LinkedHashSet<BigDecimal> priceSet = userPricePerUser.getOrDefault(userId, new LinkedHashSet<>());
+                    BigDecimal displayPrice = priceSet.isEmpty() ? null : priceSet.iterator().next();
+
+                    description.append(userName).append("(ID:").append(userId).append(")")
+                            .append(": 数量=").append(totalQuantity)
+                            .append(", 单价=").append(displayPrice == null ? "无" : displayPrice)
+                            .append("; ");
+
+                    if (usersInfo.length() > 0) {
+                        usersInfo.append(", ");
+                    }
+                    usersInfo.append(userName);
+                }
+
+                difference.setDescription(description.toString());
+                difference.setUsers(usersInfo.toString());
+                difference.setAffectedBills(detailByUserName.values().stream().mapToInt(List::size).sum());
+                difference.setUserQuantities(userQuantityByName);
+                difference.setUserBillDetails(detailByUserName);
+
+                differences.add(difference);
             }
 
-            logger.info("校验完成，共发现 {} 个差异", differences.size());
-
+            logger.info("基于明细的数据差异构建完成，共发现 {} 个差异", differences.size());
         } catch (Exception e) {
-            logger.error("校验商品唛头数量一致性失败，异常信息: {}", e.getMessage(), e);
+            logger.error("处理交叉校验明细差异时发生异常: {}", e.getMessage(), e);
             throw e;
         }
 

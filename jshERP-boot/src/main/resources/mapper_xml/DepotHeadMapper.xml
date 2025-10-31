@@ -763,6 +763,50 @@
     ORDER BY me.bar_code, IFNULL(dh.shop_name, ''), dh.creator
   </select>
 
+  <select id="getBillDetailsByDateUsersAndMaterial" resultType="com.jsh.erp.datasource.vo.ValidationBillDetail">
+    SELECT
+      dh.number AS billNumber,
+      me.bar_code AS materialBarCode,
+      m.name AS materialName,
+      IFNULL(dh.shop_name, '') AS shopName,
+      di.oper_number AS quantity,
+      di.unit_price AS unitPrice,
+      DATE_FORMAT(dh.oper_time, '%Y-%m-%d %H:%i:%S') AS billDate,
+      dh.creator AS userId,
+      u.username AS userName
+    FROM jsh_depot_head dh
+    LEFT JOIN jsh_depot_item di ON dh.id = di.header_id AND ifnull(di.delete_flag,'0') != '1'
+    LEFT JOIN jsh_material m ON di.material_id = m.id AND ifnull(m.delete_flag,'0') != '1'
+    LEFT JOIN jsh_material_extend me ON di.material_extend_id = me.id AND ifnull(me.delete_flag,'0') != '1'
+    LEFT JOIN jsh_user u ON dh.creator = u.id 
+      AND (u.tenant_id = #{tenantId} OR (u.tenant_id IS NULL AND #{tenantId} IS NULL))
+    WHERE dh.type = #{type}
+      AND dh.sub_type = #{subType}
+      AND dh.delete_flag = '0'
+      AND dh.status = '0'
+      AND ifnull(di.delete_flag,'0') != '1'
+      AND ifnull(m.delete_flag,'0') != '1'
+      AND ifnull(me.delete_flag,'0') != '1'
+      AND DATE(dh.oper_time) = DATE(#{validationDate})
+      AND (dh.tenant_id = #{tenantId} OR (dh.tenant_id IS NULL AND #{tenantId} IS NULL))
+      <if test="shopNames != null and shopNames.size() > 0">
+        AND dh.shop_name IN
+        <foreach collection="shopNames" item="shopName" open="(" close=")" separator=",">
+          #{shopName}
+        </foreach>
+      </if>
+      <if test="shopNames == null or shopNames.size() == 0">
+        AND dh.shop_name IS NOT NULL
+      </if>
+      AND dh.creator IN
+      <foreach collection="userIds" item="userId" open="(" close=")" separator=",">
+        #{userId}
+      </foreach>
+      AND me.bar_code IS NOT NULL
+      AND me.bar_code != ''
+    ORDER BY me.bar_code, IFNULL(dh.shop_name, ''), dh.creator, dh.oper_time DESC
+  </select>
+
   <select id="getBillsByDateAndUsers" resultType="com.jsh.erp.datasource.entities.DepotHead">
     SELECT 
       <include refid="Base_Column_List" />

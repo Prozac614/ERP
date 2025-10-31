@@ -50,10 +50,21 @@ public class ValidationDifference {
     private String shopName;
 
     /**
+     * 原始商店名称（未做显示处理，可能为空字符串）
+     */
+    private String shopNameRaw;
+
+    /**
      * 用户数量映射表 - 结构化数据
      * key: 用户名, value: 该用户的数量
      */
     private Map<String, BigDecimal> userQuantities;
+
+    /**
+     * 用户明细列表
+     * key: 用户名, value: 该用户的单据明细集合
+     */
+    private Map<String, java.util.List<ValidationBillDetail>> userBillDetails;
 
     public ValidationDifference() {
     }
@@ -134,5 +145,21 @@ public class ValidationDifference {
 
     public void setUserQuantities(Map<String, BigDecimal> userQuantities) {
         this.userQuantities = userQuantities;
+    }
+
+    public Map<String, java.util.List<ValidationBillDetail>> getUserBillDetails() {
+        return userBillDetails;
+    }
+
+    public void setUserBillDetails(Map<String, java.util.List<ValidationBillDetail>> userBillDetails) {
+        this.userBillDetails = userBillDetails;
+    }
+
+    public String getShopNameRaw() {
+        return shopNameRaw;
+    }
+
+    public void setShopNameRaw(String shopNameRaw) {
+        this.shopNameRaw = shopNameRaw;
     }
 }

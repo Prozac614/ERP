@@ -125,7 +125,37 @@ export default {
         if (Object.keys(userQuantities).length === 0) {
           userQuantities = this.extractUserQuantities(diff.description)
         }
+        const normalizedQuantities = {}
         Object.keys(userQuantities).forEach(user => {
+          const trimmed = String(user).trim()
+          if (trimmed) {
+            normalizedQuantities[trimmed] = userQuantities[user]
+            allUsersSet.add(trimmed)
+          }
+        })
+        userQuantities = normalizedQuantities
+        const userBillDetails = this.normalizeUserDetails(diff.userBillDetails)
+        console.log('[ValidationDifferencesModal] normalized details for', materialKey, userBillDetails)
+
+        if (Object.keys(userBillDetails).length > 0 && Object.keys(userQuantities).length === 0) {
+          const quantitiesFromDetails = {}
+          Object.keys(userBillDetails).forEach(user => {
+            const total = (userBillDetails[user] || []).reduce((sum, detail) => {
+              const numeric = detail && detail.quantity !== undefined && detail.quantity !== null
+                ? parseFloat(detail.quantity)
+                : 0
+              return sum + (isNaN(numeric) ? 0 : numeric)
+            }, 0)
+            const trimmed = String(user).trim()
+            if (trimmed) {
+              quantitiesFromDetails[trimmed] = total
+              allUsersSet.add(trimmed)
+            }
+          })
+          userQuantities = quantitiesFromDetails
+        }
+        
+        Object.keys(userBillDetails).forEach(user => {
           if (user && user.trim()) {
             allUsersSet.add(user.trim())
           }
@@ -133,12 +163,14 @@ export default {
         // 使用商品和商店的组合作为唯一键
         const shopKey = diff.shopName || ''
         const combinedKey = `${materialKey}_${shopKey}`
+        console.log('normalized details', userBillDetails)
         materialsData.set(combinedKey, {
           materialKey: combinedKey,
           materialName: diff.materialName || '未知商品',
           materialBarCode: diff.materialBarCode || '',
           shopName: diff.shopName || '',
-          userQuantities: userQuantities
+          userQuantities: userQuantities,
+          userBillDetails: userBillDetails
         })
       })
       this.allUsers = Array.from(allUsersSet).sort()
@@ -207,20 +239,31 @@ export default {
           materialName: item.materialName,
           materialBarCode: item.materialBarCode,
           shopName: item.shopName,
-          userQuantities: item.userQuantities
+          __userQuantities: item.userQuantities,
+          __userBillDetails: item.userBillDetails
         }
         this.allUsers.forEach((user, index) => {
           const userColumnKey = `user_${index}`
-          const rawValue = item.userQuantities[user]
-          let processedValue = ''
-          if (rawValue !== undefined && rawValue !== null) {
-            if (typeof rawValue === 'object' && rawValue.toString) {
-              processedValue = rawValue.toString()
+          const details = (item.userBillDetails && item.userBillDetails[user]) || []
+          if (details.length > 0) {
+            rowData[userColumnKey] = details.map(detail => {
+              let displayQuantity = '-'
+              if (detail && detail.quantity !== undefined && detail.quantity !== null) {
+                const numericQuantity = parseFloat(detail.quantity)
+                displayQuantity = isNaN(numericQuantity) ? String(detail.quantity) : Math.floor(numericQuantity)
+              }
+              const billNumber = detail && detail.billNumber ? detail.billNumber : '-'
+              return `单号: ${billNumber} 数量: ${displayQuantity}`
+            }).join('\n')
+          } else {
+            const userQuantities = item.userQuantities || {}
+            const quantity = userQuantities[user]
+            if (quantity !== undefined && quantity !== null) {
+              rowData[userColumnKey] = Math.floor(parseFloat(quantity)).toString()
             } else {
-              processedValue = String(rawValue)
+              rowData[userColumnKey] = '-'
             }
           }
-          rowData[userColumnKey] = processedValue
         })
         return rowData
       })
@@ -295,65 +338,47 @@ export default {
       
       return userQuantities
     },
+
+    normalizeUserDetails(rawDetails) {
+      if (!rawDetails) {
+        return {}
+      }
+      const toArray = (value) => {
+        if (!value) return []
+        if (Array.isArray(value)) return value
+        if (typeof value === 'string') {
+          try {
+            const parsed = JSON.parse(value)
+            return Array.isArray(parsed) ? parsed : (parsed ? [parsed] : [])
+          } catch (e) {
+            return []
+          }
+        }
+        return [value]
+      }
+      if (Array.isArray(rawDetails)) {
+        return rawDetails.reduce((acc, entry) => {
+          if (entry && entry.key !== undefined) {
+            const key = String(entry.key).trim()
+            acc[key] = toArray(entry.value)
+          }
+          return acc
+        }, {})
+      }
+      return Object.keys(rawDetails).reduce((acc, key) => {
+        const trimmedKey = String(key).trim()
+        acc[trimmedKey] = toArray(rawDetails[key])
+        return acc
+      }, {})
+    },
     
     formatUserData(record, user, index) {
       const userColumnKey = `user_${index}`
-      const rawValue = record[userColumnKey]
-      
-      if (!rawValue || rawValue === '-') {
-        return '-'
-      }
-      
-      // 检查是否有单价信息（从原始差异数据中解析）
-      const userQuantities = record.userQuantities || {}
-      const quantity = userQuantities[user]
-      
-      if (quantity !== undefined && quantity !== null) {
-        // 尝试从description中解析单价信息
-        const priceInfo = this.extractUserPriceInfo(record, user)
-        if (priceInfo) {
-          return `数量: ${Math.floor(parseFloat(quantity))}\n单价: ${priceInfo}`
-        } else {
-          return Math.floor(parseFloat(quantity)).toString()
-        }
-      }
-      
-      return rawValue || '-'
+      return record[userColumnKey] || '-'
     },
     
-    extractUserPriceInfo(record, user) {
-      // 从相关差异记录中找到这个商品和用户的单价信息
-      if (!this.differences) return null
-      
-      const relevantDiff = this.differences.find(diff => 
-        diff.materialBarCode === record.materialBarCode || 
-        diff.materialName === record.materialName
-      )
-      
-      if (!relevantDiff || !relevantDiff.description) return null
-      
-      // 解析description中的单价信息: "用户名(ID:xxx): 数量=xxx, 单价=xxx; "
-      const userPattern = new RegExp(`${user}\\(ID:\\d+\\):\\s*数量=[^,]+,\\s*单价=([^;]+)`, 'g')
-      const match = userPattern.exec(relevantDiff.description)
-      
-      if (match && match[1]) {
-        const price = match[1].trim()
-        if (price === '无') {
-          return '无'
-        }
-        // 尝试格式化价格为合理的小数位数
-        const numPrice = parseFloat(price)
-        if (!isNaN(numPrice)) {
-          return numPrice.toFixed(2)
-        }
-        return price
-      }
-      
-      return null
-    },
-
     getDifferenceStyle(record, user, index) {
-      const userQuantities = record.userQuantities || {}
+      const userQuantities = record.__userQuantities || {}
       const allQuantities = Object.values(userQuantities)
       const currentQuantity = userQuantities[user]
       
@@ -367,25 +392,26 @@ export default {
       )
       
       // 检查单价是否不一致
-      const priceInfo = this.extractUserPriceInfo(record, user)
       const priceInconsistent = this.checkPriceInconsistency(record, user)
+
+      const baseStyle = {
+        padding: '6px 8px',
+        whiteSpace: 'pre-line',
+        maxHeight: '160px',
+        overflowY: 'auto'
+      }
       
       if (quantityInconsistent || priceInconsistent) {
-        return {
+        return Object.assign({}, baseStyle, {
           backgroundColor: '#ffebee',
           color: '#c62828',
           fontWeight: 'bold',
-          padding: '6px 8px',
           borderRadius: '4px',
-          border: '1px solid #ffcdd2',
-          whiteSpace: 'pre-line'
-        }
+          border: '1px solid #ffcdd2'
+        })
       }
       
-      return {
-        padding: '6px 8px',
-        whiteSpace: 'pre-line'
-      }
+      return baseStyle
     },
     
     checkPriceInconsistency(record, user) {

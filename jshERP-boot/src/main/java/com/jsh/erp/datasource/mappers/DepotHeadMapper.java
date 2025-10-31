@@ -79,6 +79,17 @@ public interface DepotHeadMapper {
                         @Param("shopNames") List<String> shopNames);
 
         /**
+         * 获取指定日期、用户及商品的明细条目
+         */
+        List<com.jsh.erp.datasource.vo.ValidationBillDetail> getBillDetailsByDateUsersAndMaterial(
+                        @Param("validationDate") String validationDate,
+                        @Param("tenantId") Long tenantId,
+                        @Param("userIds") List<Long> userIds,
+                        @Param("type") String type,
+                        @Param("subType") String subType,
+                        @Param("shopNames") List<String> shopNames);
+
+        /**
          * 获取指定日期和用户的销售出库单据列表
          * 
          * @param validationDate 校验日期
