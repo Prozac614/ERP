@@ -125,6 +125,7 @@ export default {
       const materialsData = new Map()
       this.differences.forEach((diff, index) => {
         const materialKey = diff.materialBarCode || diff.materialName || `material_${index}`
+        const priceInconsistentFlag = diff.diffType === 'PRICE_INCONSISTENT' || diff.diffType === 'QUANTITY_PRICE_INCONSISTENT'
         // 优先使用结构化的用户数量数据，如果没有则fallback到解析description
         let userQuantities = diff.userQuantities || {}
         if (Object.keys(userQuantities).length === 0) {
@@ -173,7 +174,8 @@ export default {
           materialBarCode: diff.materialBarCode || '',
           shopName: diff.shopName || '',
           userQuantities: userQuantities,
-          userBillDetails: userBillDetails
+          userBillDetails: userBillDetails,
+          priceInconsistent: priceInconsistentFlag
         })
       })
       this.allUsers = Array.from(allUsersSet).sort()
@@ -241,7 +243,8 @@ export default {
           materialBarCode: item.materialBarCode,
           shopName: item.shopName,
           __userQuantities: item.userQuantities,
-          __userBillDetails: item.userBillDetails
+          __userBillDetails: item.userBillDetails,
+          __priceInconsistent: item.priceInconsistent
         }
 
         const quantityCounts = new Map()
@@ -254,6 +257,8 @@ export default {
             const billNumber = source.billNumber ? String(source.billNumber) : '-'
             let displayQuantity = '-'
             let numericQuantity = null
+            let displayPrice = '-'
+            let numericPrice = null
             if (source.quantity !== undefined && source.quantity !== null) {
               const parsedQuantity = parseFloat(source.quantity)
               if (!isNaN(parsedQuantity)) {
@@ -261,6 +266,16 @@ export default {
                 displayQuantity = String(Math.floor(parsedQuantity))
               } else {
                 displayQuantity = String(source.quantity)
+              }
+            }
+
+            if (source.unitPrice !== undefined && source.unitPrice !== null) {
+              const parsedPrice = parseFloat(source.unitPrice)
+              if (!isNaN(parsedPrice)) {
+                numericPrice = parsedPrice
+                displayPrice = parsedPrice.toFixed(2)
+              } else {
+                displayPrice = String(source.unitPrice)
               }
             }
 
@@ -276,7 +291,10 @@ export default {
               billNumber,
               displayQuantity,
               numericQuantity,
-              matched: false
+              matched: false,
+              displayPrice,
+              numericPrice,
+              priceMatched: true
             }
           })
 
@@ -328,14 +346,20 @@ export default {
               } else {
                 classes.push('detail-unmatched')
               }
+              const quantityClass = detail.matched ? 'detail-quantity-match' : 'detail-quantity-unmatch'
+              const priceMatched = item.priceInconsistent ? false : true
+              const priceClass = priceMatched ? 'detail-price-match' : 'detail-price-unmatch'
               const billNumber = detail.billNumber || '-'
               const quantity = detail.displayQuantity !== undefined ? String(detail.displayQuantity) : '-'
+              const price = detail.displayPrice !== undefined ? String(detail.displayPrice) : '-'
               return `
                 <div class="${classes.join(' ')}">
                   <span class="detail-label">单号:</span>
                   <span class="detail-value">${billNumber}</span>
                   <span class="detail-label"> 数量:</span>
-                  <span class="detail-quantity ${detail.matched ? 'detail-quantity-match' : 'detail-quantity-unmatch'}">${quantity}</span>
+                  <span class="detail-quantity ${quantityClass}">${quantity}</span>
+                  <span class="detail-label"> 单价:</span>
+                  <span class="detail-price ${priceClass}">${price}</span>
                 </div>
               `
             }).join('')
@@ -353,6 +377,8 @@ export default {
                   <span class="detail-value">-</span>
                   <span class="detail-label"> 数量:</span>
                   <span class="detail-quantity detail-quantity-unmatch">${displayQuantity}</span>
+                  <span class="detail-label"> 单价:</span>
+                  <span class="detail-price detail-price-unmatch">-</span>
                 </div>
               `
             } else {
@@ -618,25 +644,25 @@ export default {
   color: #333;
 }
 
-.detail-line {
+:deep(.detail-line) {
   display: block;
   margin-bottom: 4px;
   color: #333;
 }
 
-.detail-line:last-child {
+:deep(.detail-line:last-child) {
   margin-bottom: 0;
 }
 
-.detail-label {
+:deep(.detail-label) {
   color: #666;
 }
 
-.detail-value {
+:deep(.detail-value) {
   margin-right: 6px;
 }
 
-.detail-quantity {
+:deep(.detail-quantity) {
   font-weight: 600;
 }
 
@@ -648,7 +674,20 @@ export default {
   color: #c62828;
 }
 
-.detail-placeholder {
+:deep(.detail-price) {
+  font-weight: 600;
+  margin-left: 4px;
+}
+
+:deep(.detail-price-match) {
+  color: #2e7d32;
+}
+
+:deep(.detail-price-unmatch) {
+  color: #ff9800;
+}
+
+:deep(.detail-placeholder) {
   color: #999;
 }
 
