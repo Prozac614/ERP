@@ -225,7 +225,12 @@
           okText="确定"
           cancelText="取消">
           <a-form-item label="校验日期">
-            <a-date-picker v-model="selectedValidationDate" style="width: 100%" />
+            <j-date
+              v-model="selectedValidationDate"
+              placeholder="请选择日期"
+              dateFormat="YYYY-MM-DD"
+              style="width: 100%"
+            />
           </a-form-item>
         </a-modal>
         

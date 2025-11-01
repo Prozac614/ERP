@@ -697,9 +697,6 @@
           #{shopName}
         </foreach>
       </if>
-      <if test="shopNames == null or shopNames.size() == 0">
-        AND dh.shop_name IS NOT NULL
-      </if>
       AND dh.creator != #{currentUserId}
     GROUP BY dh.creator, u.username
     ORDER BY dh.creator
@@ -750,9 +747,6 @@
           #{shopName}
         </foreach>
       </if>
-      <if test="shopNames == null or shopNames.size() == 0">
-        AND dh.shop_name IS NOT NULL
-      </if>
       AND dh.creator IN 
       <foreach collection="userIds" item="userId" open="(" close=")" separator=",">
         #{userId}
@@ -795,9 +789,6 @@
           #{shopName}
         </foreach>
       </if>
-      <if test="shopNames == null or shopNames.size() == 0">
-        AND dh.shop_name IS NOT NULL
-      </if>
       AND dh.creator IN
       <foreach collection="userIds" item="userId" open="(" close=")" separator=",">
         #{userId}
@@ -822,9 +813,6 @@
         <foreach collection="shopNames" item="shopName" open="(" close=")" separator=",">
           #{shopName}
         </foreach>
-      </if>
-      <if test="shopNames == null or shopNames.size() == 0">
-        AND shop_name IS NOT NULL
       </if>
       AND creator IN 
       <foreach collection="userIds" item="userId" open="(" close=")" separator=",">
