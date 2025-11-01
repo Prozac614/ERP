@@ -1779,15 +1779,18 @@ public class DepotItemService {
      */
     private void updateSummaryTablesAfterStockChange(Long materialId, Long depotId, Date operTime, Long headerId) {
         // 保存阶段不执行每日出库汇总与库存预警（仅在已审核单据时执行）
+        DepotHead header = null;
         try {
             if (headerId == null) {
                 logger.debug("skip summary/alert: headerId is null, materialId={}, depotId={}", materialId, depotId);
                 return;
             }
-            DepotHead header = depotHeadMapper.selectByPrimaryKey(headerId);
-            if (header == null || !"1".equals(header.getStatus())) {
-                logger.debug("skip summary/alert: headerId={}, status={}, materialId={}, depotId={}",
-                        headerId, header != null ? header.getStatus() : null, materialId, depotId);
+
+            header = depotHeadMapper.selectByPrimaryKey(headerId);
+            if (header == null) {
+                logger.debug(
+                        "skip summary/alert: headerId={}, materialId={}, depotId={}, reason=header not found",
+                        headerId, materialId, depotId);
                 return;
             }
         } catch (Exception e) {
@@ -1811,8 +1814,7 @@ public class DepotItemService {
         // 1) 仅在出库型场景下更新每日出库汇总，且只在物料首次出现时执行
         if (materialFirstTime && isOutTypeAffectingSummary(materialId, operTime, tenantId)) {
             // 获取当前操作的单据头信息
-            DepotHead depotHead = depotHeadMapper.selectByPrimaryKey(headerId);
-            String shopName = depotHead != null ? depotHead.getShopName() : "";
+            String shopName = header != null ? header.getShopName() : "";
             updateDailyOutSummaryForMaterialBusinessLogic(materialId, tenantId, operTime, shopName);
             markWriteHappened();
         } else {
@@ -1824,10 +1826,9 @@ public class DepotItemService {
         if (materialFirstTime) {
             try {
                 // 获取当前操作的单据头信息
-                DepotHead depotHead = depotHeadMapper.selectByPrimaryKey(headerId);
                 // 判断是否是销售出库：必须同时满足出库类型且子类型为销售出库
-                boolean isSalesOut = BusinessConstants.DEPOTHEAD_TYPE_OUT.equals(depotHead.getType())
-                        && BusinessConstants.SUB_TYPE_SALES.equals(depotHead.getSubType());
+                boolean isSalesOut = header != null && BusinessConstants.DEPOTHEAD_TYPE_OUT.equals(header.getType())
+                        && BusinessConstants.SUB_TYPE_SALES.equals(header.getSubType());
                 boolean updated = updateStockAlertStatusForMaterial(materialId, tenantId, isSalesOut);
                 if (updated) {
                     markWriteHappened();
