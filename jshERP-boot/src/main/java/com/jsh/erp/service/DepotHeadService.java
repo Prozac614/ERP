@@ -1435,6 +1435,17 @@ public class DepotHeadService {
     public void updateDepotHeadAndDetail(String beanJson, String rows, HttpServletRequest request) throws Exception {
         /** 更新单据主表信息 */
         DepotHead depotHead = JSONObject.parseObject(beanJson, DepotHead.class);
+        DepotHead oldBill = getDepotHead(depotHead.getId());
+        if (oldBill == null) {
+            throw new BusinessRunTimeException(ExceptionConstants.DEPOT_HEAD_EDIT_FAILED_CODE,
+                    String.format(ExceptionConstants.DEPOT_HEAD_EDIT_FAILED_MSG));
+        }
+        Long currentUserId = userService.getCurrentUser().getId();
+        Long creatorId = oldBill.getCreator();
+        if (creatorId != null && !creatorId.equals(currentUserId)) {
+            throw new BusinessRunTimeException(ExceptionConstants.DEPOT_HEAD_NOT_OWNER_EDIT_FAILED_CODE,
+                    String.format(ExceptionConstants.DEPOT_HEAD_NOT_OWNER_EDIT_FAILED_MSG));
+        }
         // 校验单号是否重复
         if (checkIsBillNumberExist(depotHead.getId(), depotHead.getNumber()) > 0) {
             throw new BusinessRunTimeException(ExceptionConstants.DEPOT_HEAD_BILL_NUMBER_EXIST_CODE,
@@ -1459,12 +1470,12 @@ public class DepotHeadService {
                     String.format(ExceptionConstants.DEPOT_ITEM_EXIST_REPEAT_NO_FAILED_MSG));
         }
         // 校验单据状态，如果不是未审核则提示
-        if (!"0".equals(getDepotHead(depotHead.getId()).getStatus())) {
+        if (!BusinessConstants.BILLS_STATUS_UN_AUDIT.equals(oldBill.getStatus())) {
             throw new BusinessRunTimeException(ExceptionConstants.DEPOT_HEAD_BILL_CANNOT_EDIT_CODE,
                     String.format(ExceptionConstants.DEPOT_HEAD_BILL_CANNOT_EDIT_MSG));
         }
         // 获取之前的会员id
-        Long preOrganId = getDepotHead(depotHead.getId()).getOrganId();
+        Long preOrganId = oldBill.getOrganId();
         String subType = depotHead.getSubType();
         // 结算账户校验
         if ("采购".equals(subType) || "采购退货".equals(subType) || "销售".equals(subType) || "销售退货".equals(subType)) {

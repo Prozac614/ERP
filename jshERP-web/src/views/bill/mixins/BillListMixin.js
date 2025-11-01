@@ -8,6 +8,7 @@ import {
 import { getCheckFlag, getFormatDate, getMpListShort, getPrevMonthFormatDate } from '@/utils/util'
 import moment from 'moment'
 import pick from 'lodash.pick'
+import { USER_INFO } from '@/store/mutation-types'
 
 export const BillListMixin = {
   data() {
@@ -480,6 +481,13 @@ export const BillListMixin = {
       this.$refs.modalForm.materialTable.columns[columnIndex].type = FormTypes.popupJsh
     },
     myHandleEdit(record) {
+      const currentUserInfo = Vue.ls.get(USER_INFO)
+      const currentUserId = currentUserInfo ? String(currentUserInfo.id) : null
+      const recordCreatorId = record.creator !== undefined && record.creator !== null ? String(record.creator) : null
+      if (currentUserId && recordCreatorId && recordCreatorId !== currentUserId) {
+        this.$message.warning('抱歉，只能编辑自己创建的单据！')
+        return
+      }
       if (record.status === '0') {
         this.$refs.modalForm.action = "edit";
         if (this.btnEnableList.indexOf(2) === -1) {
