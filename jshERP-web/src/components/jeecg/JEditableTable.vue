@@ -1755,6 +1755,8 @@
       },
       /** 删除一行或多行 */
       removeRows(id) {
+        const currentFilter = (this.barCodeFilter || '').toString()
+        const hadFilter = currentFilter.trim().length > 0
         let ids = id
         if (!(id instanceof Array)) {
           if (typeof id === 'string') {
@@ -1793,6 +1795,14 @@
           this.updateFormValues()
           // 重新计算统计
           this.recalcAllStatisticsColumns()
+          if (hadFilter) {
+            this.$nextTick(() => {
+              this.applyBarCodeFilter('')
+              this.$nextTick(() => {
+                this.applyBarCodeFilter(currentFilter)
+              })
+            })
+          }
         })
         return true
       },
