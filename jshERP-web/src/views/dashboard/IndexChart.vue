@@ -182,7 +182,11 @@
             </template>
             <a-button icon="setting">列设置</a-button>
           </a-popover>
-          <span class="total-amount" style="display:inline-block; margin-left:12px; font-weight:700; font-size:16px; color:#1890ff; white-space:nowrap;">
+          <span
+            class="total-amount"
+            style="display:inline-block; margin-left:12px; font-weight:700; font-size:16px; color:#1890ff; white-space:nowrap;"
+            v-if="hasStockAlertPermission"
+          >
             库存总金额：{{ formatCurrency(totalStockValue) }}
           </span>
           <a-tooltip placement="left" title="商品库存期间统计表显示各商品的期间库存变动情况。
@@ -526,6 +530,10 @@ import { getAction, postAction, downFile } from '@/api/manage'
       },
       // 加载库存总金额
       async loadTotalStockValue() {
+        if (!this.hasStockAlertPermission) {
+          this.totalStockValue = null
+          return
+        }
         try {
           const res = await getAction('/depotItem/getTotalStockValue', {})
           if (res && res.code === 200 && res.data) {
@@ -1087,6 +1095,12 @@ import { getAction, postAction, downFile } from '@/api/manage'
         // 更新权限标识
         this.hasStockAlertPermission = data.hasStockAlertPermission || false
 
+        if (this.hasStockAlertPermission) {
+          this.loadTotalStockValue()
+        } else {
+          this.totalStockValue = null
+        }
+
 
 
         // 合并每日出库数据到商品数据中
@@ -1585,8 +1599,6 @@ import { getAction, postAction, downFile } from '@/api/manage'
       // 初始化表格高度
       this.$nextTick(() => {
         this.calcTableBodyHeight();
-        // 页面加载时拉取库存总金额
-        this.loadTotalStockValue();
       });
       
       // 监听窗口resize

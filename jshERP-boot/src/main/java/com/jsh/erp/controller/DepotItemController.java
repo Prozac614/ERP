@@ -1179,6 +1179,11 @@ public class DepotItemController {
     public BaseResponseInfo getTotalStockValue(HttpServletRequest request) throws Exception {
         BaseResponseInfo res = new BaseResponseInfo();
         try {
+            if (!StockAlertPermissionUtil.hasStockAlertPermission(request)) {
+                res.code = 403;
+                res.data = "没有库存预警功能权限";
+                return res;
+            }
             BigDecimal value = depotItemOptimizedService.getTotalStockValueForCurrentTenant();
             Map<String, Object> map = new HashMap<>();
             map.put("totalStockValue", value);
