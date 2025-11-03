@@ -1335,6 +1335,11 @@
         this.applyBarCodeFilter(value)
       },
 
+      getBarCodeFilterValue() {
+        const value = (this.barCodeFilter || '').toString().trim()
+        return value ? value : ''
+      },
+
       recalculateVisibleRows({ resetScroll = false } = {}) {
         if (!(this.rows instanceof Array)) {
           this.visibleRowOrder = []
@@ -1493,6 +1498,13 @@
           this.columns.forEach(column => {
             let inputId = column.key + value.id
             let sourceValue = (data[column.key] == null ? '' : data[column.key]).toString()
+
+            if (setDefaultValue && column.key === 'barCode') {
+              const filterValue = this.getBarCodeFilterValue()
+              if (filterValue) {
+                sourceValue = filterValue
+              }
+            }
 
             let defaultValue = null;
             if (setDefaultValue) {
