@@ -1701,12 +1701,13 @@
           this.updateFormValues()
         })
         // 触发add事件
+        const emittedRow = (() => {
+          let r = Object.assign({}, row)
+          r.id = this.getCleanId(r.id)
+          return r
+        })()
         this.$emit('added', {
-          row: (() => {
-            let r = Object.assign({}, row)
-            r.id = this.getCleanId(r.id)
-            return r
-          })(),
+          row: emittedRow,
           target: this
         })
         // 设置滚动条位置
@@ -3115,7 +3116,8 @@
       autoJumpNextInputBill() {
         let that = this
         let inputDom = $(".ant-modal-cust-warp:visible").find("#billModal");
-        inputDom.find("input:visible:not(:checkbox)").off("keydown").on("keydown", function(e){
+        const selector = "input:visible:not(:checkbox)"
+        inputDom.off("keydown.jetEnter").on("keydown.jetEnter", selector, function(e){
           //响应回车键按下的处理
           e = event || window.event || arguments.callee.caller.arguments[0];
           //捕捉是否按键为回车键，可百度JS键盘事件了解更多
