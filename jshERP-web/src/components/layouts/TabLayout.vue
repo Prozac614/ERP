@@ -206,7 +206,7 @@
       // 将首页添加到第一位
       addIndexToFirst() {
         this.pageList.splice(0, 0, {
-          name: '首页',
+          name: 'analysis',
           path: indexKey,
           fullPath: indexKey,
           meta: {
