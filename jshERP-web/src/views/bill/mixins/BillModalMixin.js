@@ -8,6 +8,16 @@ import { getCheckFlag, getMpListShort, getNowFormatDateTime } from '@/utils/util
 import { USER_INFO } from '@/store/mutation-types'
 import Vue from 'vue'
 
+const ALLOWED_VISIBLE_COLUMN_KEYS = new Set([
+  'depotId',
+  'barCode',
+  'name',
+  'stock',
+  'operNumber',
+  'unitPrice',
+  'allPrice'
+])
+
 export const BillModalMixin = {
   data() {
     return {
@@ -664,59 +674,77 @@ export const BillModalMixin = {
         taxLastMoney: mInfo.billPrice
       }
     },
-    //使得型号、颜色、扩展信息、sku等为隐藏
+    //统一保留允许的列，隐藏其余列
     changeColumnHide() {
-      this.changeFormTypes(this.materialTable.columns, 'model', 0)
-      this.changeFormTypes(this.materialTable.columns, 'color', 0)
-      this.changeFormTypes(this.materialTable.columns, 'brand', 0)
-      this.changeFormTypes(this.materialTable.columns, 'mfrs', 0)
-      this.changeFormTypes(this.materialTable.columns, 'otherField1', 0)
-      this.changeFormTypes(this.materialTable.columns, 'otherField2', 0)
-      this.changeFormTypes(this.materialTable.columns, 'otherField3', 0)
-      this.changeFormTypes(this.materialTable.columns, 'sku', 0)
+      if (!this.materialTable || !(this.materialTable.columns instanceof Array)) {
+        return
+      }
+      this.materialTable.columns.forEach(column => {
+        if (!column || !column.key) {
+          return
+        }
+        if (column.__originType == null) {
+          column.__originType = column.type
+        }
+        if (ALLOWED_VISIBLE_COLUMN_KEYS.has(column.key)) {
+          column.type = column.__originType
+        } else {
+          this.changeFormTypes(this.materialTable.columns, column.key, 0)
+        }
+      })
     },
-    //使得sku、序列号、批号、到期日等为显示
+    //根据数据需求动态显示列（受允许列限制）
     changeColumnShow(info) {
+      if (!info) {
+        return
+      }
+      const ensureVisible = (key, handler) => {
+        if (!ALLOWED_VISIBLE_COLUMN_KEYS.has(key)) {
+          return
+        }
+        handler()
+      }
+
       if (info.model) {
-        this.changeFormTypes(this.materialTable.columns, 'model', 1)
+        ensureVisible('model', () => this.changeFormTypes(this.materialTable.columns, 'model', 1))
       }
       if (info.color) {
-        this.changeFormTypes(this.materialTable.columns, 'color', 1)
+        ensureVisible('color', () => this.changeFormTypes(this.materialTable.columns, 'color', 1))
       }
       if (info.brand) {
-        this.changeFormTypes(this.materialTable.columns, 'brand', 1)
+        ensureVisible('brand', () => this.changeFormTypes(this.materialTable.columns, 'brand', 1))
       }
       if (info.mfrs) {
-        this.changeFormTypes(this.materialTable.columns, 'mfrs', 1)
+        ensureVisible('mfrs', () => this.changeFormTypes(this.materialTable.columns, 'mfrs', 1))
       }
       if (info.otherField1) {
-        this.changeFormTypes(this.materialTable.columns, 'otherField1', 1)
+        ensureVisible('otherField1', () => this.changeFormTypes(this.materialTable.columns, 'otherField1', 1))
       }
       if (info.otherField2) {
-        this.changeFormTypes(this.materialTable.columns, 'otherField2', 1)
+        ensureVisible('otherField2', () => this.changeFormTypes(this.materialTable.columns, 'otherField2', 1))
       }
       if (info.otherField3) {
-        this.changeFormTypes(this.materialTable.columns, 'otherField3', 1)
+        ensureVisible('otherField3', () => this.changeFormTypes(this.materialTable.columns, 'otherField3', 1))
       }
       if (info.sku) {
-        this.changeFormTypes(this.materialTable.columns, 'sku', 1)
+        ensureVisible('sku', () => this.changeFormTypes(this.materialTable.columns, 'sku', 1))
       }
       if (info.enableSerialNumber === "1") {
-        //如果开启出入库管理，并且类型等于采购、采购退货、销售、销售退货，则跳过
-        if (this.inOutManageFlag && (this.prefixNo === 'CGRK' || this.prefixNo === 'CGTH' || this.prefixNo === 'XSCK' || this.prefixNo === 'XSTH')) {
-          //跳过
-        } else {
+        ensureVisible('snList', () => {
+          if (this.inOutManageFlag && (this.prefixNo === 'CGRK' || this.prefixNo === 'CGTH' || this.prefixNo === 'XSCK' || this.prefixNo === 'XSTH')) {
+            return
+          }
           this.changeFormTypes(this.materialTable.columns, 'snList', 1)
-        }
+        })
       }
       if (info.enableBatchNumber === "1") {
-        //如果开启出入库管理，并且类型等于采购、采购退货、销售、销售退货，则跳过
-        if (this.inOutManageFlag && (this.prefixNo === 'CGRK' || this.prefixNo === 'CGTH' || this.prefixNo === 'XSCK' || this.prefixNo === 'XSTH')) {
-          //跳过
-        } else {
+        ensureVisible('batchNumber', () => {
+          if (this.inOutManageFlag && (this.prefixNo === 'CGRK' || this.prefixNo === 'CGTH' || this.prefixNo === 'XSCK' || this.prefixNo === 'XSTH')) {
+            return
+          }
           this.changeFormTypes(this.materialTable.columns, 'batchNumber', 1)
-          this.changeFormTypes(this.materialTable.columns, 'expirationDate', 1)
-        }
+          ensureVisible('expirationDate', () => this.changeFormTypes(this.materialTable.columns, 'expirationDate', 1))
+        })
       }
     },
     //删除一行或多行的时候触发

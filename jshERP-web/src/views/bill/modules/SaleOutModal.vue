@@ -395,13 +395,6 @@
           this.addInit(this.prefixNo)
           this.personList.value = ''
           this.fileList = []
-          // Hide specified columns for new documents
-          this.changeFormTypes(this.materialTable.columns, 'standard', 0)
-          this.changeFormTypes(this.materialTable.columns, 'unit', 0)
-          this.changeFormTypes(this.materialTable.columns, 'taxRate', 0)
-          this.changeFormTypes(this.materialTable.columns, 'taxMoney', 0)
-          this.changeFormTypes(this.materialTable.columns, 'taxLastMoney', 0)
-          this.changeFormTypes(this.materialTable.columns, 'remark', 0)
 
           this.$nextTick(() => {
             handleIntroJs(this.prefixNo, 1)
