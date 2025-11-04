@@ -231,7 +231,7 @@
           offset: 1
         },
         // 默认索引
-        defDataIndex:['action','organName','number','materialsList','operTimeStr','userName','materialCount','totalPrice','status'],
+        defDataIndex:['action','userName','materialsList','materialCount','status'],
         // 默认列
         defColumns: [
           {
