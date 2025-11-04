@@ -1385,6 +1385,10 @@ import { getAction, postAction, downFile } from '@/api/manage'
           params.beginTime = this.queryParam.createTimeRange[0].format('YYYY-MM-DD')
           params.endTime = this.queryParam.createTimeRange[1].format('YYYY-MM-DD')
         }
+
+        if (this.queryParam.shopNames && this.queryParam.shopNames.length > 0) {
+          params.shopNames = this.queryParam.shopNames.join(',')
+        }
         
         // 使用downFile函数下载文件
         downFile('/depotItem/exportMaterialStock', params).then((data) => {

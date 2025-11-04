@@ -28,6 +28,7 @@ import javax.servlet.http.HttpServletResponse;
 import java.math.BigDecimal;
 import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 public class DepotItemService {
@@ -1740,7 +1741,13 @@ public class DepotItemService {
      */
     public List<MaterialStockPeriodVo> getMaterialPeriodStock(String materialParam, int offset, int rows)
             throws Exception {
-        List<MaterialStockPeriodVo> list = depotItemMapperEx.getMaterialPeriodStock(materialParam, offset, rows);
+        return getMaterialPeriodStock(materialParam, offset, rows, Collections.emptyList());
+    }
+
+    public List<MaterialStockPeriodVo> getMaterialPeriodStock(String materialParam, int offset, int rows,
+            List<String> shopNames) throws Exception {
+        List<MaterialStockPeriodVo> list = depotItemMapperEx.getMaterialPeriodStock(materialParam, offset, rows,
+                shopNames);
         return list;
     }
 
@@ -1767,7 +1774,13 @@ public class DepotItemService {
      */
     public List<Map<String, Object>> getDailyOutStock(String materialIds, String beginTime, String endTime)
             throws Exception {
-        List<Map<String, Object>> list = depotItemMapperEx.getDailyOutStock(materialIds, beginTime, endTime);
+        return getDailyOutStock(materialIds, beginTime, endTime, Collections.emptyList());
+    }
+
+    public List<Map<String, Object>> getDailyOutStock(String materialIds, String beginTime, String endTime,
+            List<String> shopNames) throws Exception {
+        List<Map<String, Object>> list = depotItemMapperEx.getDailyOutStock(materialIds, beginTime, endTime,
+                shopNames);
         return list;
     }
 
@@ -2026,13 +2039,23 @@ public class DepotItemService {
      * @param response      HTTP响应对象
      * @throws Exception
      */
-    public void exportMaterialStockToExcel(String materialParam, String beginTime, String endTime,
+    public void exportMaterialStockToExcel(String materialParam, String beginTime, String endTime, String shopNames,
             HttpServletResponse response) throws Exception {
-        logger.info("开始导出商品库存数据，参数: materialParam={}, beginTime={}, endTime={}", materialParam, beginTime, endTime);
+        logger.info("开始导出商品库存数据，参数: materialParam={}, beginTime={}, endTime={}, shopNames={}", materialParam,
+                beginTime, endTime, shopNames);
+
+        List<String> shopNameList = Collections.emptyList();
+        if (StringUtil.isNotEmpty(shopNames)) {
+            shopNameList = Arrays.stream(shopNames.split(","))
+                    .map(String::trim)
+                    .filter(StringUtil::isNotEmpty)
+                    .distinct()
+                    .collect(Collectors.toList());
+        }
 
         // 1. 获取所有符合条件的库存数据（不分页）
         // 使用现有的查询方法，设置一个较大的数量限制来获取所有数据
-        List<MaterialStockPeriodVo> stockList = depotItemMapperEx.getMaterialPeriodStock(materialParam, 0, 999999);
+        List<MaterialStockPeriodVo> stockList = getMaterialPeriodStock(materialParam, 0, 999999, shopNameList);
 
         if (stockList == null || stockList.isEmpty()) {
             throw new BusinessRunTimeException(ExceptionConstants.MATERIAL_NOT_EXISTS_CODE, "没有找到符合条件的库存数据");
@@ -2071,7 +2094,7 @@ public class DepotItemService {
                 String formattedEndTime = endTime + BusinessConstants.DAY_LAST_TIME;
 
                 List<Map<String, Object>> dailyOutList = getDailyOutStock(
-                        materialIds.toString(), formattedBeginTime, formattedEndTime);
+                        materialIds.toString(), formattedBeginTime, formattedEndTime, shopNameList);
 
                 // 将每日出库数据按商品编码和日期组织
                 for (Map<String, Object> dailyOut : dailyOutList) {

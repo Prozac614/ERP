@@ -2047,6 +2047,7 @@ public class DepotItemController {
             @RequestParam(value = "materialParam", required = false) String materialParam,
             @RequestParam(value = "beginTime", required = false) String beginTime,
             @RequestParam(value = "endTime", required = false) String endTime,
+            @RequestParam(value = "shopNames", required = false) String shopNames,
             HttpServletRequest request,
             HttpServletResponse response) {
         try {
@@ -2054,6 +2055,7 @@ public class DepotItemController {
                     StringUtil.toNull(materialParam),
                     StringUtil.toNull(beginTime),
                     StringUtil.toNull(endTime),
+                    StringUtil.toNull(shopNames),
                     response);
         } catch (Exception e) {
             logger.error("导出商品库存数据失败", e);

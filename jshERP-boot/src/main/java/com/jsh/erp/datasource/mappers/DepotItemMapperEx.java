@@ -269,7 +269,8 @@ public interface DepotItemMapperEx {
         List<MaterialStockPeriodVo> getMaterialPeriodStock(
                         @Param("materialParam") String materialParam,
                         @Param("offset") Integer offset,
-                        @Param("rows") Integer rows);
+                        @Param("rows") Integer rows,
+                        @Param("shopNames") List<String> shopNames);
 
         int getMaterialPeriodStockCount(
                         @Param("materialParam") String materialParam);
@@ -277,7 +278,8 @@ public interface DepotItemMapperEx {
         List<java.util.Map<String, Object>> getDailyOutStock(
                         @Param("materialIds") String materialIds,
                         @Param("beginTime") String beginTime,
-                        @Param("endTime") String endTime);
+                        @Param("endTime") String endTime,
+                        @Param("shopNames") List<String> shopNames);
 
         // ========== 性能优化相关方法 ==========
 
