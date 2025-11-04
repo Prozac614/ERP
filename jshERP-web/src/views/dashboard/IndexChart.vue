@@ -6,20 +6,19 @@
         <div class="table-page-search-wrapper">
           <!-- 搜索区域 -->
           <a-form layout="inline" @keyup.enter.native="searchQuery">
-            <a-row :gutter="24">
-              <a-col :md="6" :sm="24">
-                <a-form-item label="商品信息" :labelCol="labelCol" :wrapperCol="wrapperCol">
+            <div class="dashboard-filter-row">
+              <div class="filter-item">
+                <a-form-item label="商品信息">
                   <a-input placeholder="请输入唛头、名称、助记码、规格、型号等信息" v-model="queryParam.materialParam"></a-input>
                 </a-form-item>
-              </a-col>
+              </div>
 
-              <a-col :md="12" :sm="24">
-                <a-form-item label="数据维度" :labelCol="labelCol" :wrapperCol="wrapperCol">
-                  <div style="display: flex; gap: 8px;">
+              <div class="filter-item filter-item--dimension">
+                <a-form-item label="数据维度">
+                  <div class="dimension-controls">
                     <a-select
                       v-model="queryParam.dimensionType"
                       @change="onDimensionChange"
-                      style="width: 120px"
                     >
                       <a-select-option value="daily">日</a-select-option>
                       <a-select-option value="monthly">月</a-select-option>
@@ -34,7 +33,6 @@
                         :placeholder="currentPickerPlaceholder"
                         @change="onTimeRangeChange"
                         @ok="onTimeRangeOk"
-                        style="width: 200px"
                         :key="'date-picker'"
                       />
                     </template>
@@ -46,7 +44,6 @@
                         :placeholder="currentPickerPlaceholder"
                         @change="onTimeRangeChange"
                         @ok="onTimeRangeOk"
-                        style="width: 200px"
                         :key="'month-picker'"
                       />
                     </template>
@@ -58,7 +55,6 @@
                         :placeholder="currentPickerPlaceholder"
                         @change="onTimeRangeChange"
                         @ok="onTimeRangeOk"
-                        style="width: 200px"
                         :key="'quarter-picker'"
                       />
                     </template>
@@ -70,16 +66,15 @@
                         :placeholder="currentPickerPlaceholder"
                         @change="onTimeRangeChange"
                         @ok="onTimeRangeOk"
-                        style="width: 200px"
                         :key="'year-picker'"
                       />
                     </template>
                   </div>
                 </a-form-item>
-              </a-col>
+              </div>
 
-              <a-col :md="6" :sm="24">
-                <a-form-item label="库存状态" :labelCol="labelCol" :wrapperCol="wrapperCol">
+              <div class="filter-item">
+                <a-form-item label="库存状态">
                   <a-select
                     placeholder="请选择库存状态"
                     v-model="queryParam.stockAlertStatus"
@@ -92,10 +87,10 @@
                     </a-select-option>
                   </a-select>
                 </a-form-item>
-              </a-col>
+              </div>
               <!-- 销售店铺筛选（仅影响首页销售统计相关接口时使用） -->
-              <a-col :md="6" :sm="24">
-                <a-form-item label="销售店铺" :labelCol="labelCol" :wrapperCol="wrapperCol">
+              <div class="filter-item">
+                <a-form-item label="销售店铺">
                   <a-select
                     mode="multiple"
                     placeholder="默认全部店铺"
@@ -107,14 +102,12 @@
                     <a-select-option v-for="shop in shopList" :key="shop.id" :value="shop.name">{{ shop.name }}</a-select-option>
                   </a-select>
                 </a-form-item>
-              </a-col>
-              <span style="float: left;overflow: hidden;" class="table-page-search-submitButtons">
-                <a-col :md="6" :sm="24">
-                  <a-button type="primary" @click="searchQuery">{{ getQueryButtonText() }}</a-button>
-                  <a-button style="margin-left: 8px" @click="searchReset">重置</a-button>
-                </a-col>
-              </span>
-            </a-row>
+              </div>
+              <div class="filter-actions">
+                <a-button type="primary" @click="searchQuery">{{ getQueryButtonText() }}</a-button>
+                <a-button @click="searchReset">重置</a-button>
+              </div>
+            </div>
 
           </a-form>
         </div>
@@ -1631,12 +1624,83 @@ import { getAction, postAction, downFile } from '@/api/manage'
     padding: 24px;
     background: #fafafa;
     border-radius: 6px;
-    
-    .table-page-search-submitButtons {
-      .ant-btn {
-        margin-right: 8px;
-      }
-    }
+  }
+
+  .dashboard-filter-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    width: 100%;
+    align-items: center;
+  }
+
+  .filter-item {
+    flex: 1 1 240px;
+    min-width: 200px;
+  }
+
+  .filter-item .ant-form-item {
+    margin-bottom: 0;
+    width: 100%;
+    display: flex;
+    align-items: center;
+  }
+
+  .filter-item .ant-form-item-label {
+    flex: 0 0 80px;
+    padding-right: 8px;
+    line-height: 32px;
+    text-align: left;
+  }
+
+  .filter-item .ant-form-item-label > label {
+    height: 32px;
+    display: flex;
+    align-items: center;
+  }
+
+  .filter-item .ant-form-item-control-wrapper {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .dimension-controls {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 6px;
+    align-items: center;
+    width: 100%;
+  }
+
+  .dimension-controls .ant-select {
+    flex: 0 0 100px;
+  }
+
+  .dimension-controls .ant-calendar-picker,
+  .dimension-controls .ant-picker {
+    flex: 1 1 180px;
+    min-width: 180px;
+  }
+
+  .filter-item--dimension .ant-form-item-control-wrapper {
+    display: flex;
+  }
+
+  .filter-item--dimension {
+    flex: 0 0 360px;
+    min-width: 320px;
+  }
+
+  .filter-actions {
+    flex: 0 0 auto;
+    display: flex;
+    gap: 8px;
+    margin-left: auto;
+    align-items: center;
+  }
+
+  .filter-actions .ant-btn + .ant-btn {
+    margin-left: 0;
   }
 
   .table-operator {
