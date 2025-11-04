@@ -355,6 +355,7 @@ import { getAction, postAction, downFile } from '@/api/manage'
 
         // 表格滚动
         scroll: { x: undefined }, // 初始不设置滚动，让表格填满容器
+        horizontalScrollActive: false,
         // 新增：表格内部滚动高度
         tableBodyHeight: 0,
 
@@ -395,11 +396,11 @@ import { getAction, postAction, downFile } from '@/api/manage'
             console.warn(`⚠️ 列 ${col.title} 缺少width属性，设置默认宽度100px`)
             return { ...col, width: 100 }
           }
-          return col
+          return { ...col }
         })
-        
 
-        
+
+
         return processedColumns
       },
       allDataIndex() {
@@ -459,7 +460,6 @@ import { getAction, postAction, downFile } from '@/api/manage'
       
       // 🔧 简化的表格布局策略
       dynamicTableLayout() {
-        // 简单固定布局，避免复杂判断
         return 'fixed'
       }
     },
@@ -587,12 +587,14 @@ import { getAction, postAction, downFile } from '@/api/manage'
         const calculatedWidth = this.calculateTotalTableWidth()
         const containerWidth = this.getTableContainerWidth()
         
-        if (calculatedWidth <= containerWidth) {
-          // 计算宽度小于等于容器宽度时，不设置滚动，让表格填满容器
-          this.scroll.x = undefined
-        } else {
-          // 计算宽度大于容器宽度时，设置滚动宽度
+        const needsHorizontalScroll = calculatedWidth > containerWidth
+        if (needsHorizontalScroll) {
           this.scroll.x = calculatedWidth
+          this.horizontalScrollActive = true
+        } else {
+          const fallbackWidth = Math.max(containerWidth, calculatedWidth)
+          this.scroll.x = fallbackWidth
+          this.horizontalScrollActive = false
         }
         
 
@@ -838,7 +840,7 @@ import { getAction, postAction, downFile } from '@/api/manage'
 
       // 🔧 核心功能：自适应固定列策略
       applyAdaptiveFixedColumns() {
-        const needsHorizontalScroll = this.scroll.x !== undefined
+        const needsHorizontalScroll = this.horizontalScrollActive
         
                  
         
@@ -1687,7 +1689,7 @@ import { getAction, postAction, downFile } from '@/api/manage'
   }
 
   .filter-item--dimension {
-    flex: 0 0 360px;
+    flex: 0 0 500px;
     min-width: 320px;
   }
 
@@ -1731,7 +1733,7 @@ import { getAction, postAction, downFile } from '@/api/manage'
 
 .ant-table-wrapper .ant-table table {
   table-layout: fixed !important;
-  width: 100%;
+  width: 100% !important;
 }
 
 /* 确保列头文字不换行，保持良好的显示效果 */
