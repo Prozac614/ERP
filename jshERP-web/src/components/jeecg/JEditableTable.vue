@@ -1019,6 +1019,7 @@
         barCodeFilter: '',
         // 输入框绑定值
         barCodeFilterInput: '',
+        pendingPopupJshDefaults: [],
       }
     },
     created() {
@@ -1403,6 +1404,7 @@
           this.visibleRowOrder = []
           this.barCodeFilter = ''
           this.barCodeFilterInput = ''
+          this.pendingPopupJshDefaults = []
           this.$nextTick(() => {
             this.getElement('tbody').scrollTop = 0
           })
@@ -1481,6 +1483,7 @@
         let radioValues = { ...this.radioValues }
         let multiSelectValues = { ...this.multiSelectValues }
         let searchSelectValues = { ...this.searchSelectValues }
+        let pendingPopupJshDefaults = []
         // 禁用行的id
         let disabledRowIds = (this.disabledRowIds || [])
         dataSource.forEach((data, newValueIndex) => {
@@ -1498,11 +1501,13 @@
           this.columns.forEach(column => {
             let inputId = column.key + value.id
             let sourceValue = (data[column.key] == null ? '' : data[column.key]).toString()
+            let appliedFilterDefault = false
 
             if (setDefaultValue && column.key === 'barCode') {
               const filterValue = this.getBarCodeFilterValue()
               if (filterValue) {
                 sourceValue = filterValue
+                appliedFilterDefault = true
               }
             }
 
@@ -1569,6 +1574,14 @@
               popupValues[inputId] = sourceValue
             } else if (column.type === FormTypes.popupJsh) {
               popupJshValues[inputId] = sourceValue
+              if (appliedFilterDefault && sourceValue) {
+                pendingPopupJshDefaults.push({
+                  value: sourceValue,
+                  id: inputId,
+                  column,
+                  rowId: row.id
+                })
+              }
             } else if (column.type === FormTypes.input_pop) {
               jInputPopValues[inputId] = sourceValue
             } else if (column.type === FormTypes.radio) {
@@ -1654,12 +1667,15 @@
         this.searchSelectValues = searchSelectValues
         // 重新计算所有统计列
         this.recalcAllStatisticsColumns()
+
+        if (pendingPopupJshDefaults.length > 0) {
+          this.pendingPopupJshDefaults = (this.pendingPopupJshDefaults || []).concat(pendingPopupJshDefaults)
+        }
+
         // 更新到 dom
         if (update) {
           this.rows = rows
-
-          // 更新form表单的值
-          this.$nextTick(() => {
+          this.flushPopupJshDefaults(() => {
             this.updateFormValues()
           })
         }
@@ -1697,7 +1713,7 @@
         }
         this.rows = rows
 
-        this.$nextTick(() => {
+        this.flushPopupJshDefaults(() => {
           this.updateFormValues()
         })
         // 触发add事件
@@ -1743,8 +1759,8 @@
         }
         // 同步更改
         this.rows = rows
-        this.$nextTick(() => {
-          this.recalcSortNumber()
+        this.recalcSortNumber()
+        this.flushPopupJshDefaults(() => {
           this.forceUpdateFormValues()
         })
         // 触发 insert 事件
@@ -1803,7 +1819,7 @@
         })
         this.rows = rows
         this.$emit('deleted', this.getDeleteIds(), this)
-        this.$nextTick(() => {
+        this.flushPopupJshDefaults(() => {
           // 更新formValues
           this.updateFormValues()
           // 重新计算统计
@@ -2339,6 +2355,37 @@
         this.updateFormValues()
       },
 
+      flushPopupJshDefaults(afterApply) {
+        const defaults = (this.pendingPopupJshDefaults || []).slice()
+        this.pendingPopupJshDefaults = []
+        this.$nextTick(() => {
+          if (defaults.length > 0) {
+            this.applyPopupJshDefaults(defaults)
+          }
+          if (typeof afterApply === 'function') {
+            afterApply()
+          }
+        })
+      },
+
+      applyPopupJshDefaults(defaults) {
+        if (!(defaults instanceof Array) || defaults.length === 0) {
+          return
+        }
+        defaults.forEach(item => {
+          const { value, id, column, rowId } = item || {}
+          if (value == null || value === '' || !id || !column || !rowId) {
+            return
+          }
+          const rowIndex = this.rows.findIndex(row => row && row.id === rowId)
+          if (rowIndex === -1) {
+            return
+          }
+          const row = this.rows[rowIndex]
+          this.handleChangePopupJshCommon(value, id, row, column, rowIndex)
+        })
+      },
+
       // 重新计算所有统计列
       recalcAllStatisticsColumns() {
         if (this.hasStatisticsColumn) {
@@ -2514,8 +2561,8 @@
           rows = this.push(row, false, rows, newIndex)
           // 同步更改
           this.rows = rows
-          this.$nextTick(() => {
-            this.recalcSortNumber()
+          this.recalcSortNumber()
+          this.flushPopupJshDefaults(() => {
             this.forceUpdateFormValues()
           })
           // 触发 added 事件，以便设置仓库默认值
