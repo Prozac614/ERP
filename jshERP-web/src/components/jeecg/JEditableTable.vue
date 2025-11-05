@@ -1836,6 +1836,159 @@
         return true
       },
 
+      _getRequiredQuantityColumns() {
+        if (!(this.columns instanceof Array)) {
+          return []
+        }
+        return this.columns.filter(column => {
+          if (!column || !column.key) {
+            return false
+          }
+          if (column.aggregateRequired === false) {
+            return false
+          }
+          const hasRequiredRule = (column.validateRules instanceof Array) && column.validateRules.some(rule => rule && rule.required === true)
+          if (!hasRequiredRule) {
+            return false
+          }
+          if (column.aggregateRequired === true) {
+            return true
+          }
+          return column.key === 'operNumber'
+        })
+      },
+
+      _isQuantityValueEmpty(value) {
+        if (value === 0 || value === '0') {
+          return false
+        }
+        if (value == null) {
+          return true
+        }
+        if (typeof value === 'string') {
+          return value.trim() === ''
+        }
+        if (typeof value === 'number') {
+          return Number.isNaN(value)
+        }
+        return false
+      },
+
+      _collectQuantityValidationIssues(columns, rowIdSet = null) {
+        if (!(columns instanceof Array) || columns.length === 0) {
+          return []
+        }
+        const issues = []
+        const rows = this.rows || []
+        const inputValues = this.inputValues || []
+        rows.forEach((row, rowIndex) => {
+          if (!row) {
+            return
+          }
+          if (rowIdSet != null) {
+            const cleanId = this.getCleanId(row.id)
+            if (!rowIdSet.has(cleanId)) {
+              return
+            }
+          }
+          const rowValues = inputValues[rowIndex] || {}
+          const displayIndex = (() => {
+            const idx = this.getDisplayIndex(rowIndex)
+            return typeof idx === 'number' && idx >= 0 ? idx : rowIndex
+          })()
+          columns.forEach(column => {
+            const value = rowValues[column.key]
+            if (this._isQuantityValueEmpty(value)) {
+              issues.push({
+                rowIndex,
+                row,
+                column,
+                inputId: `${column.key}${row.id}`,
+                displayIndex,
+                value
+              })
+            }
+          })
+        })
+        return issues
+      },
+
+      _getQuantityRuleMessage(column) {
+        if (column && column.validateRules instanceof Array) {
+          for (let i = 0; i < column.validateRules.length; i++) {
+            const rule = column.validateRules[i]
+            if (rule && rule.required && rule.message) {
+              return rule.message
+            }
+          }
+          for (let i = 0; i < column.validateRules.length; i++) {
+            const rule = column.validateRules[i]
+            if (rule && rule.message) {
+              return rule.message
+            }
+          }
+        }
+        return '${title}不能为空'
+      },
+
+      _markQuantityIssueHighlights(issues) {
+        if (!(issues instanceof Array) || issues.length === 0) {
+          return
+        }
+        const highlightLimit = 5
+        const highlightIssues = issues.slice(0, highlightLimit)
+        highlightIssues.forEach(issue => {
+          const currentValue = issue.value
+          this.validateOneInput(currentValue, issue.row, issue.column, this.notPassedIds, true, 'change')
+        })
+
+        let tooltips = Object.assign({}, this.tooltips)
+        let notPassedIds = Array.isArray(this.notPassedIds) ? [...this.notPassedIds] : []
+        issues.forEach(issue => {
+          if (!notPassedIds.includes(issue.inputId)) {
+            notPassedIds.push(issue.inputId)
+          }
+          const existing = tooltips[issue.inputId] || {}
+          const message = this.replaceProps(issue.column, this._getQuantityRuleMessage(issue.column))
+          tooltips[issue.inputId] = Object.assign({}, existing, {
+            title: message,
+            passed: false,
+            visible: existing.visible || false
+          })
+        })
+        this.tooltips = tooltips
+        this.notPassedIds = notPassedIds
+      },
+
+      _notifyQuantityIssues(issues) {
+        if (!(issues instanceof Array) || issues.length === 0) {
+          return
+        }
+        const rowNumberSet = new Set()
+        issues.forEach(issue => {
+          const idx = typeof issue.displayIndex === 'number' && issue.displayIndex >= 0 ? issue.displayIndex : issue.rowIndex
+          rowNumberSet.add(idx + 1)
+        })
+        const rowNumbers = Array.from(rowNumberSet).sort((a, b) => a - b)
+        const preview = rowNumbers.slice(0, 5).join('、')
+        const columnTitles = Array.from(new Set(issues.map(issue => (issue.column && issue.column.title) || '').filter(Boolean)))
+        const columnLabel = (columnTitles.length === 1 ? columnTitles[0] : '数量') || '数量'
+        let message = `共有${rowNumbers.length}行${columnLabel}为空`
+        if (preview) {
+          message += `：第${preview}`
+          if (rowNumbers.length > 5) {
+            message += '等'
+          }
+          message += '行'
+        }
+        message += '，请补录后再保存。'
+        if (this.$message && typeof this.$message.error === 'function') {
+          this.$message.error(message)
+        } else {
+          console.error(message)
+        }
+      },
+
       /** 获取表格表单里的值（异步版） */
       getValuesAsync(options = {}, callback) {
         let { validate, rowIds, deleteTempId } = options
@@ -1843,7 +1996,27 @@
         if (!(rowIds instanceof Array)) rowIds = null
         // 是否删除临时ID，默认为 false
         if (typeof deleteTempId !== 'boolean') deleteTempId = false
+        let rowIdSet = null
+        if (rowIds instanceof Array) {
+          rowIdSet = new Set(rowIds.map(id => this.getCleanId(id)))
+        }
         // console.log('options:', { validate, rowIds })
+
+        if (validate === true) {
+          const quantityColumns = this._getRequiredQuantityColumns()
+          if (quantityColumns.length > 0) {
+            const quantityIssues = this._collectQuantityValidationIssues(quantityColumns, rowIdSet)
+            if (quantityIssues.length > 0) {
+              this._markQuantityIssueHighlights(quantityIssues)
+              this._notifyQuantityIssues(quantityIssues)
+              const result = { error: quantityIssues.length, values: [] }
+              if (typeof callback === 'function') {
+                callback(result)
+              }
+              return result
+            }
+          }
+        }
 
         let asyncCount = 0
         let error = 0
