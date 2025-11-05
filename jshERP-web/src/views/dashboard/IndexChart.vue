@@ -359,17 +359,23 @@ import { getAction, postAction, downFile } from '@/api/manage'
         // 新增：表格内部滚动高度
         tableBodyHeight: 0,
 
+        // 粘性列配置
+        stickyConfig: {
+          enabled: false,
+          leftColumns: [],
+        },
+
         // 默认索引（包含库存状态列）
         defDataIndex: ['action', 'barCode', 'materialName', 'currentPeriodStock', 'lastSixMonthsSales', 'stockAlertStatus'],
         settingDataIndex: ['action', 'barCode', 'materialName', 'currentPeriodStock', 'lastSixMonthsSales', 'stockAlertStatus'],
-        // 默认列（将根据横向滚动需求自适应设置fixed属性，优化宽度显示）
+        defaultStickyColumns: ['action', 'barCode', 'materialName', 'currentPeriodStock', 'lastSixMonthsSales', 'stockAlertStatus'],
+        // 默认列（宽度将用于粘性列偏移计算）
         defColumns: [
           {
             title: '操作',
             dataIndex: 'action',
             align: "center", 
             width: 100, // 🔧 80 → 100px，增加操作空间
-            // fixed属性将在 applyAdaptiveFixedColumns() 中动态设置
             scopedSlots: { customRender: 'action' },
           },
           { title: '商品编码', dataIndex: 'barCode', width: 120 }, // 🔧 100 → 120px，增加编码显示空间
@@ -391,12 +397,105 @@ import { getAction, postAction, downFile } from '@/api/manage'
         const baseColumns = this.defColumns.filter(item => validSettingDataIndex.includes(item.dataIndex))
         
         // 🔧 确保所有列都有明确的宽度，防止过度拉伸
-        const processedColumns = [...baseColumns, ...this.dateColumns].map(col => {
-          if (!col.width) {
-            console.warn(`⚠️ 列 ${col.title} 缺少width属性，设置默认宽度100px`)
-            return { ...col, width: 100 }
+        const stickyEnabled = this.stickyConfig.enabled
+        const headerBackground = '#f6f8ff'
+        const stickySet = stickyEnabled ? new Set(this.stickyConfig.leftColumns) : new Set()
+        const stickyOffsets = {}
+        if (stickyEnabled) {
+          let offset = 0
+          baseColumns.forEach(item => {
+            if (stickySet.has(item.dataIndex)) {
+              stickyOffsets[item.dataIndex] = offset
+              offset += item.width || 0
+            }
+          })
+        }
+
+        const appendClass = (origin, extra) => {
+          if (!origin) return extra
+          if (Array.isArray(origin)) {
+            return [...origin, extra]
           }
-          return { ...col }
+          if (typeof origin === 'object') {
+            return { ...origin, [extra]: true }
+          }
+          return `${origin} ${extra}`
+        }
+
+        const ensureWidth = (column) => {
+          if (!column.width) {
+            console.warn(`⚠️ 列 ${column.title} 缺少width属性，设置默认宽度100px`)
+            return { ...column, width: 100 }
+          }
+          return { ...column }
+        }
+
+        const processedColumns = [...baseColumns, ...this.dateColumns].map(col => {
+          const normalized = ensureWidth(col)
+
+          if (stickyEnabled && stickySet.has(normalized.dataIndex)) {
+            const stickyLeft = stickyOffsets[normalized.dataIndex]
+            if (typeof stickyLeft === 'number') {
+              const originalCustomCell = normalized.customCell
+              const originalCustomHeaderCell = normalized.customHeaderCell
+
+              normalized.customCell = (record, rowIndex) => {
+                const baseResult = typeof originalCustomCell === 'function' ? (originalCustomCell(record, rowIndex) || {}) : {}
+                const combinedClass = appendClass(baseResult.class, 'sticky-column')
+                return {
+                  ...baseResult,
+                  class: combinedClass,
+                  style: {
+                    ...baseResult.style,
+                    position: 'sticky',
+                    left: `${stickyLeft}px`,
+                    zIndex: 10,
+                    background: '#fff'
+                  }
+                }
+              }
+
+              normalized.customHeaderCell = (columnProps) => {
+                const baseResult = typeof originalCustomHeaderCell === 'function' ? (originalCustomHeaderCell(columnProps) || {}) : {}
+                const withStickyBase = appendClass(baseResult.class, 'sticky-column')
+                const combinedClass = appendClass(withStickyBase, 'sticky-column--header')
+                const nextStyle = {
+                  ...baseResult.style,
+                  position: 'sticky',
+                  left: `${stickyLeft}px`,
+                  zIndex: 11,
+                  background: baseResult.style && baseResult.style.background != null ? baseResult.style.background : headerBackground
+                }
+                return {
+                  ...baseResult,
+                  class: combinedClass,
+                  style: nextStyle
+                }
+              }
+            }
+          }
+
+          if (!normalized.customHeaderCell) {
+            normalized.customHeaderCell = () => ({
+              style: {
+                background: headerBackground
+              }
+            })
+          } else {
+            const originalCustomHeaderCell = normalized.customHeaderCell
+            normalized.customHeaderCell = (...args) => {
+              const baseResult = (originalCustomHeaderCell && originalCustomHeaderCell(...args)) || {}
+              return {
+                ...baseResult,
+                style: {
+                  ...baseResult.style,
+                  background: baseResult.style && baseResult.style.background != null ? baseResult.style.background : headerBackground
+                }
+              }
+            }
+          }
+
+          return normalized
         })
 
 
@@ -845,43 +944,15 @@ import { getAction, postAction, downFile } from '@/api/manage'
                  
         
         if (needsHorizontalScroll) {
-          // 需要横向滚动时，启用固定列（包含重要的基础信息列，优化宽度）
-          this.defColumns = [
-            {
-              title: '操作',
-              dataIndex: 'action',
-              align: "center", 
-              width: 100, // 🔧 优化宽度
-              fixed: 'left', // 启用固定
-              scopedSlots: { customRender: 'action' },
-            },
-            { title: '商品编码', dataIndex: 'barCode', width: 120, fixed: 'left' }, // 🔧 优化宽度
-            { title: '商品名称', dataIndex: 'materialName', width: 180, ellipsis: true, fixed: 'left' }, // 🔧 优化宽度
-            { title: '当前库存', dataIndex: 'currentPeriodStock', width: 110, fixed: 'left', scopedSlots: { customRender: 'customRenderStock' } }, // 🔧 优化宽度
-            { title: '近六月出库', dataIndex: 'lastSixMonthsSales', width: 120, align: 'center', fixed: 'left' },
-            { title: '库存状态', dataIndex: 'stockAlertStatus', width: 130, align: 'center', fixed: 'left', scopedSlots: { customRender: 'stockAlertStatusRender' } } // 🔧 优化宽度
-          ]
-
+          this.stickyConfig.enabled = true
+          this.stickyConfig.leftColumns = this.defaultStickyColumns.filter(dataIndex =>
+            this.settingDataIndex.includes(dataIndex)
+          )
         } else {
-          // 不需要横向滚动时，禁用所有固定列（保持相同宽度）
-          this.defColumns = [
-            {
-              title: '操作',
-              dataIndex: 'action',
-              align: "center", 
-              width: 100, // 🔧 保持优化宽度
-              // 不设置fixed属性
-              scopedSlots: { customRender: 'action' },
-            },
-            { title: '商品编码', dataIndex: 'barCode', width: 120 }, // 🔧 保持优化宽度
-            { title: '商品名称', dataIndex: 'materialName', width: 180, ellipsis: true }, // 🔧 保持优化宽度
-            { title: '当前库存', dataIndex: 'currentPeriodStock', width: 110, scopedSlots: { customRender: 'customRenderStock' } }, // 🔧 保持优化宽度
-            { title: '近六月出库', dataIndex: 'lastSixMonthsSales', width: 120, align: 'center' },
-            { title: '库存状态', dataIndex: 'stockAlertStatus', width: 130, align: 'center', scopedSlots: { customRender: 'stockAlertStatusRender' } } // 🔧 保持优化宽度
-          ]
-
+          this.stickyConfig.enabled = false
+          this.stickyConfig.leftColumns = []
         }
-        
+
         // 强制更新组件以应用新的列配置
         this.$forceUpdate()
       },
@@ -1298,11 +1369,19 @@ import { getAction, postAction, downFile } from '@/api/manage'
         
         // 验证列设置状态
         this.validateColumnSettings()
+
+        this.$nextTick(() => {
+          this.applyAdaptiveFixedColumns()
+        })
       },
       handleRestDefault() {
         this.settingDataIndex = [...this.defDataIndex]
         // 验证列设置状态
         this.validateColumnSettings()
+
+        this.$nextTick(() => {
+          this.applyAdaptiveFixedColumns()
+        })
       },
       // 验证列设置状态
       validateColumnSettings() {
@@ -1742,6 +1821,7 @@ import { getAction, postAction, downFile } from '@/api/manage'
   text-align: center;
   vertical-align: middle;
   border-right: 1px solid #f0f0f0; /* 确保列边界清晰 */
+  background: #f6f8ff;
 }
 
 .ant-table-wrapper .ant-table-tbody > tr > td {
@@ -1754,6 +1834,21 @@ import { getAction, postAction, downFile } from '@/api/manage'
 .ant-table-wrapper .ant-table table {
   table-layout: fixed !important;
   width: 100% !important;
+}
+
+.ant-table-wrapper .ant-table-header {
+  position: relative;
+}
+
+.ant-table-wrapper .ant-table-header::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: #f0f0f0;
+  pointer-events: none;
 }
 
 /* 确保无滚动条时表格列的精确对齐 */
@@ -1769,6 +1864,37 @@ import { getAction, postAction, downFile } from '@/api/manage'
 .ant-table-wrapper .ant-table-thead > tr > th:last-child,
 .ant-table-wrapper .ant-table-tbody > tr > td:last-child {
   border-right: none;
+}
+
+.sticky-column {
+  position: sticky;
+  z-index: 10;
+  background: #fff;
+}
+
+.sticky-column--header {
+  z-index: 11;
+  background: #fafafa;
+}
+
+.sticky-column::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 1px;
+  height: 100%;
+  background: #f0f0f0;
+  pointer-events: none;
+}
+
+.ant-table-tbody > tr,
+.ant-table-thead > tr {
+  position: relative;
+}
+
+.ant-table-tbody > tr > td {
+  z-index: 1;
 }
 
 
