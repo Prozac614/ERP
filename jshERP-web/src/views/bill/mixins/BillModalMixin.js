@@ -454,6 +454,7 @@ export const BillModalMixin = {
           }
           break;
         case "barCode":
+          const prevOperNumber = row.operNumber
           param = {
             barCode: value,
             organId: this.form.getFieldValue('organId'),
@@ -514,6 +515,27 @@ export const BillModalMixin = {
                     }
                     mArr.push(mObj)
                     target.setValues(mArr);
+                    if (prevOperNumber != null && prevOperNumber !== '') {
+                      let restoredOperNumber = Number(prevOperNumber)
+                      if (!isNaN(restoredOperNumber)) {
+                        const unitPriceNew = Number(mInfoEx.unitPrice) || 0
+                        const taxRateNew = Number(mInfoEx.taxRate) || 0
+                        const allPriceNew = Number((unitPriceNew * restoredOperNumber).toFixed(2))
+                        const taxMoneyNew = Number(((taxRateNew * 0.01) * allPriceNew).toFixed(2))
+                        const taxLastMoneyNew = Number((allPriceNew + taxMoneyNew).toFixed(2))
+                        target.setValues([
+                          {
+                            rowKey: row.id,
+                            values: {
+                              operNumber: restoredOperNumber,
+                              allPrice: allPriceNew,
+                              taxMoney: taxMoneyNew,
+                              taxLastMoney: taxLastMoneyNew
+                            }
+                          }
+                        ])
+                      }
+                    }
                     target.recalcAllStatisticsColumns()
                     that.autoChangePrice(target)
                     target.autoSelectBySpecialKey('operNumber', row.orderNum)
@@ -666,7 +688,6 @@ export const BillModalMixin = {
         otherField3: mInfo.otherField3,
         unit: mInfo.commodityUnit,
         sku: mInfo.sku,
-        operNumber: null,
         unitPrice: mInfo.billPrice,
         allPrice: mInfo.billPrice,
         taxRate: 0,
