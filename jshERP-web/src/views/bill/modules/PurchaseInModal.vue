@@ -489,7 +489,6 @@
              // 重写onAdded方法，防止自动滚动但保留仓库设置逻辑
       onAdded(event) {
         const { row, target } = event
-        target.setValues([{ rowKey: row.id, values: { operNumber: 0 } }])
         
         // 保留原来的仓库设置逻辑
         if (this.currentSelectDepotId) {

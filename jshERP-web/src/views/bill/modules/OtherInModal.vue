@@ -489,8 +489,6 @@
       onAdded(event) {
         console.log('重写的onAdded被调用，行数:', event.target.rows.length);
         const { row, target } = event
-        target.setValues([{ rowKey: row.id, values: { operNumber: 0 } }])
-        
         // 保留原来的仓库设置逻辑
         if (this.currentSelectDepotId) {
           target.setValues([{ rowKey: row.id, values: { depotId: this.currentSelectDepotId } }])

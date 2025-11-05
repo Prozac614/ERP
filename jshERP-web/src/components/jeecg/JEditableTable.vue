@@ -1897,6 +1897,9 @@
             return typeof idx === 'number' && idx >= 0 ? idx : rowIndex
           })()
           columns.forEach(column => {
+            if (this.shouldSkipQuantityRequired(rowIndex, column)) {
+              return
+            }
             const value = rowValues[column.key]
             if (this._isQuantityValueEmpty(value)) {
               issues.push({
@@ -2336,6 +2339,24 @@
         // let notPassedIds = cloneObject(this.notPassedIds)
         let inputId = column.key + row.id
         tooltips[inputId] = tooltips[inputId] ? tooltips[inputId] : {}
+
+        const rowIndex = this.getRowIndexById(row && row.id)
+        if (this.shouldSkipQuantityRequired(rowIndex, column)) {
+          tooltips[inputId].visible = false
+          tooltips[inputId].passed = true
+          let existed = notPassedIds.indexOf(inputId)
+          if (existed !== -1) {
+            notPassedIds.splice(existed, 1)
+          }
+          if (update) {
+            this.tooltips = tooltips
+            this.notPassedIds = notPassedIds
+          }
+          if (typeof callback === 'function') {
+            callback([tooltips[inputId], notPassedIds])
+          }
+          return [tooltips[inputId], notPassedIds]
+        }
 
         let [passed, message] = this.validateValue(column, value)
 
@@ -3212,6 +3233,45 @@
         } else {
           return value
         }
+      },
+      shouldSkipQuantityRequired(rowIndex, column) {
+        if (!column || column.type !== FormTypes.inputNumber) {
+          return false
+        }
+        if (!this.hasQuantityRequiredRule(column)) {
+          return false
+        }
+        if (typeof rowIndex !== 'number' || rowIndex < 0) {
+          return false
+        }
+        const barCode = this.getRowBarCode(rowIndex)
+        return !(barCode && barCode.trim().length > 0)
+      },
+      hasQuantityRequiredRule(column) {
+        if (!column) {
+          return false
+        }
+        if (column.aggregateRequired === true) {
+          return true
+        }
+        if (column.validateRules instanceof Array) {
+          return column.validateRules.some(rule => rule && rule.required === true)
+        }
+        return false
+      },
+      getRowIndexById(rowId) {
+        if (!rowId) {
+          return -1
+        }
+        const cleanId = this.getCleanId(rowId)
+        const rows = this.rows || []
+        for (let i = 0; i < rows.length; i++) {
+          let row = rows[i]
+          if (row && this.getCleanId(row.id) === cleanId) {
+            return i
+          }
+        }
+        return -1
       },
       /** 预览图片地址 */
       getCellImageView(id) {

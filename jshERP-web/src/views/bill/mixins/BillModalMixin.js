@@ -416,7 +416,6 @@ export const BillModalMixin = {
     onAdded(event) {
       let that = this
       const { row, target } = event
-      target.setValues([{ rowKey: row.id, values: { operNumber: 0 } }])
       //自动下滑到最后一行
       setTimeout(function () {
         that.$refs.materialDataTable.resetScrollTop((target.rows.length + 1) * that.$refs.materialDataTable.rowHeight)
