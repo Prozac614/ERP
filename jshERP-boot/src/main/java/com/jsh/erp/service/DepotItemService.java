@@ -470,6 +470,10 @@ public class DepotItemService {
         deleteDepotItemHeadId(headerId);
         JSONArray rowArr = JSONArray.parseArray(rows);
         if (null != rowArr && rowArr.size() > 0) {
+            Map<Long, BigDecimal> purchasePriceMap = null;
+            if (BusinessConstants.SUB_TYPE_PURCHASE.equals(depotHead.getSubType())) {
+                purchasePriceMap = new HashMap<>();
+            }
             // 针对组装单、拆卸单校验是否存在组合件和普通子件
             checkAssembleWithMaterialType(rowArr, depotHead.getSubType());
             for (int i = 0; i < rowArr.size(); i++) {
@@ -585,7 +589,6 @@ public class DepotItemService {
                 // 查询多单位信息
                 if (StringUtil.isExist(rowObj.get("operNumber"))) {
                     depotItem.setOperNumber(rowObj.getBigDecimal("operNumber"));
-                    String unit = rowObj.get("unit").toString();
                     BigDecimal oNumber = rowObj.getBigDecimal("operNumber");
                     // if (StringUtil.isNotEmpty(unitInfo.getName())) {
                     // String basicUnit = unitInfo.getBasicUnit(); // 基本单位
@@ -660,6 +663,17 @@ public class DepotItemService {
                 if (StringUtil.isExist(rowObj.get("unitPrice"))) {
                     BigDecimal unitPrice = rowObj.getBigDecimal("unitPrice");
                     depotItem.setUnitPrice(unitPrice);
+                    if (purchasePriceMap != null) {
+                        String priceBarCode = rowObj.getString("barCode");
+                        if (StringUtil.isEmpty(priceBarCode)) {
+                            priceBarCode = materialExtend.getBarCode();
+                            if (StringUtil.isEmpty(priceBarCode)) {
+                                priceBarCode = materialExtend.getSku();
+                            }
+                        }
+                        checkPurchasePriceConsistency(purchasePriceMap, materialExtend.getId(), unitPrice,
+                                priceBarCode, materialExtend.getSku());
+                    }
                     if (materialExtend.getLowDecimal() != null) {
                         // 零售或销售单价低于最低售价，进行提示
                         if ("零售".equals(depotHead.getSubType()) || "销售".equals(depotHead.getSubType())) {
@@ -1039,29 +1053,88 @@ public class DepotItemService {
      */
     @Transactional(value = "transactionManager", rollbackFor = Exception.class)
     public void updateMaterialExtendPriceOnAudit(Long headerId) throws Exception {
+        DepotHead depotHead = depotHeadMapper.selectByPrimaryKey(headerId);
+        if (depotHead == null) {
+            return;
+        }
+        List<DepotItem> depotItems = getListByHeaderId(headerId);
+        if (depotItems == null || depotItems.isEmpty()) {
+            return;
+        }
+
+        if (BusinessConstants.SUB_TYPE_PURCHASE.equals(depotHead.getSubType())) {
+            validatePurchasePriceConsistency(depotItems);
+        }
+
         if (systemConfigService.getUpdateUnitPriceFlag()) {
-            DepotHead depotHead = depotHeadMapper.selectByPrimaryKey(headerId);
-            if (depotHead != null) {
-                List<DepotItem> depotItems = getListByHeaderId(headerId);
-                for (DepotItem depotItem : depotItems) {
-                    if (depotItem.getUnitPrice() != null && depotItem.getMaterialExtendId() != null) {
-                        MaterialExtend materialExtend = new MaterialExtend();
-                        materialExtend.setId(depotItem.getMaterialExtendId());
-                        // 只有采购入库单据才能修改零售价
-                        if (BusinessConstants.SUB_TYPE_PURCHASE.equals(depotHead.getSubType())) {
-                            materialExtend.setCommodityDecimal(depotItem.getUnitPrice());
+            for (DepotItem depotItem : depotItems) {
+                if (depotItem.getUnitPrice() != null && depotItem.getMaterialExtendId() != null) {
+                    MaterialExtend materialExtend = new MaterialExtend();
+                    materialExtend.setId(depotItem.getMaterialExtendId());
+                    // 只有采购入库单据才能修改零售价
+                    if (BusinessConstants.SUB_TYPE_PURCHASE.equals(depotHead.getSubType())) {
+                        materialExtend.setCommodityDecimal(depotItem.getUnitPrice());
+                        materialExtendService.updateMaterialExtend(materialExtend);
+                    }
+                    // 其它入库-生产入库的情况更新采购单价（保留原有逻辑）
+                    if (BusinessConstants.SUB_TYPE_OTHER.equals(depotHead.getSubType())) {
+                        if (BusinessConstants.BILL_TYPE_PRODUCE_IN.equals(depotHead.getBillType())) {
+                            materialExtend.setPurchaseDecimal(depotItem.getUnitPrice());
                             materialExtendService.updateMaterialExtend(materialExtend);
-                        }
-                        // 其它入库-生产入库的情况更新采购单价（保留原有逻辑）
-                        if (BusinessConstants.SUB_TYPE_OTHER.equals(depotHead.getSubType())) {
-                            if (BusinessConstants.BILL_TYPE_PRODUCE_IN.equals(depotHead.getBillType())) {
-                                materialExtend.setPurchaseDecimal(depotItem.getUnitPrice());
-                                materialExtendService.updateMaterialExtend(materialExtend);
-                            }
                         }
                     }
                 }
             }
+        }
+    }
+
+    private void validatePurchasePriceConsistency(List<DepotItem> depotItems) {
+        Map<Long, BigDecimal> priceMap = new HashMap<>();
+        for (DepotItem depotItem : depotItems) {
+            Long materialExtendId = depotItem.getMaterialExtendId();
+            BigDecimal unitPrice = depotItem.getUnitPrice();
+            if (materialExtendId == null || unitPrice == null) {
+                continue;
+            }
+            BigDecimal recordedPrice = priceMap.putIfAbsent(materialExtendId, unitPrice);
+            if (recordedPrice != null && recordedPrice.compareTo(unitPrice) != 0) {
+                String barCode = null;
+                try {
+                    MaterialExtend materialExtendInfo = materialExtendService.getMaterialExtend(materialExtendId);
+                    if (materialExtendInfo != null) {
+                        barCode = materialExtendInfo.getBarCode();
+                        if (StringUtil.isEmpty(barCode)) {
+                            barCode = materialExtendInfo.getSku();
+                        }
+                    }
+                } catch (Exception e) {
+                    logger.warn("获取商品唛头失败, materialExtendId={}, error={}", materialExtendId, e.getMessage());
+                }
+                if (StringUtil.isEmpty(barCode)) {
+                    barCode = materialExtendId.toString();
+                }
+                throw new BusinessRunTimeException(ExceptionConstants.DEPOT_HEAD_PRICE_INCONSISTENT_CODE,
+                        String.format(ExceptionConstants.DEPOT_HEAD_PRICE_INCONSISTENT_MSG, barCode));
+            }
+        }
+    }
+
+    private void checkPurchasePriceConsistency(Map<Long, BigDecimal> priceMap, Long materialExtendId,
+            BigDecimal unitPrice, String barCode, String sku) {
+        if (priceMap == null || materialExtendId == null || unitPrice == null) {
+            return;
+        }
+        BigDecimal recordedPrice = priceMap.putIfAbsent(materialExtendId, unitPrice);
+        if (recordedPrice != null && recordedPrice.compareTo(unitPrice) != 0) {
+            String code = barCode;
+            if (StringUtil.isEmpty(code)) {
+                code = sku;
+            }
+            if (StringUtil.isEmpty(code)) {
+                code = materialExtendId.toString();
+            }
+            throw new BusinessRunTimeException(ExceptionConstants.DEPOT_HEAD_PRICE_INCONSISTENT_CODE,
+                    String.format(ExceptionConstants.DEPOT_HEAD_PRICE_INCONSISTENT_MSG, code));
         }
     }
 

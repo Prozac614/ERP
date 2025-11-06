@@ -412,6 +412,9 @@ public class ExceptionConstants {
     // 单据录入-商品唛头XXX的单价低于最低售价
     public static final int DEPOT_HEAD_UNIT_PRICE_LOW_CODE = 8500018;
     public static final String DEPOT_HEAD_UNIT_PRICE_LOW_MSG = "商品唛头%s的单价低于最低售价";
+    // 单据审核-同一商品存在多个单价
+    public static final int DEPOT_HEAD_PRICE_INCONSISTENT_CODE = 8500019;
+    public static final String DEPOT_HEAD_PRICE_INCONSISTENT_MSG = "抱歉，商品唛头%s在单据中存在多个单价，请调整后再审核";
     // 单据录入-单据明细中必须要有组合件和普通子件
     public static final int DEPOT_HEAD_CHECK_ASSEMBLE_EMPTY_CODE = 8500020;
     public static final String DEPOT_HEAD_CHECK_ASSEMBLE_EMPTY_MSG = "抱歉，单据明细中必须要有组合件和普通子件";
