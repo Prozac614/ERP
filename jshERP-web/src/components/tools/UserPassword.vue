@@ -1,12 +1,10 @@
 <template>
-  <div ref="container">
+  <div>
     <a-modal
       :title="title"
       :width="modalWidth"
       :visible="visible"
       :confirmLoading="confirmLoading"
-      :getContainer="() => $refs.container"
-      :maskStyle="{'top':'93px','left':'154px'}"
       :wrapClassName="wrapClassNameInfo()"
       :mask="isDesktop()"
       :maskClosable="false"
