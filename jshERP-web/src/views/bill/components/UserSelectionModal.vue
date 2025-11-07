@@ -10,7 +10,7 @@
     cancelText="取消"
   >
     <div>
-      <p>今日有以下用户保存了销售出库单据，请选择要进行校验的用户：</p>
+      <p>{{ introText }}</p>
       <a-table
         :columns="columns"
         :data-source="userList"
@@ -46,6 +46,8 @@ export default {
       type: null,
       subType: null,
       shopNames: [],
+      billLabel: '',
+      introText: '今日有以下用户保存了销售出库单据，请选择要进行校验的用户：',
       columns: [
         {
           title: '用户名',
@@ -82,6 +84,29 @@ export default {
       this.type = type
       this.subType = subType
       this.shopNames = Array.isArray(shopNames) ? shopNames : []
+      this.billLabel = this.getBillLabel(type, subType)
+      this.introText = `今日有以下用户保存了${this.billLabel}单据，请选择要进行校验的用户：`
+    },
+    getBillLabel(type, subType) {
+      if (!type && !subType) {
+        return '销售出库'
+      }
+      const typeValue = type || ''
+      const subTypeValue = subType || ''
+      const key = `${typeValue}-${subTypeValue}`
+      const mapping = {
+        '入库-采购': '采购入库',
+        '入库-其它': '其它入库',
+        '出库-销售': '销售出库',
+        '出库-其它': '其它出库'
+      }
+      if (mapping[key]) {
+        return mapping[key]
+      }
+      if (typeValue && subTypeValue) {
+        return `${typeValue}${subTypeValue}`
+      }
+      return typeValue || subTypeValue || '销售出库'
     },
     
     handleOk() {
@@ -126,6 +151,8 @@ export default {
       this.currentUserIds = []
       this.validationDate = null
       this.shopNames = []
+      this.billLabel = ''
+      this.introText = '今日有以下用户保存了销售出库单据，请选择要进行校验的用户：'
     },
     
     onSelectChange(selectedRowKeys) {

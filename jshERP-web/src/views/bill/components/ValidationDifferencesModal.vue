@@ -181,7 +181,7 @@ export default {
       this.allUsers = Array.from(allUsersSet).sort()
       this.matrixColumns = [
         {
-          title: '销售店铺',
+          title: '店铺',
           dataIndex: 'shopName',
           width: 120,
           align: 'center'

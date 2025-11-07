@@ -99,6 +99,7 @@
           <a-button v-if="btnEnableList.indexOf(1)>-1" icon="delete" @click="batchDel">删除</a-button>
           <a-button v-if="checkFlag && btnEnableList.indexOf(2)>-1" icon="check" @click="batchSetStatus(1)">审核</a-button>
           <a-button v-if="checkFlag && btnEnableList.indexOf(7)>-1" icon="stop" @click="batchSetStatus(0)">反审核</a-button>
+          <a-button v-if="btnEnableList.indexOf(8)>-1 || saleBtnEnableList.indexOf(8)>-1 || hasValidationPermission" icon="eye" @click="batchValidation">校验</a-button>
           <a-button v-if="isShowExcel && btnEnableList.indexOf(3)>-1" icon="download" @click="handleExport">导出</a-button>
           <a-popover trigger="click" placement="right">
             <template slot="content">
@@ -158,6 +159,7 @@
             <template slot="customRenderStatus" slot-scope="status">
               <a-tag v-if="status == '0'" color="red">未审核</a-tag>
               <a-tag v-if="status == '1'" color="green">已审核</a-tag>
+              <a-tag v-if="status == '2'" color="cyan">完成出库</a-tag>
               <a-tag v-if="status == '9'" color="orange">审核中</a-tag>
             </template>
             <a-table
@@ -179,6 +181,33 @@
         <bill-detail ref="modalDetail" @ok="modalFormOk" @close="modalFormClose"></bill-detail>
         <bill-excel-iframe ref="billExcelIframe" @ok="modalFormOk" @close="modalFormClose"></bill-excel-iframe>
         <batch-wait-bill-list ref="batchWaitBill" @ok="modalFormOk" @close="waitModalFormClose"></batch-wait-bill-list>
+
+        <a-modal
+          title="选择校验日期"
+          :visible="validationDateVisible"
+          @ok="handleDateConfirm"
+          @cancel="handleDateCancel"
+          okText="确定"
+          cancelText="取消">
+          <a-form-item label="校验日期">
+            <j-date
+              v-model="selectedValidationDate"
+              placeholder="请选择日期"
+              dateFormat="YYYY-MM-DD"
+              style="width: 100%"
+            />
+          </a-form-item>
+        </a-modal>
+
+        <user-selection-modal
+          ref="userSelectionModal"
+          @validation-success="handleValidationSuccess"
+          @validation-failed="handleValidationFailed"
+        ></user-selection-modal>
+
+        <validation-differences-modal
+          ref="validationDifferencesModal"
+        ></validation-differences-modal>
       </a-card>
     </a-col>
   </a-row>
@@ -189,11 +218,15 @@
   import BillDetail from './dialog/BillDetail'
   import BillExcelIframe from '@/components/tools/BillExcelIframe'
   import BatchWaitBillList from './dialog/BatchWaitBillList'
+  import UserSelectionModal from './components/UserSelectionModal'
+  import ValidationDifferencesModal from './components/ValidationDifferencesModal'
   import { JeecgListMixin } from '@/mixins/JeecgListMixin'
   import { BillListMixin } from './mixins/BillListMixin'
   import JEllipsis from '@/components/jeecg/JEllipsis'
   import JDate from '@/components/jeecg/JDate'
-  import { deleteAction } from '@/api/manage'
+  import { deleteAction, postAction } from '@/api/manage'
+  import Vue from 'vue'
+  import moment from 'moment'
   export default {
     name: "OtherOutList",
     mixins:[JeecgListMixin,BillListMixin],
@@ -202,6 +235,8 @@
       BillDetail,
       BillExcelIframe,
       BatchWaitBillList,
+      UserSelectionModal,
+      ValidationDifferencesModal,
       JEllipsis,
       JDate
     },
@@ -223,6 +258,11 @@
         prefixNo: 'QTCK',
         //出入库管理开关，适合独立仓管场景
         inOutManageFlag: false,
+        // 销售出库按钮权限串，复用校验按钮权限
+        saleBtnEnableList: '',
+        // 交叉验证日期选择
+        validationDateVisible: false,
+        selectedValidationDate: null,
         labelCol: {
           span: 5
         },
@@ -267,6 +307,25 @@
       }
     },
     computed: {
+      hasValidationPermission() {
+        const btnStrList = Vue.ls.get('winBtnStrList')
+        if (btnStrList) {
+          for (let i = 0; i < btnStrList.length; i++) {
+            const item = btnStrList[i]
+            if (item.url && (
+              item.url.includes('sale_out') ||
+              item.url.includes('sale-out') ||
+              item.url.includes('saleOut') ||
+              item.url.includes('销售出库')
+            )) {
+              if (item.btnStr && item.btnStr.length > 8) {
+                return item.btnStr.charAt(8) === '1'
+              }
+            }
+          }
+        }
+        return false
+      }
     },
     created() {
       this.initSystemConfig()
@@ -274,6 +333,7 @@
       this.getDepotData()
       this.initUser()
       this.initWaitBillCount('出库', '销售,采购退货', '1,3')
+      this.initSaleBtnStr()
     },
     methods: {
       searchQuery() {
@@ -349,6 +409,104 @@
         this.loadData()
         this.initWaitBillCount('出库', '销售,采购退货', '1,3')
       },
+      initSaleBtnStr() {
+        const btnStrList = Vue.ls.get('winBtnStrList')
+        this.saleBtnEnableList = ''
+        if (btnStrList) {
+          for (let i = 0; i < btnStrList.length; i++) {
+            const item = btnStrList[i]
+            if (item.url === '/bill/sale_out' ||
+              item.url === '/sale_out' ||
+              (item.url && item.url.includes('sale_out')) ||
+              (item.url && item.url.includes('销售出库'))) {
+              if (item.btnStr) {
+                this.saleBtnEnableList = item.btnStr
+              }
+              break
+            }
+          }
+        }
+      },
+      batchValidation() {
+        const that = this
+        this.$confirm({
+          title: "交叉验证确认",
+          content: "校验将会自动校验指定日期所有用户的未审核单据数据，只有在每个用户提交的其它出库单据统计数据一致时，会自动通过审核。是否继续？",
+          onOk() {
+            that.showDateSelector()
+          }
+        })
+      },
+      showDateSelector() {
+        this.selectedValidationDate = moment().format('YYYY-MM-DD')
+        this.validationDateVisible = true
+      },
+      handleDateConfirm() {
+        if (!this.selectedValidationDate) {
+          this.$message.warning('请选择校验日期！')
+          return
+        }
+        let formattedDate
+        if (moment.isMoment(this.selectedValidationDate)) {
+          formattedDate = this.selectedValidationDate.format('YYYY-MM-DD')
+        } else if (this.selectedValidationDate instanceof Date) {
+          formattedDate = moment(this.selectedValidationDate).format('YYYY-MM-DD')
+        } else if (typeof this.selectedValidationDate === 'string') {
+          formattedDate = moment(this.selectedValidationDate).format('YYYY-MM-DD')
+        } else {
+          this.$message.error('日期格式无效')
+          return
+        }
+        this.validationDateVisible = false
+        this.handleValidation(formattedDate)
+      },
+      handleDateCancel() {
+        this.validationDateVisible = false
+        this.selectedValidationDate = null
+      },
+      handleValidation(validationDate) {
+        this.loading = true
+        const requestData = {
+          validationDate,
+          type: '出库',
+          subType: '其它'
+        }
+        postAction('/depotHead/checkTodayUsers', requestData).then((res) => {
+          if (res.code === 200) {
+            if (res.data.hasOtherUsers) {
+              this.showUserSelectionModal(res.data, validationDate)
+            } else {
+              this.$message.error(`校验失败：${validationDate} 没有其他用户保存其它出库单据！`)
+            }
+          } else {
+            this.$message.error(res.msg || '校验失败')
+          }
+        }).catch((error) => {
+          console.error('checkTodayUsers请求错误:', error)
+          this.$message.error('校验请求失败')
+        }).finally(() => {
+          this.loading = false
+        })
+      },
+      showUserSelectionModal(data, validationDate) {
+        if (this.$refs.userSelectionModal) {
+          this.$refs.userSelectionModal.show(data, validationDate, '出库', '其它')
+        }
+      },
+      handleValidationSuccess(result) {
+        this.$message.success(`校验通过！共有 ${result.totalBills} 种商品数据一致，相关单据状态已自动更新。`)
+        this.loadData()
+      },
+      handleValidationFailed(differences) {
+        this.showValidationDifferences(differences)
+      },
+      showValidationDifferences(differences) {
+        if (this.$refs.validationDifferencesModal) {
+          this.$refs.validationDifferencesModal.show(differences)
+        } else {
+          console.error('ValidationDifferencesModal组件引用未找到！')
+        }
+      }
     }
   }
 </script>
