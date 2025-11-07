@@ -19,6 +19,25 @@
       <a-form :form="form">
         <a-tabs v-model:activeKey="activeKey" size="small">
           <a-tab-pane key="1" tab="基本信息" id="materialHeadModal" forceRender>
+            <a-row class="form-row" :gutter="24" style="max-width:900px;margin-left:24px;padding-right:24px;">
+              <a-col :xl="8" :lg="8" :md="8" :sm="24">
+                <a-form-item :labelCol="labelCol" :wrapperCol="wrapperCol" label="唛头">
+                  <a-input placeholder="请输入唛头" v-decorator.trim="[ 'singleBarCode', validatorRules.singleBarCode ]" />
+                </a-form-item>
+              </a-col>
+              <a-col :xl="8" :lg="8" :md="8" :sm="24">
+                <a-form-item :labelCol="labelCol" :wrapperCol="wrapperCol" label="名称" data-step="1" data-title="名称" data-intro="名称必填，可以重复">
+                  <a-input placeholder="请输入名称" v-decorator.trim="[ 'name', validatorRules.name ]" @change="handleNameChange" />
+                </a-form-item>
+              </a-col>
+              <a-col :xl="8" :lg="8" :md="8" :sm="24">
+                <a-form-item :labelCol="labelCol" :wrapperCol="wrapperCol" label="单价">
+                  <a-input-number style="width: 100%" placeholder="请输入单价" v-decorator="[ 'singlePrice', validatorRules.singlePrice ]" />
+                </a-form-item>
+              </a-col>
+            </a-row>
+            <div id="materialDetailModal" style="display:none;"></div>
+            <template v-if="false">
             <a-row class="form-row" :gutter="24">
               <a-col :md="6" :sm="24">
                 <a-form-item :labelCol="labelCol" :wrapperCol="wrapperCol" label="名称" data-step="1" data-title="名称" data-intro="名称必填，可以重复">
@@ -241,8 +260,9 @@
                 </a-form-item>
               </a-col>
             </a-row>
+            </template>
           </a-tab-pane>
-          <a-tab-pane key="2" tab="库存数量" forceRender>
+          <a-tab-pane key="2" tab="库存数量" forceRender v-if="false">
             <j-editable-table
               ref="editableDepotTable"
               :loading="depotTable.loading"
@@ -262,7 +282,7 @@
             <!-- 表单区域 -->
             <batch-set-stock-modal ref="stockModalForm" @ok="batchSetStockModalFormOk"></batch-set-stock-modal>
           </a-tab-pane>
-          <a-tab-pane key="3" tab="图片信息" forceRender>
+          <a-tab-pane key="3" tab="图片信息" forceRender v-if="false">
             <a-row class="form-row" :gutter="24" style="padding-top:20px">
               <a-col :lg="18" :md="18" :sm="24">
                 <a-form-item :labelCol="{xs: { span: 24 },sm: { span: 3 }}" :wrapperCol="{xs: { span: 24 },sm: { span: 20 }}" label="图片信息">
@@ -292,7 +312,7 @@
   import BatchSetStockModal from './BatchSetStockModal'
   import UnitModal from '../../system/modules/UnitModal'
   import JEditableTable from '@/components/jeecg/JEditableTable'
-  import { FormTypes, getRefPromise, VALIDATE_NO_PASSED, validateFormAndTables } from '@/utils/JEditableTableUtil'
+  import { FormTypes } from '@/utils/JEditableTableUtil'
   import { changeNameToPinYin, checkMaterial, checkMaterialBarCode, getMaterialAttributeNameList, getMaterialAttributeValueListById, getMaxBarCode, queryMaterialCategoryTreeList } from '@/api/api'
   import { autoJumpNextInput, handleIntroJs, removeByVal } from '@/utils/util'
   import { getAction, httpAction } from '@/api/manage'
@@ -413,6 +433,18 @@
         confirmLoading: false,
         form: this.$form.createForm(this),
         validatorRules:{
+          singleBarCode:{
+            rules: [
+              { required: true, message: '请输入唛头!' },
+              { min: 2, max: 40, message: '长度为2到40位', trigger: 'blur' }
+            ]
+          },
+          singlePrice:{
+            rules: [
+              { required: true, message: '请输入单价!' },
+              { pattern: /^(0|[1-9]\d*)(\.\d{1,2})?$/, message: '请输入合法的单价', trigger: 'blur' }
+            ]
+          },
           name:{
             rules: [
               { required: true, message: '请输入名称!' },
@@ -471,22 +503,12 @@
           e.preventDefault()
         }
       },
-      // 获取所有的editableTable实例
-      getAllTable() {
-        return Promise.all([
-          getRefPromise(this, 'editableMeTable'),
-          getRefPromise(this, 'editableDepotTable')
-        ])
-      },
       add () {
         //隐藏多属性
         this.meTable.columns[2].type = FormTypes.hidden
-        // 默认新增一条数据
-        this.getAllTable().then(editableTables => {
-          editableTables[0].add()
-        })
         this.edit({})
         this.$nextTick(() => {
+          this.form.setFieldsValue({ singleBarCode: '', singlePrice: undefined })
           handleIntroJs('material', 11)
         })
       },
@@ -494,6 +516,8 @@
         let that = this
         this.form.resetFields();
         this.model = Object.assign({}, record);
+        this.model.singleBarCode = record.mBarCode || ''
+        this.model.singlePrice = record.commodityDecimal || undefined
         // 设置默认单位
         if (!this.model.unit) {
           this.model.unit = '件'
@@ -524,9 +548,12 @@
           }
         }
         this.$nextTick(() => {
-          this.form.setFieldsValue(pick(this.model, 'name', 'standard', 'unit', 'unitId', 'model', 'color', 'brand', 'mnemonic',
+          this.form.setFieldsValue(Object.assign({}, pick(this.model, 'name', 'standard', 'unit', 'unitId', 'model', 'color', 'brand', 'mnemonic',
             'categoryId','enableSerialNumber','enableBatchNumber','position','expiryNum','weight','remark','mfrs',
-            'otherField1','otherField2','otherField3','manySku','skuOne','skuTwo','skuThree'))
+            'otherField1','otherField2','otherField3','manySku','skuOne','skuTwo','skuThree'), {
+            singleBarCode: this.model.singleBarCode,
+            singlePrice: this.model.singlePrice
+          }))
           autoJumpNextInput('materialHeadModal')
           autoJumpNextInput('materialDetailModal')
         });
@@ -579,6 +606,19 @@
             }
           }
           tab.dataSource = res.data.rows || []
+          if (tab.dataSource && tab.dataSource.length > 0) {
+            const firstRow = tab.dataSource[0]
+            this.model.singleBarCode = firstRow.barCode
+            this.model.singlePrice = firstRow.commodityDecimal
+            this.$nextTick(() => {
+              if (this.form) {
+                this.form.setFieldsValue({
+                  singleBarCode: firstRow.barCode,
+                  singlePrice: firstRow.commodityDecimal
+                })
+              }
+            })
+          }
           this.meOldDataSource = res.data.rows || []
           //复制新增商品-初始化唛头信息
           if(this.action === 'copyAdd') {
@@ -615,10 +655,15 @@
         this.unitStatus = false
         this.manyUnitStatus = true
         this.unitChecked = false
-        this.getAllTable().then(editableTables => {
-          editableTables[0].initialize()
-          editableTables[1].initialize()
-        })
+        if (this.form) {
+          this.form.resetFields()
+        }
+        if (this.meTable && this.meTable.dataSource) {
+          this.meTable.dataSource = []
+        }
+        if (this.depotTable && this.depotTable.dataSource) {
+          this.depotTable.dataSource = []
+        }
       },
       handleOk () {
         this.validateFields()
@@ -628,24 +673,54 @@
       },
       /** 触发表单验证 */
       validateFields() {
-        this.getAllTable().then(tables => {
-          /** 一次性验证主表和所有的次表 */
-          return validateFormAndTables(this.form, tables)
-        }).then(allValues => {
-          let formData = this.classifyIntoFormData(allValues)
-          formData.sortList = [];
-          if(formData.unit === undefined || !formData.unit) {formData.unit = '件'}
-          if(formData.unitId === undefined) {formData.unitId = ''}
-          if(this.unitChecked) {formData.unit = ''} else {formData.unitId = ''}
-          // 发起请求
-          return this.requestAddOrEdit(formData)
-        }).catch(e => {
-          if (e.error === VALIDATE_NO_PASSED) {
-            // 如果有未通过表单验证的子表，就自动跳转到它所在的tab
-            this.activeKey = e.index == null ? this.activeKey : (e.index + 1).toString()
-          } else {
-            console.error(e)
+        this.form.validateFields((err, values) => {
+          if (err) {
+            return
           }
+          const params = {
+            barCode: values.singleBarCode,
+            id: this.model && this.model.id ? this.model.id : 0
+          }
+          checkMaterialBarCode(params).then(res => {
+            if (res && res.code === 200) {
+              if (res.data && res.data.status) {
+                this.$message.warning('抱歉，该唛头已经存在！')
+                return
+              }
+              const materialMain = Object.assign({}, this.model, values)
+              materialMain.unit = '件'
+              materialMain.unitId = ''
+              materialMain.name = values.name
+              materialMain.remark = values.remark
+              materialMain.mBarCode = values.singleBarCode
+              const existingMe = (this.meTable && this.meTable.dataSource && this.meTable.dataSource.length > 0)
+                ? this.meTable.dataSource[0] : {}
+              const meItem = {
+                barCode: values.singleBarCode,
+                commodityUnit: existingMe.commodityUnit || materialMain.unit,
+                sku: existingMe.sku || '',
+                purchaseDecimal: existingMe.purchaseDecimal || 0,
+                commodityDecimal: values.singlePrice,
+                wholesaleDecimal: existingMe.wholesaleDecimal || 0,
+                lowDecimal: existingMe.lowDecimal || 0
+              }
+              if (existingMe && existingMe.id) {
+                meItem.id = existingMe.id
+              }
+              materialMain.meList = [meItem]
+              materialMain.stock = []
+              materialMain.sortList = []
+              materialMain.meDeleteIdList = this.meDeleteIdList || []
+              delete materialMain.singleBarCode
+              delete materialMain.singlePrice
+              this.model = Object.assign({}, materialMain)
+              this.requestAddOrEdit(materialMain)
+            } else {
+              this.$message.warning((res && res.data) || '唛头校验失败')
+            }
+          }).catch(() => {
+            this.$message.warning('唛头校验失败')
+          })
         })
       },
       /** 整理成formData */
