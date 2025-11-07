@@ -313,7 +313,17 @@
             and (me.bar_code like #{bindKey} or m.name like #{bindKey} or m.standard like #{bindKey} or m.model like #{bindKey} or m.mnemonic like #{bindKey})
         </if>
         and ifnull(m.delete_flag,'0') !='1'
-        order by CASE WHEN me.bar_code LIKE 'W%' THEN 1 WHEN me.bar_code LIKE 'B%' THEN 2 ELSE 3 END, m.id ASC, me.default_flag desc, me.id asc
+        <choose>
+            <when test="materialParam != null and materialParam !=''">
+                order by CASE WHEN me.bar_code LIKE #{bindKey} THEN 0 ELSE 1 END,
+                CASE WHEN me.bar_code LIKE 'W%' THEN 1 WHEN me.bar_code LIKE 'B%' THEN 2 ELSE 3 END,
+                m.id ASC, me.default_flag desc, me.id asc
+            </when>
+            <otherwise>
+                order by CASE WHEN me.bar_code LIKE 'W%' THEN 1 WHEN me.bar_code LIKE 'B%' THEN 2 ELSE 3 END,
+                m.id ASC, me.default_flag desc, me.id asc
+            </otherwise>
+        </choose>
         limit 0,20
     </select>
 
@@ -369,7 +379,17 @@
             and m.enable_batch_number = #{enableBatchNumber}
         </if>
         and ifnull(m.delete_flag,'0') !='1'
-        ORDER BY CASE WHEN me.bar_code LIKE 'W%' THEN 1 WHEN me.bar_code LIKE 'B%' THEN 2 ELSE 3 END, m.id ASC, me.default_flag desc, me.id asc
+        <choose>
+            <when test="q != null and q !=''">
+                ORDER BY CASE WHEN me.bar_code LIKE #{bindKey} THEN 0 ELSE 1 END,
+                CASE WHEN me.bar_code LIKE 'W%' THEN 1 WHEN me.bar_code LIKE 'B%' THEN 2 ELSE 3 END,
+                m.id ASC, me.default_flag desc, me.id asc
+            </when>
+            <otherwise>
+                ORDER BY CASE WHEN me.bar_code LIKE 'W%' THEN 1 WHEN me.bar_code LIKE 'B%' THEN 2 ELSE 3 END,
+                m.id ASC, me.default_flag desc, me.id asc
+            </otherwise>
+        </choose>
         <if test="offset != null and rows != null">
             limit #{offset},#{rows}
         </if>
