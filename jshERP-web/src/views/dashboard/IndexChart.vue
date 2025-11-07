@@ -178,7 +178,7 @@
           <span
             class="total-amount"
             style="display:inline-block; margin-left:12px; font-weight:700; font-size:16px; color:#1890ff; white-space:nowrap;"
-            v-if="hasStockAlertPermission"
+            v-if="totalStockValue !== null && totalStockValue !== undefined"
           >
             库存总金额：{{ formatCurrency(totalStockValue) }}
           </span>
@@ -282,7 +282,10 @@ import { getAction, postAction, downFile } from '@/api/manage'
       JEllipsis,
       StockChartModal
     },
-            data () {
+    data () {
+      const defaultColumnKeys = ['action', 'barCode', 'materialName', 'currentPeriodStock', 'lastSixMonthsSales', 'stockAlertStatus']
+      const stockAlertStatusColumn = { title: '库存状态', dataIndex: 'stockAlertStatus', width: 130, align: 'center', scopedSlots: { customRender: 'stockAlertStatusRender' } }
+
       return {
         // 查询条件
         queryParam: {
@@ -366,9 +369,9 @@ import { getAction, postAction, downFile } from '@/api/manage'
         },
 
         // 默认索引（包含库存状态列）
-        defDataIndex: ['action', 'barCode', 'materialName', 'currentPeriodStock', 'lastSixMonthsSales', 'stockAlertStatus'],
-        settingDataIndex: ['action', 'barCode', 'materialName', 'currentPeriodStock', 'lastSixMonthsSales', 'stockAlertStatus'],
-        defaultStickyColumns: ['action', 'barCode', 'materialName', 'currentPeriodStock', 'lastSixMonthsSales', 'stockAlertStatus'],
+        defDataIndex: [...defaultColumnKeys],
+        settingDataIndex: [...defaultColumnKeys],
+        defaultStickyColumns: [...defaultColumnKeys],
         // 默认列（宽度将用于粘性列偏移计算）
         defColumns: [
           {
@@ -382,8 +385,10 @@ import { getAction, postAction, downFile } from '@/api/manage'
           { title: '商品名称', dataIndex: 'materialName', width: 180, ellipsis: true }, // 🔧 150 → 180px，增加名称显示空间
           { title: '当前库存', dataIndex: 'currentPeriodStock', width: 110, scopedSlots: { customRender: 'customRenderStock' } }, // 🔧 90 → 110px，增加库存数据显示空间
           { title: '近六月出库', dataIndex: 'lastSixMonthsSales', width: 120, align: 'center' },
-          { title: '库存状态', dataIndex: 'stockAlertStatus', width: 130, align: 'center', scopedSlots: { customRender: 'stockAlertStatusRender' } } // 🔧 110 → 130px，增加状态显示空间
-        ]
+          stockAlertStatusColumn // 🔧 110 → 130px，增加状态显示空间
+        ],
+        stockAlertStatusColumnDef: stockAlertStatusColumn,
+        stockAlertColumnKey: 'stockAlertStatus'
 
       }
     },
@@ -572,6 +577,7 @@ import { getAction, postAction, downFile } from '@/api/manage'
       }
     },
     created() {
+      this.applyStockPermissionToColumns(this.hasStockAlertPermission)
       this.generateDateColumns()
       this.initShopList()
       this.loadStockData()
@@ -603,6 +609,60 @@ import { getAction, postAction, downFile } from '@/api/manage'
 
     },
     methods: {
+      applyStockPermissionToColumns(hasPermission) {
+        const columnKey = this.stockAlertColumnKey
+        const hasColumn = this.defColumns.some(col => col.dataIndex === columnKey)
+
+        if (hasPermission) {
+          if (!hasColumn) {
+            this.defColumns = [...this.defColumns, this.stockAlertStatusColumnDef]
+          }
+        } else if (hasColumn) {
+          this.defColumns = this.defColumns.filter(col => col.dataIndex !== columnKey)
+        }
+
+        const allowedKeys = this.defColumns.map(col => col.dataIndex)
+        this.defDataIndex = [...allowedKeys]
+
+        const toUniqueOrdered = (sourceArray) => {
+          const sourceSet = new Set(sourceArray)
+          const seen = new Set()
+          return allowedKeys.filter(key => {
+            if (!sourceSet.has(key) || seen.has(key)) {
+              return false
+            }
+            seen.add(key)
+            return true
+          })
+        }
+
+        let updatedSetting = toUniqueOrdered(this.settingDataIndex)
+        if (hasPermission && allowedKeys.includes(columnKey) && !updatedSetting.includes(columnKey)) {
+          const insertIndex = allowedKeys.indexOf(columnKey)
+          if (insertIndex >= 0) {
+            updatedSetting.splice(insertIndex, 0, columnKey)
+          } else {
+            updatedSetting.push(columnKey)
+          }
+        }
+        this.settingDataIndex = [...updatedSetting]
+
+        let updatedSticky = toUniqueOrdered(this.defaultStickyColumns)
+        if (hasPermission && allowedKeys.includes(columnKey) && !updatedSticky.includes(columnKey)) {
+          const insertIndex = allowedKeys.indexOf(columnKey)
+          if (insertIndex >= 0) {
+            updatedSticky.splice(insertIndex, 0, columnKey)
+          } else {
+            updatedSticky.push(columnKey)
+          }
+        }
+        this.defaultStickyColumns = [...updatedSticky]
+
+        this.validateColumnSettings()
+        this.$nextTick(() => {
+          this.applyAdaptiveFixedColumns()
+        })
+      },
       // 性能优化 - 日期范围验证
       validateDateRange(beginDate, endDate) {
         if (!beginDate || !endDate) return { valid: true }
@@ -622,10 +682,6 @@ import { getAction, postAction, downFile } from '@/api/manage'
       },
       // 加载库存总金额
       async loadTotalStockValue() {
-        if (!this.hasStockAlertPermission) {
-          this.totalStockValue = null
-          return
-        }
         try {
           const res = await getAction('/depotItem/getTotalStockValue', {})
           if (res && res.code === 200 && res.data) {
@@ -1160,12 +1216,8 @@ import { getAction, postAction, downFile } from '@/api/manage'
         
         // 更新权限标识
         this.hasStockAlertPermission = data.hasStockAlertPermission || false
-
-        if (this.hasStockAlertPermission) {
-          this.loadTotalStockValue()
-        } else {
-          this.totalStockValue = null
-        }
+        this.applyStockPermissionToColumns(this.hasStockAlertPermission)
+        this.loadTotalStockValue()
 
 
 
