@@ -280,8 +280,7 @@
         // 实际列
         columns:[],
         // 默认索引
-        defDataIndex:['action','mBarCode','name','standard','model','color','categoryName','unit', 'stock',
-          'purchaseDecimal','commodityDecimal','wholesaleDecimal','lowDecimal','enabled'],
+        defDataIndex:['action','name','stock','enabled','mBarCode','commodityDecimal'],
         // 默认列
         defColumns: [
           {
@@ -325,7 +324,7 @@
             scopedSlots: { customRender: 'customRenderStock' }
           },
           {title: '采购价', dataIndex: 'purchaseDecimal', width: 80},
-          {title: '零售价', dataIndex: 'commodityDecimal', width: 80},
+          {title: '单价', dataIndex: 'commodityDecimal', width: 80},
           {title: '销售价', dataIndex: 'wholesaleDecimal', width: 80},
           {title: '最低售价', dataIndex: 'lowDecimal', width: 80},
           {title: '仓位货架', dataIndex: 'position', width: 80},
@@ -368,13 +367,13 @@
         }
         this.columns = this.defColumns.filter(item => {
           return this.settingDataIndex.includes(item.dataIndex)
-        })
+        }).sort((a, b) => this.settingDataIndex.indexOf(a.dataIndex) - this.settingDataIndex.indexOf(b.dataIndex))
       },
       //列设置更改事件
       onColChange (checkedValues) {
         this.columns = this.defColumns.filter(item => {
           return checkedValues.includes(item.dataIndex)
-        })
+        }).sort((a, b) => checkedValues.indexOf(a.dataIndex) - checkedValues.indexOf(b.dataIndex))
         let columnsStr = checkedValues.join()
         Vue.ls.set('materialColumns', columnsStr)
       },
