@@ -14,6 +14,21 @@
                 </a-form-item>
               </a-col>
               <a-col :md="6" :sm="24">
+                <a-form-item label="销售店铺" :labelCol="labelCol" :wrapperCol="wrapperCol">
+                  <a-select 
+                    placeholder="请选择店铺" 
+                    v-model="queryParam.shopName" 
+                    allow-clear 
+                    showSearch 
+                    :filterOption="true" 
+                    optionFilterProp="children"
+                    :maxTagCount="3"
+                  >
+                    <a-select-option v-for="(name,idx) in shopList" :key="idx" :value="name">{{ name }}</a-select-option>
+                  </a-select>
+                </a-form-item>
+              </a-col>
+              <a-col :md="6" :sm="24">
                 <a-form-item label="商品信息" :labelCol="labelCol" :wrapperCol="wrapperCol">
                   <a-input placeholder="请输入唛头、名称、助记码、规格、型号等信息" v-model="queryParam.materialParam"></a-input>
                 </a-form-item>
@@ -237,6 +252,20 @@
               style="width: 100%"
             />
           </div>
+          <a-form-item label="选择店铺">
+            <a-select
+              mode="multiple"
+              v-model="selectedValidationShops"
+              placeholder="请选择店铺"
+              style="width: 100%"
+              allow-clear
+              :maxTagCount="3"
+            >
+              <a-select-option v-for="(name, idx) in shopList" :key="idx" :value="name">
+                {{ name }}
+              </a-select-option>
+            </a-select>
+          </a-form-item>
         </a-modal>
       </a-card>
     </a-col>
@@ -254,7 +283,7 @@
   import JEllipsis from '@/components/jeecg/JEllipsis'
   import JDate from '@/components/jeecg/JDate'
   import Vue from 'vue'
-  import { postAction } from '@/api/manage'
+  import { postAction, getAction } from '@/api/manage'
   import moment from 'moment'
   export default {
     name: "SaleOutList",
@@ -284,14 +313,17 @@
           accountId: undefined,
           hasDebt: undefined,
           status: undefined,
-          remark: ""
+          remark: "",
+          shopName: undefined
         },
+        shopList: [],
         prefixNo: 'XSCK',
         //出入库管理开关，适合独立仓管场景
         inOutManageFlag: false,
         // 交叉验证日期选择
         validationDateVisible: false,
         selectedValidationDate: null,
+        selectedValidationShops: [],
         labelCol: {
           span: 5
         },
@@ -300,8 +332,7 @@
           offset: 1
         },
         // 默认索引
-        defDataIndex:['action','organName','number','materialsList','operTimeStr','userName','materialCount','totalPrice','totalTaxLastMoney',
-          'needOutMoney','changeAmount','debt','status'],
+        defDataIndex:['action','operTimeStr','totalPrice','status','shopName','userName','materialsList','materialCount'],
         // 默认列
         defColumns: [
           {
@@ -309,6 +340,11 @@
             dataIndex: 'action',
             align:"center", width: 180,
             scopedSlots: { customRender: 'action' },
+          },
+          { title: '销售店铺', dataIndex: 'shopName',width:120,
+            customRender:function (text) {
+              return text || ''
+            }
           },
           { title: '客户', dataIndex: 'organName',width:120, ellipsis:true},
           { title: '单据编号', dataIndex: 'number',width:160,
@@ -367,6 +403,7 @@
     },
     created() {
       this.initSystemConfig()
+      this.initShopList()
       this.initCustomer()
       this.getDepotData()
       this.initUser()
@@ -375,12 +412,25 @@
       this.getDepotByCurrentUser()
     },
     methods: {
+      initShopList() {
+        console.log('Initializing shop list...');
+        this.loading = true
+        getAction('/shop/list').then(res => {
+          console.log('Shop list response:', res);
+          if (res && res.code === 200 && res.data && Array.isArray(res.data.rows)) {
+            this.shopList = res.data.rows.map(row => row.name).filter(name => name)
+            console.log('Shop list updated:', this.shopList);
+          }
+        }).finally(() => this.loading = false)
+      },
       batchValidation() {
+        console.log('===== batchValidation 被调用 =====');
         let that = this;
         this.$confirm({
           title: "交叉验证确认",
           content: "校验将会自动校验指定日期所有用户的未审核单据数据，只有在每个用户提交的销售单据统计数据一致时，会自动通过审核。是否继续？",
           onOk: function () {
+            console.log('===== 用户确认交叉验证 =====');
             console.log('确认对话框 onOk 被调用');
             console.log('that 指向:', that);
             console.log('that.showDateSelector 类型:', typeof that.showDateSelector);
@@ -388,18 +438,21 @@
           }
         });
       },
-      handleValidation(validationDate) {
+      handleValidation(validationDate, selectedShops) {
         // 执行校验逻辑
         this.loading = true;
         const requestData = {
-          validationDate: validationDate
+          validationDate: validationDate,
+          type: '出库',
+          subType: '销售',
+          shopNames: selectedShops && selectedShops.length ? JSON.stringify(selectedShops) : "[]"
         };
         postAction('/depotHead/checkTodayUsers', requestData).then((res) => {
           console.log('checkTodayUsers响应:', res);
           if(res.code === 200) {
             if(res.data.hasOtherUsers) {
               // 有其他用户，显示用户选择界面
-              this.showUserSelectionModal(res.data, validationDate);
+              this.showUserSelectionModal(res.data, validationDate, '出库', '销售', selectedShops);
             } else {
               this.$message.error("校验失败：" + validationDate + " 没有其他用户保存销售出库单据！");
             }
@@ -414,15 +467,16 @@
         });
       },
       
-      showUserSelectionModal(data, validationDate) {
+      showUserSelectionModal(data, validationDate, type = '出库', subType = '销售', shopNames = []) {
         // 显示用户选择界面
-        this.$refs.userSelectionModal.show(data, validationDate);
+        this.$refs.userSelectionModal.show(data, validationDate, type, subType, shopNames);
       },
       
       showDateSelector() {
         // 显示日期选择器
         console.log('showDateSelector 被调用');
         this.selectedValidationDate = moment().format('YYYY-MM-DD'); // 默认选择今天
+        this.selectedValidationShops = [];
         this.validationDateVisible = true;
         console.log('validationDateVisible 设置为:', this.validationDateVisible);
         console.log('selectedValidationDate 设置为:', this.selectedValidationDate);
@@ -433,32 +487,47 @@
           this.$message.warning('请选择校验日期！');
           return;
         }
+        if (!this.selectedValidationShops || this.selectedValidationShops.length === 0) {
+          this.$message.warning('请选择需要校验的店铺！');
+          return;
+        }
         console.log('确认选择的日期:', this.selectedValidationDate);
         this.validationDateVisible = false;
-        this.handleValidation(this.selectedValidationDate);
+        this.handleValidation(this.selectedValidationDate, this.selectedValidationShops);
       },
       
       handleDateCancel() {
         this.validationDateVisible = false;
         this.selectedValidationDate = null;
+        this.selectedValidationShops = [];
       },
       
       showValidationDifferences(differences) {
         // 显示校验差异界面
-        console.log('显示校验差异:', differences);
-        this.$refs.validationDifferencesModal.show(differences);
+        console.log('===== SaleOutList.showValidationDifferences 被调用 =====');
+        console.log('传入的differences:', differences);
+        console.log('differences类型:', typeof differences);
+        console.log('ValidationDifferencesModal组件ref:', this.$refs.validationDifferencesModal);
+        
+        if (this.$refs.validationDifferencesModal) {
+          console.log('调用ValidationDifferencesModal.show()');
+          this.$refs.validationDifferencesModal.show(differences);
+        } else {
+          console.error('ValidationDifferencesModal组件引用未找到！');
+        }
       },
       
       handleValidationSuccess(result) {
         // 处理校验成功
         console.log('校验成功:', result);
-        this.$message.success(`校验通过！共有 ${result.totalBills} 张单据数据一致。`);
+        this.$message.success(`校验通过！共有 ${result.totalBills} 种商品数据一致，相关单据状态已自动更新。`);
         this.loadData(); // 刷新列表
       },
       
       handleValidationFailed(differences) {
         // 处理校验失败，显示差异
-        console.log('校验失败:', differences);
+        console.log('===== SaleOutList.handleValidationFailed 被调用 =====');
+        console.log('校验失败 differences:', differences);
         this.showValidationDifferences(differences);
       }
     }

@@ -20,6 +20,7 @@
     <result column="remark" jdbcType="VARCHAR" property="remark" />
     <result column="file_name" jdbcType="VARCHAR" property="fileName" />
     <result column="sales_man" jdbcType="VARCHAR" property="salesMan" />
+    <result column="shop_name" jdbcType="VARCHAR" property="shopName" />
     <result column="account_id_list" jdbcType="VARCHAR" property="accountIdList" />
     <result column="account_money_list" jdbcType="VARCHAR" property="accountMoneyList" />
     <result column="discount" jdbcType="DECIMAL" property="discount" />
@@ -96,7 +97,7 @@
   <sql id="Base_Column_List">
     id, type, sub_type, default_number, number, create_time, oper_time, organ_id, creator, 
     account_id, change_amount, back_amount, total_price, pay_type, bill_type, remark, 
-    file_name, sales_man, account_id_list, account_money_list, discount, discount_money, 
+    file_name, sales_man, shop_name, account_id_list, account_money_list, discount, discount_money, 
     discount_last_money, other_money, deposit, status, purchase_status, source, link_number, 
     link_apply, tenant_id, delete_flag
   </sql>
@@ -136,7 +137,7 @@
       oper_time, organ_id, creator, 
       account_id, change_amount, back_amount, 
       total_price, pay_type, bill_type, 
-      remark, file_name, sales_man, 
+      remark, file_name, sales_man, shop_name, 
       account_id_list, account_money_list, discount, 
       discount_money, discount_last_money, other_money, 
       deposit, status, purchase_status, 
@@ -147,7 +148,7 @@
       #{operTime,jdbcType=TIMESTAMP}, #{organId,jdbcType=BIGINT}, #{creator,jdbcType=BIGINT}, 
       #{accountId,jdbcType=BIGINT}, #{changeAmount,jdbcType=DECIMAL}, #{backAmount,jdbcType=DECIMAL}, 
       #{totalPrice,jdbcType=DECIMAL}, #{payType,jdbcType=VARCHAR}, #{billType,jdbcType=VARCHAR}, 
-      #{remark,jdbcType=VARCHAR}, #{fileName,jdbcType=VARCHAR}, #{salesMan,jdbcType=VARCHAR}, 
+      #{remark,jdbcType=VARCHAR}, #{fileName,jdbcType=VARCHAR}, #{salesMan,jdbcType=VARCHAR}, #{shopName,jdbcType=VARCHAR}, 
       #{accountIdList,jdbcType=VARCHAR}, #{accountMoneyList,jdbcType=VARCHAR}, #{discount,jdbcType=DECIMAL}, 
       #{discountMoney,jdbcType=DECIMAL}, #{discountLastMoney,jdbcType=DECIMAL}, #{otherMoney,jdbcType=DECIMAL}, 
       #{deposit,jdbcType=DECIMAL}, #{status,jdbcType=VARCHAR}, #{purchaseStatus,jdbcType=VARCHAR}, 
@@ -210,6 +211,9 @@
       </if>
       <if test="salesMan != null">
         sales_man,
+      </if>
+      <if test="shopName != null">
+        shop_name,
       </if>
       <if test="accountIdList != null">
         account_id_list,
@@ -308,6 +312,9 @@
       </if>
       <if test="salesMan != null">
         #{salesMan,jdbcType=VARCHAR},
+      </if>
+      <if test="shopName != null">
+        #{shopName,jdbcType=VARCHAR},
       </if>
       <if test="accountIdList != null">
         #{accountIdList,jdbcType=VARCHAR},
@@ -416,6 +423,9 @@
       <if test="record.salesMan != null">
         sales_man = #{record.salesMan,jdbcType=VARCHAR},
       </if>
+      <if test="record.shopName != null">
+        shop_name = #{record.shopName,jdbcType=VARCHAR},
+      </if>
       <if test="record.accountIdList != null">
         account_id_list = #{record.accountIdList,jdbcType=VARCHAR},
       </if>
@@ -483,6 +493,7 @@
       remark = #{record.remark,jdbcType=VARCHAR},
       file_name = #{record.fileName,jdbcType=VARCHAR},
       sales_man = #{record.salesMan,jdbcType=VARCHAR},
+      shop_name = #{record.shopName,jdbcType=VARCHAR},
       account_id_list = #{record.accountIdList,jdbcType=VARCHAR},
       account_money_list = #{record.accountMoneyList,jdbcType=VARCHAR},
       discount = #{record.discount,jdbcType=DECIMAL},
@@ -555,6 +566,9 @@
       <if test="salesMan != null">
         sales_man = #{salesMan,jdbcType=VARCHAR},
       </if>
+      <if test="shopName != null">
+        shop_name = #{shopName,jdbcType=VARCHAR},
+      </if>
       <if test="accountIdList != null">
         account_id_list = #{accountIdList,jdbcType=VARCHAR},
       </if>
@@ -619,6 +633,7 @@
       remark = #{remark,jdbcType=VARCHAR},
       file_name = #{fileName,jdbcType=VARCHAR},
       sales_man = #{salesMan,jdbcType=VARCHAR},
+      shop_name = #{shopName,jdbcType=VARCHAR},
       account_id_list = #{accountIdList,jdbcType=VARCHAR},
       account_money_list = #{accountMoneyList,jdbcType=VARCHAR},
       discount = #{discount,jdbcType=DECIMAL},
@@ -640,20 +655,50 @@
   <select id="getTodayUserBillSummary" resultType="com.jsh.erp.datasource.vo.TodayUserBillSummary">
     SELECT 
       dh.creator as userId,
-      u.user_name as userName,
-      u.name as realName,
+      u.username as userName,
+      u.username as realName,
       COUNT(dh.id) as billCount,
-      MIN(dh.create_time) as firstBillTime,
-      MAX(dh.create_time) as lastBillTime
+      MIN(dh.oper_time) as firstBillTime,
+      MAX(dh.oper_time) as lastBillTime
     FROM jsh_depot_head dh
-    LEFT JOIN jsh_user u ON dh.creator = u.id
+    LEFT JOIN jsh_user u ON dh.creator = u.id 
+      AND (u.tenant_id = #{tenantId} OR (u.tenant_id IS NULL AND #{tenantId} IS NULL))
     WHERE dh.type = '出库' 
       AND dh.sub_type = '销售'
       AND dh.delete_flag = '0'
+      AND dh.status = '0'
       AND DATE(dh.create_time) = CURDATE()
-      AND dh.tenant_id = #{tenantId}
+      AND (dh.tenant_id = #{tenantId} OR (dh.tenant_id IS NULL AND #{tenantId} IS NULL))
       AND dh.creator != #{currentUserId}
-    GROUP BY dh.creator, u.user_name, u.name
+    GROUP BY dh.creator, u.username
+    ORDER BY dh.creator
+  </select>
+  
+  <select id="getUserBillSummaryByDate" resultType="com.jsh.erp.datasource.vo.TodayUserBillSummary">
+    SELECT 
+      dh.creator as userId,
+      u.username as userName,
+      u.username as realName,
+      COUNT(dh.id) as billCount,
+      MIN(dh.oper_time) as firstBillTime,
+      MAX(dh.oper_time) as lastBillTime
+    FROM jsh_depot_head dh
+    LEFT JOIN jsh_user u ON dh.creator = u.id 
+      AND (u.tenant_id = #{tenantId} OR (u.tenant_id IS NULL AND #{tenantId} IS NULL))
+    WHERE dh.type = #{type}
+      AND dh.sub_type = #{subType}
+      AND dh.delete_flag = '0'
+      AND dh.status = '0'
+      AND DATE(dh.oper_time) = DATE(#{validationDate})
+      AND (dh.tenant_id = #{tenantId} OR (dh.tenant_id IS NULL AND #{tenantId} IS NULL))
+      <if test="shopNames != null and shopNames.size() > 0">
+        AND dh.shop_name IN
+        <foreach collection="shopNames" item="shopName" open="(" close=")" separator=",">
+          #{shopName}
+        </foreach>
+      </if>
+      AND dh.creator != #{currentUserId}
+    GROUP BY dh.creator, u.username
     ORDER BY dh.creator
   </select>
   
@@ -664,8 +709,9 @@
     WHERE type = '出库' 
       AND sub_type = '销售'
       AND delete_flag = '0'
-      AND DATE(create_time) = CURDATE()
-      AND tenant_id = #{tenantId}
+      AND status = '0'
+      AND DATE(oper_time) = CURDATE()
+      AND (tenant_id = #{tenantId} OR (tenant_id IS NULL AND #{tenantId} IS NULL))
       AND creator = #{userId}
     ORDER BY create_time
   </select>
@@ -673,29 +719,105 @@
   <select id="getBillMaterialSummaryByDateAndUsers" resultType="com.jsh.erp.datasource.vo.BillMaterialSummary">
     SELECT 
       dh.creator as userId,
-      u.user_name as userName,
-      m.bar_code as materialBarCode,
+      u.username as userName,
+      me.bar_code as materialBarCode,
       m.name as materialName,
       SUM(di.oper_number) as totalOutNumber,
-      dh.create_time as createTime
+      di.unit_price as unitPrice,
+      dh.oper_time as createTime,
+      IFNULL(dh.shop_name, '') as shopName
     FROM jsh_depot_head dh
-    LEFT JOIN jsh_user u ON dh.creator = u.id
+    LEFT JOIN jsh_user u ON dh.creator = u.id 
+      AND (u.tenant_id = #{tenantId} OR (u.tenant_id IS NULL AND #{tenantId} IS NULL))
     LEFT JOIN jsh_depot_item di ON dh.id = di.header_id
     LEFT JOIN jsh_material m ON di.material_id = m.id
-    WHERE dh.type = '出库' 
-      AND dh.sub_type = '销售'
+    LEFT JOIN jsh_material_extend me ON di.material_extend_id = me.id 
+      AND ifnull(me.delete_flag,'0') != '1'
+    WHERE dh.type = #{type}
+      AND dh.sub_type = #{subType}
       AND dh.delete_flag = '0'
+      AND dh.status = '0'
       AND di.delete_flag = '0'
       AND m.delete_flag = '0'
-      AND DATE(dh.create_time) = #{validationDate}
-      AND dh.tenant_id = #{tenantId}
+      AND DATE(dh.oper_time) = DATE(#{validationDate})
+      AND (dh.tenant_id = #{tenantId} OR (dh.tenant_id IS NULL AND #{tenantId} IS NULL))
+      <if test="shopNames != null and shopNames.size() > 0">
+        AND dh.shop_name IN
+        <foreach collection="shopNames" item="shopName" open="(" close=")" separator=",">
+          #{shopName}
+        </foreach>
+      </if>
       AND dh.creator IN 
       <foreach collection="userIds" item="userId" open="(" close=")" separator=",">
         #{userId}
       </foreach>
-      AND m.bar_code IS NOT NULL
-      AND m.bar_code != ''
-    GROUP BY dh.creator, u.user_name, m.bar_code, m.name
-    ORDER BY m.bar_code, dh.creator
+      AND me.bar_code IS NOT NULL
+      AND me.bar_code != ''
+    GROUP BY dh.creator, u.username, me.bar_code, m.name, di.unit_price, IFNULL(dh.shop_name, '')
+    ORDER BY me.bar_code, IFNULL(dh.shop_name, ''), dh.creator
+  </select>
+
+  <select id="getBillDetailsByDateUsersAndMaterial" resultType="com.jsh.erp.datasource.vo.ValidationBillDetail">
+    SELECT
+      dh.number AS billNumber,
+      me.bar_code AS materialBarCode,
+      m.name AS materialName,
+      IFNULL(dh.shop_name, '') AS shopName,
+      di.oper_number AS quantity,
+      di.unit_price AS unitPrice,
+      DATE_FORMAT(dh.oper_time, '%Y-%m-%d %H:%i:%S') AS billDate,
+      dh.creator AS userId,
+      u.username AS userName
+    FROM jsh_depot_head dh
+    LEFT JOIN jsh_depot_item di ON dh.id = di.header_id AND ifnull(di.delete_flag,'0') != '1'
+    LEFT JOIN jsh_material m ON di.material_id = m.id AND ifnull(m.delete_flag,'0') != '1'
+    LEFT JOIN jsh_material_extend me ON di.material_extend_id = me.id AND ifnull(me.delete_flag,'0') != '1'
+    LEFT JOIN jsh_user u ON dh.creator = u.id 
+      AND (u.tenant_id = #{tenantId} OR (u.tenant_id IS NULL AND #{tenantId} IS NULL))
+    WHERE dh.type = #{type}
+      AND dh.sub_type = #{subType}
+      AND dh.delete_flag = '0'
+      AND dh.status = '0'
+      AND ifnull(di.delete_flag,'0') != '1'
+      AND ifnull(m.delete_flag,'0') != '1'
+      AND ifnull(me.delete_flag,'0') != '1'
+      AND DATE(dh.oper_time) = DATE(#{validationDate})
+      AND (dh.tenant_id = #{tenantId} OR (dh.tenant_id IS NULL AND #{tenantId} IS NULL))
+      <if test="shopNames != null and shopNames.size() > 0">
+        AND dh.shop_name IN
+        <foreach collection="shopNames" item="shopName" open="(" close=")" separator=",">
+          #{shopName}
+        </foreach>
+      </if>
+      AND dh.creator IN
+      <foreach collection="userIds" item="userId" open="(" close=")" separator=",">
+        #{userId}
+      </foreach>
+      AND me.bar_code IS NOT NULL
+      AND me.bar_code != ''
+    ORDER BY me.bar_code, IFNULL(dh.shop_name, ''), dh.creator, dh.oper_time DESC
+  </select>
+
+  <select id="getBillsByDateAndUsers" resultType="com.jsh.erp.datasource.entities.DepotHead">
+    SELECT 
+      <include refid="Base_Column_List" />
+    FROM jsh_depot_head
+    WHERE type = #{type}
+      AND sub_type = #{subType}
+      AND delete_flag = '0'
+      AND status = '0'
+      AND DATE(oper_time) = DATE(#{validationDate})
+      AND (tenant_id = #{tenantId} OR (tenant_id IS NULL AND #{tenantId} IS NULL))
+      <if test="shopNames != null and shopNames.size() > 0">
+        AND shop_name IN
+        <foreach collection="shopNames" item="shopName" open="(" close=")" separator=",">
+          #{shopName}
+        </foreach>
+      </if>
+      AND creator IN 
+      <foreach collection="userIds" item="userId" open="(" close=")" separator=",">
+        #{userId}
+      </foreach>
+    ORDER BY oper_time
   </select>
 </mapper>

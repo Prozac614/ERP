@@ -138,6 +138,7 @@
   import JDate from '@/components/jeecg/JDate'
   import Vue from 'vue'
   import WaitBillList from '../dialog/WaitBillList'
+  import { getAction } from '@/api/manage'
   export default {
     name: "OtherInModal",
     mixins: [JEditableTableMixin, BillModalMixin],
@@ -163,7 +164,7 @@
         width: '1600px',
         moreStatus: false,
         // 新增时子表默认添加几行空数据
-        addDefaultRowNum: 1,
+        addDefaultRowNum: 20,
         visible: false,
         operTimeStr: '',
         prefixNo: 'QTRK',
@@ -172,6 +173,10 @@
         //出入库管理开关，适合独立仓管场景
         inOutManageFlag: false,
         model: {},
+        // 滚动加载相关
+        scrollLoadThreshold: 20,  // 距离底部20px时加载
+        scrollLoadRowCount: 1,    // 每次加载1行
+        isScrollLoading: false,   // 防止重复加载
         labelCol: {
           xs: { span: 24 },
           sm: { span: 8 },
@@ -189,8 +194,7 @@
             { title: '仓库名称', key: 'depotId', width: '8%', type: FormTypes.select, placeholder: '请选择${title}', options: [],
               allowSearch:true, validateRules: [{ required: true, message: '${title}不能为空' }]
             },
-            { title: '唛头', key: 'barCode', width: '12%', type: FormTypes.popupJsh, kind: 'material', multi: true,
-              validateRules: [{ required: true, message: '${title}不能为空' }]
+            { title: '唛头', key: 'barCode', width: '12%', type: FormTypes.popupJsh, kind: 'material', multi: true
             },
             { title: '名称', key: 'name', width: '10%', type: FormTypes.normal },
             { title: '规格', key: 'standard', width: '9%', type: FormTypes.normal },
@@ -212,8 +216,8 @@
             { title: '数量', key: 'operNumber', width: '5%', type: FormTypes.inputNumber, statistics: true,
               validateRules: [{ required: true, message: '${title}不能为空' }]
             },
-            { title: '单价', key: 'unitPrice', width: '5%', type: FormTypes.inputNumber},
-            { title: '金额', key: 'allPrice', width: '5%', type: FormTypes.inputNumber, statistics: true },
+            { title: '单价', key: 'unitPrice', width: '5%', type: FormTypes.normal},
+            { title: '金额', key: 'allPrice', width: '5%', type: FormTypes.normal, statistics: true },
             { title: '备注', key: 'remark', width: '5%', type: FormTypes.input },
             { title: '关联id', key: 'linkId', width: '5%', type: FormTypes.hidden },
           ]
@@ -240,6 +244,13 @@
     },
     created () {
     },
+    beforeDestroy() {
+      // 清理滚动事件监听器
+      const tableRef = this.$refs[this.refKeys[0]];
+      if (tableRef && tableRef.$refs.scrollView) {
+        tableRef.$refs.scrollView.removeEventListener('scroll', this.handleTableScroll);
+      }
+    },
     methods: {
       //调用完edit()方法之后会自动调用此方法
       editAfter() {
@@ -256,6 +267,13 @@
         if (this.action === 'add') {
           this.addInit(this.prefixNo)
           this.fileList = []
+          
+          this.$nextTick(() => {
+            // 初始化后滚动到顶部
+            this.scrollToTop();
+            // 模拟为每一行触发onAdded事件
+            this.triggerOnAddedForAllRows();
+          })
         } else {
           if(this.model.linkNumber) {
             this.rowCanEdit = false
@@ -288,12 +306,130 @@
         this.initPlatform()
         this.initQuickBtn()
         this.handleChangeOtherField()
+        
+        // 新增时初始化操作
+        if (this.action === 'add') {
+          this.$nextTick(() => {
+            // 初始化后滚动到顶部
+            this.scrollToTop();
+            // 为初始20行设置默认仓库值
+            this.setInitialDepotForRows();
+          });
+        }
+        
+        // 绑定滚动事件监听器
+        this.$nextTick(() => {
+          const tableRef = this.$refs[this.refKeys[0]];
+          if (tableRef && tableRef.$refs.scrollView) {
+            tableRef.$refs.scrollView.addEventListener('scroll', this.handleTableScroll);
+          }
+        });
       },
+      // 处理表格滚动事件
+      handleTableScroll() {
+        if (this.isScrollLoading) return;
+        
+        const tableRef = this.$refs[this.refKeys[0]];
+        if (!tableRef) return;
+        
+        const scrollView = tableRef.$refs.scrollView;
+        if (!scrollView) return;
+        
+        const { scrollTop, scrollHeight, clientHeight } = scrollView;
+        const distanceToBottom = scrollHeight - scrollTop - clientHeight;
+        
+        // 当距离底部小于阈值时触发加载
+        if (distanceToBottom <= this.scrollLoadThreshold) {
+          this.addMoreRows();
+        }
+      },
+
+      // 添加更多行
+      addMoreRows() {
+        this.isScrollLoading = true;
+        const tableRef = this.$refs[this.refKeys[0]];
+        if (tableRef && tableRef.add) {
+          tableRef.add(this.scrollLoadRowCount);
+        }
+        // 使用setTimeout防止过于频繁的触发
+        setTimeout(() => {
+          this.isScrollLoading = false;
+        }, 200);
+      },
+      
+      // 为初始行设置默认仓库（修复版本）
+      setInitialDepotForRows() {
+        this.$nextTick(() => {
+          const tableRef = this.$refs[this.refKeys[0]];
+          if (!tableRef || !tableRef.rows || tableRef.rows.length === 0) {
+            // 如果表格还没初始化，等待一下再试
+            setTimeout(() => this.setInitialDepotForRows(), 500);
+            return;
+          }
+          
+          if (this.currentSelectDepotId) {
+            // 如果已经有选中的仓库，直接为所有行设置
+            const values = tableRef.rows.map(row => ({
+              rowKey: row.id,
+              values: { depotId: this.currentSelectDepotId }
+            }));
+            tableRef.setValues(values);
+          } else {
+            // 只调用一次API，然后为所有行设置
+            getAction('/depot/findDepotByCurrentUser').then((res) => {
+              if (res.code === 200) {
+                let arr = res.data;
+                let defaultDepotId = '';
+                
+                if (arr.length === 1) {
+                  defaultDepotId = arr[0].id + '';
+                } else {
+                  for (let i = 0; i < arr.length; i++) {
+                    if (arr[i].isDefault) {
+                      defaultDepotId = arr[i].id + '';
+                      break;
+                    }
+                  }
+                }
+                
+                if (defaultDepotId) {
+                  // 为所有行一次性设置默认仓库
+                  const values = tableRef.rows.map(row => ({
+                    rowKey: row.id,
+                    values: { depotId: defaultDepotId }
+                  }));
+                  tableRef.setValues(values);
+                }
+              }
+            });
+          }
+        });
+      },
+      
+      // 滚动到顶部
+      scrollToTop() {
+        this.$nextTick(() => {
+          const tableRef = this.$refs[this.refKeys[0]];
+          if (tableRef && tableRef.$refs.scrollView) {
+            tableRef.$refs.scrollView.scrollTop = 0;
+          }
+        });
+      },
+      
+
+      
+
       //提交单据时整理成formData
       classifyIntoFormData(allValues) {
         let totalPrice = 0
         let billMain = Object.assign(this.model, allValues.formValue)
         let detailArr = allValues.tablesValue[0].values
+        
+        // 过滤掉唄头为空的行（数量现在是必填的）
+        detailArr = detailArr.filter(item => {
+          const hasBarCode = item.barCode && item.barCode.trim() !== '';
+          return hasBarCode;
+        });
         billMain.type = '入库'
         billMain.subType = '其它'
         for(let item of detailArr){
@@ -329,9 +465,12 @@
             let info = selectBillDetailRows[j];
             if(info.finishNumber>0) {
               info.operNumber = info.preNumber - info.finishNumber
+              // 计算金额与税额
+              let taxRate = info.taxRate-0
+              info.allPrice = (info.operNumber * info.unitPrice).toFixed(2)-0
+              info.taxMoney = (info.allPrice*taxRate/100).toFixed(2)-0
+              info.taxLastMoney = (info.allPrice + info.taxMoney).toFixed(2)-0
             }
-            info.unitPrice = 0
-            info.allPrice = 0
             info.linkId = info.id
             listEx.push(info)
             this.changeColumnShow(info)
@@ -344,6 +483,72 @@
             })
           })
         }
+      },
+      
+      // 重写onAdded方法，防止自动滚动但保留仓库设置逻辑
+      onAdded(event) {
+        console.log('重写的onAdded被调用，行数:', event.target.rows.length);
+        const { row, target } = event
+        // 保留原来的仓库设置逻辑
+        if (this.currentSelectDepotId) {
+          target.setValues([{ rowKey: row.id, values: { depotId: this.currentSelectDepotId } }])
+        } else {
+          getAction('/depot/findDepotByCurrentUser').then((res) => {
+            if (res.code === 200) {
+              let arr = res.data
+              if (arr.length === 1) {
+                target.setValues([{ rowKey: row.id, values: { depotId: arr[0].id + '' } }])
+              } else {
+                for (let i = 0; i < arr.length; i++) {
+                  if (arr[i].isDefault) {
+                    target.setValues([{ rowKey: row.id, values: { depotId: arr[i].id + '' } }])
+                    break
+                  }
+                }
+              }
+            }
+          })
+        }
+      },
+      
+      // 为所有初始行触发onAdded逻辑
+      triggerOnAddedForAllRows() {
+        setTimeout(() => {
+          const tableRef = this.$refs[this.refKeys[0]];
+          if (!tableRef || !tableRef.rows || tableRef.rows.length === 0) {
+            setTimeout(() => this.triggerOnAddedForAllRows(), 500);
+            return;
+          }
+          
+          tableRef.rows.forEach(row => {
+            const mockEvent = {
+              row: row,
+              target: tableRef
+            };
+            this.onAdded(mockEvent);
+          });
+        }, 1000);
+      },
+      
+      // 滚动到顶部
+      scrollToTop() {
+        const attemptScroll = () => {
+          const tableRef = this.$refs[this.refKeys[0]];
+          if (tableRef && tableRef.$refs.scrollView) {
+            tableRef.$refs.scrollView.scrollTop = 0;
+            setTimeout(() => {
+              if (tableRef.$refs.scrollView.scrollTop > 0) {
+                attemptScroll();
+              }
+            }, 100);
+          }
+        };
+        
+        this.$nextTick(() => {
+          attemptScroll();
+          setTimeout(attemptScroll, 500);
+          setTimeout(attemptScroll, 1000);
+        });
       }
     }
   }

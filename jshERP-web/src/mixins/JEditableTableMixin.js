@@ -1,3 +1,47 @@
+function resolveErrorMessage(payload, fallback) {
+  if (!payload) {
+    return fallback
+  }
+  if (typeof payload === 'string') {
+    const trimmed = payload.trim()
+    if (!trimmed) {
+      return fallback
+    }
+    if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+      try {
+        const parsed = JSON.parse(trimmed)
+        return resolveErrorMessage(parsed, fallback)
+      } catch (e) {
+        return trimmed
+      }
+    }
+    return trimmed
+  }
+  if (payload.msg) {
+    if (typeof payload.msg === 'string') {
+      return resolveErrorMessage(payload.msg, fallback)
+    }
+    return resolveErrorMessage(payload.msg, fallback)
+  }
+
+  if (payload.message) {
+    if (typeof payload.message === 'string') {
+      return resolveErrorMessage(payload.message, fallback)
+    }
+    return resolveErrorMessage(payload.message, fallback)
+  }
+  if (payload.data) {
+    if (typeof payload.data === 'string') {
+      return payload.data || fallback
+    }
+    return resolveErrorMessage(payload.data, fallback)
+  }
+  if (payload.response && payload.response.data) {
+    return resolveErrorMessage(payload.response.data, fallback)
+  }
+  return fallback
+}
+
 import JEditableTable from '@/components/jeecg/JEditableTable'
 import { VALIDATE_NO_PASSED, getRefPromise, validateFormAndTables } from '@/utils/JEditableTableUtil'
 import { httpAction, getAction } from '@/api/manage'
@@ -66,9 +110,11 @@ export const JEditableTableMixin = {
       if (typeof this.editBefore === 'function') this.editBefore(record)
       this.visible = true
       this.activeKey = this.refKeys[0]
-      this.form.resetFields()
       this.model = Object.assign({}, record)
-      if (typeof this.editAfter === 'function') this.editAfter(this.model)
+      this.$nextTick(() => {
+        this.form.resetFields()
+        if (typeof this.editAfter === 'function') this.editAfter(this.model)
+      })
     },
     /** 关闭弹窗，并将所有JEditableTable实例回归到初始状态 */
     close() {
@@ -83,7 +129,7 @@ export const JEditableTableMixin = {
     requestSubTableData(url, params, tab, success) {
       tab.loading = true
       getAction(url, params).then(res => {
-        if(res && res.code === 200){
+        if (res && res.code === 200) {
           tab.dataSource = res.data.rows
           typeof success === 'function' ? success(res) : ''
         }
@@ -100,15 +146,31 @@ export const JEditableTableMixin = {
       }
       this.confirmLoading = true
       httpAction(url, formData, method).then((res) => {
-        if(res.code === 200){
+        if (res.code === 200) {
           this.$emit('ok')
           this.confirmLoading = false
           this.close()
         } else {
-          this.$message.warning(res.data.message);
+          const message = resolveErrorMessage(res, '操作失败，请稍后重试')
+          if (this.$message && typeof this.$message.warning === 'function') {
+            this.$message.warning(message)
+          }
           this.confirmLoading = false
         }
-      }).finally(() => {
+      }).catch(error => {
+        let message = resolveErrorMessage(error, '')
+        if (!message && error && error.message) {
+          message = error.message
+        }
+        if (!message) {
+          message = '请求失败，请稍后重试'
+        }
+        if (this.$message && typeof this.$message.error === 'function') {
+          this.$message.error(message)
+        } else {
+          console.error(message)
+        }
+        this.confirmLoading = false
       })
     },
 

@@ -24,7 +24,7 @@
     </template>
     <a-spin :spinning="confirmLoading">
       <a-form :form="form">
-        <a-row class="form-row" :gutter="24">
+        <a-row class="form-row hide-fields" :gutter="24">
           <a-col :lg="6" :md="12" :sm="24">
             <a-form-item :labelCol="labelCol" :wrapperCol="wrapperCol" label="客户" data-step="1" data-title="客户"
                          data-intro="客户必须选择，如果发现需要选择的客户尚未录入，可以在下拉框中点击新增客户进行录入。
@@ -44,17 +44,25 @@
             </a-form-item>
           </a-col>
           <a-col :lg="6" :md="12" :sm="24">
+            <a-form-item :labelCol="labelCol" :wrapperCol="wrapperCol" label="销售店铺">
+              <a-select placeholder="请选择店铺" v-decorator="[ 'shopName', validatorRules.shopName ]" :disabled="!rowCanEdit"
+                        :loading="shopLoading" allow-clear showSearch :filterOption="true" optionFilterProp="children">
+                <a-select-option v-for="shop in shopList" :key="shop.id" :value="shop.name">{{ shop.name }}</a-select-option>
+              </a-select>
+            </a-form-item>
+          </a-col>
+          <a-col :lg="6" :md="12" :sm="24">
             <a-form-item :labelCol="labelCol" :wrapperCol="wrapperCol" label="单据日期">
               <j-date v-decorator="['operTime', validatorRules.operTime]" :show-time="true"/>
             </a-form-item>
           </a-col>
-          <a-col :lg="6" :md="12" :sm="24">
+          <a-col :lg="6" :md="12" :sm="24" class="number-field">
             <a-form-item :labelCol="labelCol" :wrapperCol="wrapperCol" label="单据编号" data-step="2" data-title="单据编号"
                          data-intro="单据编号自动生成、自动累加、开头是单据类型的首字母缩写，累加的规则是每次打开页面会自动占用一个新的编号">
               <a-input placeholder="请输入单据编号" v-decorator.trim="[ 'number' ]" />
             </a-form-item>
           </a-col>
-          <a-col :lg="6" :md="12" :sm="24">
+          <a-col :lg="6" :md="12" :sm="24" class="link-number-field">
             <a-form-item :labelCol="labelCol" :wrapperCol="wrapperCol" label="关联订单" data-step="3" data-title="关联订单"
               data-intro="销售出库单据可以通过关联订单来选择已录入的订单，选择之后会自动加载订单的内容，然后继续录入仓库等信息完成单据的提交，
               提交之后原来的销售订单会对应的改变单据状态。另外本系统支持订单多次出库，只需选择订单之后修改对应的商品数量即可">
@@ -73,7 +81,7 @@
           :rowSelection="true"
           :actionButton="rowCanEdit"
           :actionDeleteButton="!rowCanEdit"
-          :dragSortAndNumber="rowCanEdit"
+          :dragToInsert="rowCanEdit"
           @valueChange="onValueChange"
           @added="onAdded"
           @deleted="onDeleted">
@@ -114,7 +122,7 @@
             </a-form-item>
           </a-col>
         </a-row>
-        <a-row class="form-row" :gutter="24">
+        <a-row class="form-row" :gutter="24" style="display: none;">
           <a-col :lg="6" :md="12" :sm="24">
             <a-form-item :labelCol="labelCol" :wrapperCol="wrapperCol" label="优惠率" data-step="5" data-title="优惠率"
                          data-intro="针对单据明细中商品总金额进行优惠的比例">
@@ -140,7 +148,7 @@
             </a-form-item>
           </a-col>
         </a-row>
-        <a-row class="form-row" :gutter="24">
+        <a-row class="form-row" :gutter="24" style="display: none;">
           <a-col :lg="6" :md="12" :sm="24">
             <a-form-item :labelCol="labelCol" :wrapperCol="wrapperCol" label="结算账户" data-step="9" data-title="结算账户"
                          data-intro="如果在下拉框中选择多账户，则可以通过多个结算账户进行结算">
@@ -178,7 +186,7 @@
             </a-form-item>
           </a-col>
         </a-row>
-        <a-row class="form-row" :gutter="24">
+        <a-row class="form-row" :gutter="24" style="display: none;">
           <a-col :lg="6" :md="12" :sm="24">
             <a-form-item :labelCol="labelCol" :wrapperCol="wrapperCol" label="销售人员" data-step="11" data-title="销售人员"
                          data-intro="销售人员的数据来自【经手人管理】菜单中的销售员">
@@ -192,7 +200,7 @@
           <a-col :lg="6" :md="12" :sm="24">
           </a-col>
         </a-row>
-        <a-row class="form-row" :gutter="24">
+        <a-row class="form-row" :gutter="24" style="display: none;">
           <a-col :lg="6" :md="12" :sm="24">
             <a-form-item :labelCol="labelCol" :wrapperCol="wrapperCol" label="附件" data-step="12" data-title="附件"
                          data-intro="可以上传与单据相关的图片、文档，支持多个文件">
@@ -237,6 +245,7 @@
   import JDate from '@/components/jeecg/JDate'
   import Vue from 'vue'
   import { getCurrentSystemConfig } from '@/api/api'
+  import { getAction } from '@/api/manage'
   export default {
     name: "SaleOutModal",
     mixins: [JEditableTableMixin, BillModalMixin],
@@ -266,7 +275,13 @@
         width: '1600px',
         moreStatus: false,
         // 新增时子表默认添加几行空数据
-        addDefaultRowNum: 1,
+        addDefaultRowNum: 20,
+        // 滚动加载相关参数
+        scrollLoadThreshold: 10,  // 距离底部10px时加载
+        scrollLoadRowCount: 1,    // 每次加载1行
+        isScrollLoading: false,   // 防止重复加载
+        lastScrollTop: 0,         // 记录上次滚动位置
+        hasReachedBottom: false,  // 是否已经到达底部
         visible: false,
         operTimeStr: '',
         prefixNo: 'XSCK',
@@ -274,6 +289,8 @@
         fileList:[],
         rowCanEdit: true,
         model: {},
+        shopList: [],
+        shopLoading: false,
         labelCol: {
           xs: { span: 24 },
           sm: { span: 8 },
@@ -291,8 +308,7 @@
             { title: '仓库名称', key: 'depotId', width: '8%', type: FormTypes.select, placeholder: '请选择${title}', options: [],
               allowSearch:true, validateRules: [{ required: true, message: '${title}不能为空' }]
             },
-            { title: '唛头', key: 'barCode', width: '12%', type: FormTypes.popupJsh, kind: 'material', multi: true,
-              validateRules: [{ required: true, message: '${title}不能为空' }]
+            { title: '唛头', key: 'barCode', width: '12%', type: FormTypes.popupJsh, kind: 'material', multi: true
             },
             { title: '名称', key: 'name', width: '10%', type: FormTypes.normal },
             { title: '规格', key: 'standard', width: '9%', type: FormTypes.normal },
@@ -314,11 +330,11 @@
             { title: '数量', key: 'operNumber', width: '4%', type: FormTypes.inputNumber, statistics: true,
               validateRules: [{ required: true, message: '${title}不能为空' }]
             },
-            { title: '单价', key: 'unitPrice', width: '4%', type: FormTypes.inputNumber},
-            { title: '金额', key: 'allPrice', width: '5%', type: FormTypes.inputNumber, statistics: true },
-            { title: '税率', key: 'taxRate', width: '4%', type: FormTypes.inputNumber,placeholder: '%'},
-            { title: '税额', key: 'taxMoney', width: '5%', type: FormTypes.inputNumber, readonly: true, statistics: true },
-            { title: '价税合计', key: 'taxLastMoney', width: '7%', type: FormTypes.inputNumber, statistics: true },
+            { title: '单价', key: 'unitPrice', width: '4%', type: FormTypes.normal},
+            { title: '金额', key: 'allPrice', width: '5%', type: FormTypes.normal, statistics: true },
+            { title: '税率', key: 'taxRate', width: '4%', type: FormTypes.normal },
+            { title: '税额', key: 'taxMoney', width: '5%', type: FormTypes.normal, statistics: true },
+            { title: '价税合计', key: 'taxLastMoney', width: '7%', type: FormTypes.normal, statistics: true },
             { title: '备注', key: 'remark', width: '6%', type: FormTypes.input },
             { title: '关联id', key: 'linkId', width: '5%', type: FormTypes.hidden },
           ]
@@ -333,6 +349,11 @@
           organId:{
             rules: [
               { required: true, message: '请选择客户！' }
+            ]
+          },
+          shopName:{
+            rules: [
+              { required: true, message: '请选择销售店铺！' }
             ]
           },
           accountId:{
@@ -374,12 +395,17 @@
           this.addInit(this.prefixNo)
           this.personList.value = ''
           this.fileList = []
+
           this.$nextTick(() => {
             handleIntroJs(this.prefixNo, 1)
             if(this.transferParam && this.transferParam.number) {
               let tp = this.transferParam
               this.linkBillListOk(tp.list, tp.number, tp.organId, tp.discountMoney, tp.deposit, tp.remark, this.defaultDepotId, tp.accountId, tp.salesMan)
             }
+            // 初始化后滚动到顶部
+            this.scrollToTop();
+            // 模拟为每一行触发onAdded事件
+            this.triggerOnAddedForAllRows();
           })
         } else {
           if(this.model.linkNumber) {
@@ -406,7 +432,7 @@
           this.fileList = this.model.fileName
           this.$nextTick(() => {
             this.form.setFieldsValue(pick(this.model,'organId', 'operTime', 'number', 'linkNumber', 'remark',
-              'discount','discountMoney','discountLastMoney','otherMoney','accountId','deposit','changeAmount','debt','salesMan'))
+              'discount','discountMoney','discountLastMoney','otherMoney','accountId','deposit','changeAmount','debt','salesMan','shopName'))
           });
           // 加载子表数据
           let params = {
@@ -424,21 +450,38 @@
           this.copyAddInit(this.prefixNo)
         }
         this.initSystemConfig()
-        this.initCustomer(0)
+        this.initShopList()
+        this.initCustomer(1)
         this.initSalesman()
         this.initDepot()
         this.initAccount(0)
         this.initPlatform()
         this.initQuickBtn()
         this.handleChangeOtherField()
+        
+        // 添加滚动监听器
+        this.$nextTick(() => {
+          const tableRef = this.$refs[this.refKeys[0]];
+          if (tableRef && tableRef.$refs.scrollView) {
+            tableRef.$refs.scrollView.addEventListener('scroll', this.handleTableScroll);
+          }
+        });
       },
       //提交单据时整理成formData
       classifyIntoFormData(allValues) {
         let totalPrice = 0
         let billMain = Object.assign(this.model, allValues.formValue)
         let detailArr = allValues.tablesValue[0].values
+        
+        // 过滤掉唱头为空的行（数量现在是必填的）
+        detailArr = detailArr.filter(item => {
+          const hasBarCode = item.barCode && item.barCode.trim() !== '';
+          return hasBarCode;
+        });
         billMain.type = '出库'
         billMain.subType = '销售'
+        // 销售店铺
+        billMain.shopName = this.form.getFieldValue('shopName')
         for(let item of detailArr){
           totalPrice += item.allPrice-0
         }
@@ -462,6 +505,21 @@
           info: JSON.stringify(billMain),
           rows: JSON.stringify(detailArr),
         }
+      },
+      initShopList() {
+        this.shopLoading = true
+        getAction('/shop/list').then(res => {
+          if (res && res.code === 200 && res.data && Array.isArray(res.data.rows)) {
+            // 添加未指定店铺选项
+            const defaultShop = {
+              id: 0,
+              name: '未指定店铺'
+            }
+            this.shopList = [defaultShop, ...res.data.rows]
+          }
+        }).finally(() => {
+          this.shopLoading = false
+        })
       },
       handleHistoryBillList() {
         let organId = this.form.getFieldValue('organId')
@@ -542,9 +600,130 @@
           }
         }
       },
+      
+      // 重写onAdded方法，防止自动滚动但保留仓库设置逻辑
+      onAdded(event) {
+        const { row, target } = event
+        
+        // 保留原来的仓库设置逻辑
+        if (this.currentSelectDepotId) {
+          //如果单据选择过仓库，则直接从当前选择的仓库加载
+          target.setValues([{ rowKey: row.id, values: { depotId: this.currentSelectDepotId } }])
+        } else {
+          getAction('/depot/findDepotByCurrentUser').then((res) => {
+            if (res.code === 200) {
+              let arr = res.data
+              if (arr.length === 1) {
+                target.setValues([{ rowKey: row.id, values: { depotId: arr[0].id + '' } }])
+              } else {
+                for (let i = 0; i < arr.length; i++) {
+                  if (arr[i].isDefault) {
+                    target.setValues([{ rowKey: row.id, values: { depotId: arr[i].id + '' } }])
+                    break
+                  }
+                }
+              }
+            }
+          })
+        }
+      },
+      
+      // 为所有初始行触发onAdded逻辑
+      triggerOnAddedForAllRows() {
+        setTimeout(() => {
+          const tableRef = this.$refs[this.refKeys[0]];
+          if (!tableRef || !tableRef.rows || tableRef.rows.length === 0) {
+            setTimeout(() => this.triggerOnAddedForAllRows(), 500);
+            return;
+          }
+          
+          // 为每个初始行模拟触发onAdded事件
+          tableRef.rows.forEach(row => {
+            const mockEvent = {
+              row: row,
+              target: tableRef
+            };
+            this.onAdded(mockEvent);
+          });
+        }, 1000);
+      },
+      
+      // 滚动事件处理
+      handleTableScroll() {
+        const tableRef = this.$refs[this.refKeys[0]];
+        if (!tableRef || !tableRef.$refs.scrollView || this.isScrollLoading) {
+          return;
+        }
+        
+        const scrollView = tableRef.$refs.scrollView;
+        const scrollTop = scrollView.scrollTop;
+        const scrollHeight = scrollView.scrollHeight;
+        const clientHeight = scrollView.clientHeight;
+        
+        // 检查是否滚动到底部
+        const isAtBottom = scrollTop + clientHeight >= scrollHeight - this.scrollLoadThreshold;
+        
+        // 只有在向下滚动且到达底部时才添加行
+        if (isAtBottom && scrollTop > this.lastScrollTop) {
+          this.addMoreRows();
+        }
+        
+        this.lastScrollTop = scrollTop;
+      },
+      
+      // 添加更多行
+      addMoreRows() {
+        if (this.isScrollLoading) return;
+        
+        this.isScrollLoading = true;
+        const tableRef = this.$refs[this.refKeys[0]];
+        if (tableRef) {
+          tableRef.add(this.scrollLoadRowCount);
+          
+          // 防抖，稍后重置状态
+          setTimeout(() => {
+            this.isScrollLoading = false;
+          }, 300);
+        }
+      },
+      
+      // 滚动到顶部
+      scrollToTop() {
+        // 多次尝试确保滚动到顶部
+        const attemptScroll = () => {
+          const tableRef = this.$refs[this.refKeys[0]];
+          if (tableRef && tableRef.$refs.scrollView) {
+            tableRef.$refs.scrollView.scrollTop = 0;
+            // 再次检查是否成功
+            setTimeout(() => {
+              if (tableRef.$refs.scrollView.scrollTop > 0) {
+                attemptScroll(); // 如果还没有滚动到顶部，再试一次
+              }
+            }, 100);
+          }
+        };
+        
+        this.$nextTick(() => {
+          attemptScroll();
+          // 再等待一段时间后再次尝试
+          setTimeout(attemptScroll, 500);
+          setTimeout(attemptScroll, 1000);
+        });
+      },
+    },
+    beforeDestroy() {
+      // 移除滚动监听器
+      const tableRef = this.$refs[this.refKeys[0]];
+      if (tableRef && tableRef.$refs.scrollView) {
+        tableRef.$refs.scrollView.removeEventListener('scroll', this.handleTableScroll);
+      }
     }
   }
 </script>
 <style scoped>
-
+/* 暂时隐藏单据编号和关联订单字段 */
+.hide-fields .number-field,
+.hide-fields .link-number-field {
+  display: none !important;
+}
 </style>

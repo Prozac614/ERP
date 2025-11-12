@@ -379,7 +379,7 @@
         group by m.id, me.bar_code, m.name, m.mfrs, m.model, m.standard, m.brand,
         m.other_field1,m.other_field2,m.other_field3,m.unit, u.basic_unit, m.color, m.unit_id, u.name,
         me.purchase_decimal, mcs.current_unit_price
-        order by m.id desc
+        order by CASE WHEN me.bar_code LIKE 'W%' THEN 1 WHEN me.bar_code LIKE 'B%' THEN 2 ELSE 3 END, m.id ASC
         <if test="offset != null and rows != null">
             limit #{offset},#{rows}
         </if>
@@ -477,7 +477,7 @@
         and ifnull(m.delete_flag,'0') !='1'
         group by m.id, di.material_extend_id, me.bar_code, m.name, m.mfrs, m.model, m.standard,
         m.other_field1,m.other_field2,m.other_field3, m.unit, u.basic_unit, m.color, m.brand, u.name
-        order by m.id desc
+        order by CASE WHEN me.bar_code LIKE 'W%' THEN 1 WHEN me.bar_code LIKE 'B%' THEN 2 ELSE 3 END, m.id ASC
         <if test="offset != null and rows != null">
             limit #{offset},#{rows}
         </if>
@@ -1106,7 +1106,7 @@
             and me.bar_code in (${barCodes})
         </if>
         and ifnull(m.delete_flag,'0') !='1'
-        order by m.id desc
+        order by CASE WHEN me.bar_code LIKE 'W%' THEN 1 WHEN me.bar_code LIKE 'B%' THEN 2 ELSE 3 END, m.id ASC
     </select>
 
     <select id="getCurrentStockByParam" resultType="java.math.BigDecimal">
@@ -1132,5 +1132,986 @@
         order by dh.id desc, di.id desc
         limit 0,1
     </select>
+
+
+
+    <select id="getMaterialPeriodStock" resultType="com.jsh.erp.datasource.vo.MaterialStockPeriodVo" parameterType="map">
+        select
+            m.id as materialId,
+            m.name as materialName,
+            me.bar_code as barCode,
+            -- 当前库存作为本期结存
+            ifnull((
+                select sum(ifnull(current_number,0))
+                from jsh_material_current_stock mcs
+                where mcs.material_id = m.id
+                and ifnull(mcs.delete_flag,'0') !='1'
+            ), 0) as currentPeriodStock,
+            
+            -- 上期结存：根据库存平衡公式计算
+            -- 公式：上期结存 = 本期结存 - 本期入库 + 本期出库
+            -- 注意：这里使用GREATEST确保不会出现负数
+            GREATEST(0,
+                ifnull((
+                    select sum(ifnull(current_number,0))
+                    from jsh_material_current_stock mcs
+                    where mcs.material_id = m.id
+                    and ifnull(mcs.delete_flag,'0') !='1'
+                ), 0) -
+                ifnull((
+                    select sum(ifnull(di.basic_number,0))
+                    from jsh_depot_item di
+                    left join jsh_depot_head dh on dh.id = di.header_id
+                    where di.material_id = m.id
+                    and dh.type = '入库'
+                    and ifnull(di.delete_flag,'0') !='1'
+                    and ifnull(dh.delete_flag,'0') !='1'
+                    <if test="shopNames != null and shopNames.size() > 0">
+                        and dh.shop_name in
+                        <foreach collection="shopNames" item="shopName" open="(" close=")" separator=",">
+                            #{shopName}
+                        </foreach>
+                    </if>
+                    and (
+                        -- 本期时间范围：根据当前月份动态判断
+                        (month(now()) >= 2 and month(now()) &lt;= 7 and dh.oper_time >= concat(year(now()), '-02-01 00:00:00') and dh.oper_time &lt;= concat(year(now()), '-07-31 23:59:59'))
+                        or
+                        (month(now()) >= 8 and dh.oper_time >= concat(year(now()), '-08-01 00:00:00') and dh.oper_time &lt;= concat(year(now()) + 1, '-01-31 23:59:59'))
+                        or
+                        (month(now()) = 1 and dh.oper_time >= concat(year(now()) - 1, '-08-01 00:00:00') and dh.oper_time &lt;= concat(year(now()), '-01-31 23:59:59'))
+                    )
+                ), 0) +
+                ifnull((
+                    select sum(ifnull(di.basic_number,0))
+                    from jsh_depot_item di
+                    left join jsh_depot_head dh on dh.id = di.header_id
+                    where di.material_id = m.id
+                    and dh.type = '出库'
+                    and ifnull(di.delete_flag,'0') !='1'
+                    and ifnull(dh.delete_flag,'0') !='1'
+                    <if test="shopNames != null and shopNames.size() > 0">
+                        and dh.shop_name in
+                        <foreach collection="shopNames" item="shopName" open="(" close=")" separator=",">
+                            #{shopName}
+                        </foreach>
+                    </if>
+                    and (
+                        -- 本期时间范围：根据当前月份动态判断
+                        (month(now()) >= 2 and month(now()) &lt;= 7 and dh.oper_time >= concat(year(now()), '-02-01 00:00:00') and dh.oper_time &lt;= concat(year(now()), '-07-31 23:59:59'))
+                        or
+                        (month(now()) >= 8 and dh.oper_time >= concat(year(now()), '-08-01 00:00:00') and dh.oper_time &lt;= concat(year(now()) + 1, '-01-31 23:59:59'))
+                        or
+                        (month(now()) = 1 and dh.oper_time >= concat(year(now()) - 1, '-08-01 00:00:00') and dh.oper_time &lt;= concat(year(now()), '-01-31 23:59:59'))
+                    )
+                ), 0)
+            ) as previousPeriodStock,
+            
+            -- 本期出库：根据当前月份判断本期时间范围
+            ifnull((
+                select sum(ifnull(di.basic_number,0))
+                from jsh_depot_item di
+                left join jsh_depot_head dh on dh.id = di.header_id
+                where di.material_id = m.id
+                and dh.type = '出库'
+                and ifnull(di.delete_flag,'0') !='1'
+                and ifnull(dh.delete_flag,'0') !='1'
+                <if test="shopNames != null and shopNames.size() > 0">
+                    and dh.shop_name in
+                    <foreach collection="shopNames" item="shopName" open="(" close=")" separator=",">
+                        #{shopName}
+                    </foreach>
+                </if>
+                and (
+                    -- 本期时间范围：根据当前月份动态判断
+                    (month(now()) >= 2 and month(now()) &lt;= 7 and dh.oper_time >= concat(year(now()), '-02-01 00:00:00') and dh.oper_time &lt;= concat(year(now()), '-07-31 23:59:59'))
+                    or
+                    (month(now()) >= 8 and dh.oper_time >= concat(year(now()), '-08-01 00:00:00') and dh.oper_time &lt;= concat(year(now()) + 1, '-01-31 23:59:59'))
+                    or
+                    (month(now()) = 1 and dh.oper_time >= concat(year(now()) - 1, '-08-01 00:00:00') and dh.oper_time &lt;= concat(year(now()), '-01-31 23:59:59'))
+                )
+            ), 0) as currentPeriodOut,
+            
+            -- 上期出库：根据当前月份判断上期时间范围
+            ifnull((
+                select sum(ifnull(di.basic_number,0))
+                from jsh_depot_item di
+                left join jsh_depot_head dh on dh.id = di.header_id
+                where di.material_id = m.id
+                and dh.type = '出库'
+                and ifnull(di.delete_flag,'0') !='1'
+                and ifnull(dh.delete_flag,'0') !='1'
+                <if test="shopNames != null and shopNames.size() > 0">
+                    and dh.shop_name in
+                    <foreach collection="shopNames" item="shopName" open="(" close=")" separator=",">
+                        #{shopName}
+                    </foreach>
+                </if>
+                and (
+                    -- 上期时间范围：根据当前月份判断
+                    (month(now()) >= 2 and month(now()) &lt;= 7 and dh.oper_time >= concat(year(now()) - 1, '-08-01 00:00:00') and dh.oper_time &lt;= concat(year(now()), '-01-31 23:59:59'))
+                    or
+                    (month(now()) >= 8 and dh.oper_time >= concat(year(now()), '-02-01 00:00:00') and dh.oper_time &lt;= concat(year(now()), '-07-31 23:59:59'))
+                    or
+                    (month(now()) = 1 and dh.oper_time >= concat(year(now()) - 1, '-02-01 00:00:00') and dh.oper_time &lt;= concat(year(now()) - 1, '-07-31 23:59:59'))
+                )
+            ), 0) as previousPeriodOut,
+            
+            -- 本期入库：根据当前月份判断本期时间范围
+            ifnull((
+                select sum(ifnull(di.basic_number,0))
+                from jsh_depot_item di
+                left join jsh_depot_head dh on dh.id = di.header_id
+                where di.material_id = m.id
+                and dh.type = '入库'
+                and ifnull(di.delete_flag,'0') !='1'
+                and ifnull(dh.delete_flag,'0') !='1'
+                <if test="shopNames != null and shopNames.size() > 0">
+                    and dh.shop_name in
+                    <foreach collection="shopNames" item="shopName" open="(" close=")" separator=",">
+                        #{shopName}
+                    </foreach>
+                </if>
+                and (
+                    -- 本期时间范围：根据当前月份动态判断
+                    (month(now()) >= 2 and month(now()) &lt;= 7 and dh.oper_time >= concat(year(now()), '-02-01 00:00:00') and dh.oper_time &lt;= concat(year(now()), '-07-31 23:59:59'))
+                    or
+                    (month(now()) >= 8 and dh.oper_time >= concat(year(now()), '-08-01 00:00:00') and dh.oper_time &lt;= concat(year(now()) + 1, '-01-31 23:59:59'))
+                    or
+                    (month(now()) = 1 and dh.oper_time >= concat(year(now()) - 1, '-08-01 00:00:00') and dh.oper_time &lt;= concat(year(now()), '-01-31 23:59:59'))
+                )
+            ), 0) as currentPeriodIn
+            
+        from jsh_material m
+        left join jsh_material_extend me on me.material_id = m.id and ifnull(me.delete_flag,'0') !='1'
+        where 1=1
+        and ifnull(m.delete_flag,'0') !='1'
+        and me.default_flag = 1
+        <if test="materialParam != null and materialParam !=''">
+            <bind name="bindKey" value="'%'+materialParam+'%'"/>
+            and (me.bar_code like #{bindKey} or m.name like #{bindKey} or m.mnemonic like #{bindKey} or m.standard like #{bindKey} or m.model like #{bindKey}
+            or m.color like #{bindKey} or m.mfrs like #{bindKey} or m.brand like #{bindKey} or m.other_field1 like #{bindKey}
+            or m.other_field2 like #{bindKey} or m.other_field3 like #{bindKey})
+        </if>
+        order by CASE WHEN me.bar_code LIKE 'W%' THEN 1 WHEN me.bar_code LIKE 'B%' THEN 2 ELSE 3 END, m.id ASC
+        limit #{offset}, #{rows}
+    </select>
+
+    <select id="getMaterialPeriodStockCount" resultType="java.lang.Integer">
+        select count(1)
+        from jsh_material m
+        left join jsh_material_extend me on me.material_id = m.id and ifnull(me.delete_flag,'0') !='1'
+        where 1=1
+        and ifnull(m.delete_flag,'0') !='1'
+        and me.default_flag = 1
+        <if test="materialParam != null and materialParam !=''">
+            <bind name="bindKey" value="'%'+materialParam+'%'"/>
+            and (me.bar_code like #{bindKey} or m.name like #{bindKey} or m.mnemonic like #{bindKey} or m.standard like #{bindKey} or m.model like #{bindKey}
+            or m.color like #{bindKey} or m.mfrs like #{bindKey} or m.brand like #{bindKey} or m.other_field1 like #{bindKey}
+            or m.other_field2 like #{bindKey} or m.other_field3 like #{bindKey})
+        </if>
+    </select>
+
+    <select id="getDailyOutStock" resultType="java.util.Map">
+        select 
+            me.bar_code as barCode,
+            m.name as materialName,
+            date_format(dh.oper_time, '%Y-%m-%d') as outDate,
+            sum(ifnull(di.basic_number, 0)) as outQuantity
+        from jsh_depot_item di
+        left join jsh_depot_head dh on dh.id = di.header_id
+        left join jsh_material m on m.id = di.material_id
+        left join jsh_material_extend me on me.material_id = m.id and ifnull(me.delete_flag,'0') !='1' and me.default_flag = 1
+        where dh.type = '出库'
+        and ifnull(di.delete_flag,'0') !='1'
+        and ifnull(dh.delete_flag,'0') !='1'
+        and ifnull(m.delete_flag,'0') !='1'
+        and dh.status = '1'
+        <if test="shopNames != null and shopNames.size() > 0">
+            and dh.shop_name in
+            <foreach collection="shopNames" item="shopName" open="(" close=")" separator=",">
+                #{shopName}
+            </foreach>
+        </if>
+        <if test="materialIds != null and materialIds !=''">
+            and di.material_id in (${materialIds})
+        </if>
+        <if test="beginTime != null and beginTime !=''">
+            and dh.oper_time >= #{beginTime}
+        </if>
+        <if test="endTime != null and endTime !=''">
+            and dh.oper_time &lt;= #{endTime}
+        </if>
+        group by me.bar_code, m.name, date_format(dh.oper_time, '%Y-%m-%d')
+        order by outDate asc, me.bar_code asc
+    </select>
+
+    <!-- ========== 性能优化相关查询 ========== -->
+
+    <!-- 优化的商品期间库存统计查询（改为基于 jsh_material_current_stock 实时聚合） -->
+    <select id="getMaterialPeriodStockOptimized" resultType="com.jsh.erp.datasource.vo.MaterialStockPeriodVo">
+        select
+            m.id as materialId,
+            me.bar_code as barCode,
+            m.name as materialName,
+            -- 从实时库存表聚合当前库存
+            COALESCE(mcs_sum.current_stock, 0) as currentPeriodStock,
+            -- 以下期间相关字段无页面使用，保持为0以兼容VO
+            0 as previousPeriodStock,
+            0 as currentPeriodOut,
+            0 as previousPeriodOut,
+            0 as currentPeriodIn,
+            -- 直接从商品表获取库存告急状态
+            m.stock_alert_status as stockAlertStatus,
+            m.last_six_months_sales as lastSixMonthsSales,
+            m.stock_alert_ignored_at as stockAlertIgnoredAt
+        from jsh_material m
+        -- 默认条码/价格等扩展信息
+        left join jsh_material_extend me on me.material_id = m.id
+            and ifnull(me.delete_flag,'0') != '1'
+            and me.default_flag = '1'
+            <if test="tenantId != null">
+                and me.tenant_id = #{tenantId}
+            </if>
+        -- 实时库存聚合（按物料汇总）
+        left join (
+            select material_id, sum(ifnull(current_number,0)) as current_stock
+            from jsh_material_current_stock
+            where ifnull(delete_flag,'0') != '1'
+            <if test="tenantId != null">
+                and tenant_id = #{tenantId}
+            </if>
+            group by material_id
+        ) mcs_sum on mcs_sum.material_id = m.id
+        where ifnull(m.delete_flag,'0') != '1'
+        <if test="tenantId != null">
+            and m.tenant_id = #{tenantId}
+        </if>
+        <if test="materialParam != null and materialParam != ''">
+            and (
+                me.bar_code like concat('%', #{materialParam}, '%')
+                or m.name like concat('%', #{materialParam}, '%')
+            )
+        </if>
+        <if test="stockAlertStatus != null and stockAlertStatus != ''">
+            and m.stock_alert_status = #{stockAlertStatus}
+        </if>
+        order by m.id
+        <if test="offset != null and rows != null">
+            limit #{offset}, #{rows}
+        </if>
+    </select>
+
+    <!-- 全量库存总金额（按租户，基于 jsh_material_current_stock × 默认零售价 实时汇总） -->
+    <select id="getTotalStockValueByTenant" resultType="java.math.BigDecimal">
+        select
+            COALESCE(ROUND(SUM(COALESCE(mcs_sum.current_stock, 0) * COALESCE(me.commodity_decimal, 0)), 2), 0) as totalStockValue
+        from jsh_material m
+        -- 实时库存聚合（按物料）
+        left join (
+            select material_id, sum(ifnull(current_number,0)) as current_stock
+            from jsh_material_current_stock
+            where ifnull(delete_flag,'0') != '1'
+              and tenant_id = #{tenantId}
+            group by material_id
+        ) mcs_sum on mcs_sum.material_id = m.id
+        -- 默认零售价
+        left join jsh_material_extend me on me.material_id = m.id
+            and ifnull(me.delete_flag,'0') != '1'
+            and me.default_flag = '1'
+            and me.tenant_id = #{tenantId}
+        where ifnull(m.delete_flag,'0') != '1'
+          and m.tenant_id = #{tenantId}
+    </select>
+
+    <!-- 缺失默认零售价统计（按租户） -->
+    <select id="countMaterialsMissingDefaultPrice" resultType="java.lang.Long">
+        select count(distinct m.id)
+        from jsh_material m
+        left join jsh_material_extend me on me.material_id = m.id
+            and ifnull(me.delete_flag,'0') != '1'
+            and me.default_flag = '1'
+            and me.tenant_id = #{tenantId}
+        where ifnull(m.delete_flag,'0') != '1'
+          and m.tenant_id = #{tenantId}
+          and (me.id is null or me.commodity_decimal is null)
+    </select>
+
+    <!-- 优化的商品期间库存统计计数 -->
+    <select id="getMaterialPeriodStockCountOptimized" resultType="java.lang.Integer">
+        select count(1)
+        from jsh_material m
+        left join jsh_material_extend me on me.material_id = m.id
+            and ifnull(me.delete_flag,'0') != '1'
+            and me.default_flag = '1'
+            <if test="tenantId != null">
+                and me.tenant_id = #{tenantId}
+            </if>
+        where ifnull(m.delete_flag,'0') != '1'
+        <if test="tenantId != null">
+            and m.tenant_id = #{tenantId}
+        </if>
+        <if test="materialParam != null and materialParam != ''">
+            and (
+                me.bar_code like concat('%', #{materialParam}, '%')
+                or m.name like concat('%', #{materialParam}, '%')
+            )
+        </if>
+        <if test="stockAlertStatus != null and stockAlertStatus != ''">
+            and m.stock_alert_status = #{stockAlertStatus}
+        </if>
+    </select>
+
+    <!-- 从汇总表获取每日出库数据 -->
+    <select id="getDailyOutStockFromSummary" resultType="java.util.Map">
+        SELECT 
+            m.id as materialId,
+            me.bar_code as barCode,
+            m.name as materialName,
+            dos.out_date as outDate,
+            SUM(dos.total_out_quantity) as totalOutQuantity
+        FROM jsh_material m
+        INNER JOIN jsh_material_extend me ON me.material_id = m.id 
+            AND me.default_flag = 1 
+            AND ifnull(me.delete_flag,'0') != '1'
+        LEFT JOIN jsh_daily_out_summary dos ON dos.material_id = m.id
+            AND ifnull(dos.delete_flag,'0') != '1'
+        WHERE 1=1
+            AND ifnull(m.delete_flag,'0') != '1'
+            <if test="materialIds != null and materialIds.size() > 0">
+                AND m.id IN
+                <foreach collection="materialIds" item="materialId" open="(" close=")" separator=",">
+                    #{materialId}
+                </foreach>
+            </if>
+            <if test="tenantId != null">
+                AND m.tenant_id = #{tenantId}
+            </if>
+            <if test="beginTime != null and beginTime != ''">
+                AND dos.out_date >= #{beginTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND dos.out_date &lt;= #{endTime}
+            </if>
+            <if test="shopNames != null and shopNames.size() > 0">
+                AND dos.shop_name IN
+                <foreach collection="shopNames" item="shopName" open="(" close=")" separator=",">
+                    #{shopName}
+                </foreach>
+            </if>
+        GROUP BY 
+            m.id,
+            me.bar_code,
+            m.name,
+            dos.out_date
+        HAVING totalOutQuantity > 0
+        ORDER BY dos.out_date ASC, me.bar_code ASC
+    </select>
+
+    <!-- 调用存储过程刷新商品期间汇总 -->
+    <select id="refreshMaterialPeriodSummary" statementType="CALLABLE">
+        {call refresh_material_period_summary(#{tenantId})}
+    </select>
+
+    <!-- 调用存储过程更新每日出库汇总 -->
+    <select id="updateDailyOutSummary" statementType="CALLABLE">
+        {call update_daily_out_summary(#{materialId}, #{targetDate}, #{tenantId})}
+    </select>
+
+    <!-- 刷新最近N天的汇总数据 -->
+    <update id="refreshDailySummaryForRecentDays">
+        INSERT INTO jsh_daily_out_summary (
+            material_id, bar_code, material_name, out_date, 
+            total_out_quantity, depot_count, bill_count, tenant_id
+        )
+        SELECT 
+            di.material_id,
+            me.bar_code,
+            m.name as material_name,
+            DATE(dh.oper_time) as out_date,
+            SUM(IFNULL(di.basic_number, 0)) as total_out_quantity,
+            COUNT(DISTINCT di.depot_id) as depot_count,
+            COUNT(DISTINCT dh.id) as bill_count,
+            dh.tenant_id
+        FROM jsh_depot_item di
+        LEFT JOIN jsh_depot_head dh ON dh.id = di.header_id
+        LEFT JOIN jsh_material m ON m.id = di.material_id
+        LEFT JOIN jsh_material_extend me ON me.material_id = m.id 
+            AND IFNULL(me.delete_flag,'0') != '1' 
+            AND me.default_flag = 1
+        WHERE dh.type = '出库'
+            AND IFNULL(di.delete_flag,'0') != '1'
+            AND IFNULL(dh.delete_flag,'0') != '1'
+            AND IFNULL(m.delete_flag,'0') != '1'
+            AND dh.status = '1'
+            AND dh.oper_time >= DATE_SUB(CURDATE(), INTERVAL #{days} DAY)
+            <if test="tenantId != null">
+                AND IFNULL(dh.tenant_id, 0) = #{tenantId}
+            </if>
+        GROUP BY di.material_id, DATE(dh.oper_time), dh.tenant_id
+        ON DUPLICATE KEY UPDATE
+            bar_code = VALUES(bar_code),
+            material_name = VALUES(material_name),
+            total_out_quantity = VALUES(total_out_quantity),
+            depot_count = VALUES(depot_count),
+            bill_count = VALUES(bill_count),
+            last_update_time = CURRENT_TIMESTAMP
+    </update>
+
+    <!-- ========== 数据修复相关查询 ========== -->
+
+    <!-- 统计包含小数的库存记录数量 -->
+    <select id="countDecimalStockRecords" resultType="int">
+        SELECT COUNT(*)
+        FROM jsh_material_period_summary
+        WHERE delete_flag = '0'
+        AND (
+            current_period_stock != ROUND(current_period_stock)
+            OR previous_period_stock != ROUND(previous_period_stock)
+            OR current_period_out != ROUND(current_period_out)
+            OR previous_period_out != ROUND(previous_period_out)
+            OR current_period_in != ROUND(current_period_in)
+            OR previous_period_in != ROUND(previous_period_in)
+        )
+    </select>
+
+    <!-- 修复库存小数数据 -->
+    <update id="fixDecimalStockData">
+        UPDATE jsh_material_period_summary
+        SET
+            current_period_stock = ROUND(current_period_stock),
+            previous_period_stock = ROUND(previous_period_stock),
+            current_period_out = ROUND(current_period_out),
+            previous_period_out = ROUND(previous_period_out),
+            current_period_in = ROUND(current_period_in),
+            previous_period_in = ROUND(previous_period_in),
+            last_calculation_time = NOW()
+        WHERE delete_flag = '0'
+        AND (
+            current_period_stock != ROUND(current_period_stock)
+            OR previous_period_stock != ROUND(previous_period_stock)
+            OR current_period_out != ROUND(current_period_out)
+            OR previous_period_out != ROUND(previous_period_out)
+            OR current_period_in != ROUND(current_period_in)
+            OR previous_period_in != ROUND(previous_period_in)
+        )
+    </update>
+
+
+
+    <!-- 验证期间库存计算结果 -->
+    <select id="validatePeriodStockBalance" resultType="java.util.Map">
+        SELECT
+            material_id,
+            bar_code,
+            material_name,
+            current_period_stock as currentPeriodStock,
+            previous_period_stock as previousPeriodStock,
+            current_period_out as currentPeriodOut,
+            previous_period_out as previousPeriodOut,
+            current_period_in as currentPeriodIn,
+            previous_period_in as previousPeriodIn,
+            -- 验证库存平衡：上期结存 + 本期入库 - 本期出库 应该等于本期结存
+            (previous_period_stock + current_period_in - current_period_out) as calculatedCurrentStock,
+            (current_period_stock - (previous_period_stock + current_period_in - current_period_out)) as difference
+        FROM jsh_material_period_summary
+        WHERE delete_flag = '0'
+        ORDER BY ABS(current_period_stock - (previous_period_stock + current_period_in - current_period_out)) DESC
+        LIMIT 100
+    </select>
+
+    <!-- 获取商品过去6个月的销量 -->
+    <select id="getSixMonthsSalesByMaterialId" resultType="java.math.BigDecimal">
+        SELECT IFNULL(SUM(di.basic_number), 0)
+        FROM jsh_depot_item di
+        LEFT JOIN jsh_depot_head dh ON dh.id = di.header_id
+        WHERE di.material_id = #{materialId}
+        AND dh.type = '出库'
+        AND dh.sub_type = '销售'
+        AND dh.status = '1'
+        AND IFNULL(di.delete_flag, '0') != '1'
+        AND IFNULL(dh.delete_flag, '0') != '1'
+        AND dh.oper_time >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
+        <if test="tenantId != null">
+            AND dh.tenant_id = #{tenantId}
+        </if>
+    </select>
+
+    <!-- 批量获取商品过去6个月的销量（仅销售） -->
+    <select id="getSixMonthsSalesByMaterialIds" resultType="java.util.Map">
+        SELECT 
+            di.material_id AS materialId,
+            IFNULL(SUM(di.basic_number), 0) AS sixMonthsSales
+        FROM jsh_depot_item di
+        INNER JOIN jsh_depot_head dh ON dh.id = di.header_id
+        WHERE dh.type = '出库'
+          AND dh.sub_type = '销售'
+          AND dh.status = '1'
+          AND IFNULL(di.delete_flag, '0') != '1'
+          AND IFNULL(dh.delete_flag, '0') != '1'
+          AND dh.oper_time >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
+          <if test="tenantId != null">
+              AND dh.tenant_id = #{tenantId}
+          </if>
+          <if test="materialIds != null and materialIds.size() > 0">
+              AND di.material_id IN
+              <foreach collection="materialIds" item="mid" open="(" close=")" separator=",">
+                  #{mid}
+              </foreach>
+          </if>
+        GROUP BY di.material_id
+    </select>
+
+    <!-- ========== 业务层汇总表更新方法（替换存储过程） ========== -->
+    
+    <!-- 插入或更新每日出库汇总（避免多租户插件干扰） -->
+    <insert id="insertOrUpdateDailyOutSummary">
+        <!-- 使用INSERT VALUES语法避免MyBatis-Plus插件对SELECT语句的干扰 -->
+        INSERT INTO jsh_daily_out_summary (material_id, bar_code, material_name, out_date, shop_name, total_out_quantity, depot_count, bill_count)
+        VALUES (
+            #{materialId},
+            (SELECT me.bar_code FROM jsh_material_extend me WHERE me.material_id = #{materialId} AND me.default_flag = 1 LIMIT 1),
+            (SELECT m.name FROM jsh_material m WHERE m.id = #{materialId} LIMIT 1),
+            #{targetDate},
+            #{shopName},
+            (SELECT COUNT(DISTINCT di.depot_id) 
+             FROM jsh_depot_item di 
+             INNER JOIN jsh_depot_head dh ON dh.id = di.header_id 
+             WHERE di.material_id = #{materialId} 
+               AND DATE(dh.oper_time) = #{targetDate}
+               AND dh.type = '出库' 
+               AND dh.sub_type = '销售' 
+               AND dh.status = '1'
+               AND IFNULL(di.delete_flag, '0') != '1'
+               AND IFNULL(dh.delete_flag, '0') != '1'
+               <if test="tenantId != null">
+                   AND dh.tenant_id = #{tenantId}
+               </if>
+            ),
+            (SELECT COUNT(DISTINCT dh.id) 
+             FROM jsh_depot_item di 
+             INNER JOIN jsh_depot_head dh ON dh.id = di.header_id 
+             WHERE di.material_id = #{materialId} 
+               AND DATE(dh.oper_time) = #{targetDate}
+               AND dh.type = '出库' 
+               AND dh.sub_type = '销售' 
+               AND dh.status = '1'
+               AND IFNULL(di.delete_flag, '0') != '1'
+               AND IFNULL(dh.delete_flag, '0') != '1'
+               <if test="tenantId != null">
+                   AND dh.tenant_id = #{tenantId}
+               </if>
+            )
+        )
+        ON DUPLICATE KEY UPDATE
+            bar_code = VALUES(bar_code),
+            material_name = VALUES(material_name),
+            shop_name = VALUES(shop_name),
+            total_out_quantity = VALUES(total_out_quantity),
+            depot_count = VALUES(depot_count),
+            bill_count = VALUES(bill_count),
+            last_update_time = CURRENT_TIMESTAMP
+    </insert>
+
+    <!-- 删除指定条件的每日出库汇总记录 -->
+    <delete id="deleteDailyOutSummary">
+        DELETE FROM jsh_daily_out_summary 
+        WHERE 1=1
+        <if test="materialId != null">
+            AND material_id = #{materialId}
+        </if>
+        <if test="targetDate != null">
+            AND out_date = #{targetDate}
+        </if>
+        <if test="tenantId != null">
+            AND tenant_id = #{tenantId}
+        </if>
+    </delete>
+
+    <!-- 插入或更新商品期间汇总（简化版） -->
+    <insert id="insertOrUpdateMaterialPeriodSummary">
+        <!-- 使用INSERT VALUES语法避免MyBatis-Plus插件干扰 -->
+        INSERT INTO jsh_material_period_summary (
+            material_id, bar_code, material_name, material_model, material_unit,
+            current_period_stock, previous_period_stock,
+            current_period_out, previous_period_out,
+            current_period_in, previous_period_in
+        )
+        VALUES (
+            #{materialId},
+            (SELECT me.bar_code FROM jsh_material_extend me WHERE me.material_id = #{materialId} AND me.default_flag = 1 LIMIT 1),
+            (SELECT m.name FROM jsh_material m WHERE m.id = #{materialId} LIMIT 1),
+            (SELECT m.model FROM jsh_material m WHERE m.id = #{materialId} LIMIT 1),
+            (SELECT m.unit FROM jsh_material m WHERE m.id = #{materialId} LIMIT 1),
+            -- 当前库存
+            (SELECT IFNULL(SUM(mcs.current_number), 0) 
+             FROM jsh_material_current_stock mcs 
+             WHERE mcs.material_id = #{materialId} 
+               AND mcs.delete_flag = '0'
+               <if test="tenantId != null">
+                   AND mcs.tenant_id = #{tenantId}
+               </if>
+            ),
+            -- 上期结存（暂时设为0，后续可优化）
+            0,
+            -- 本期出库
+            (SELECT IFNULL(SUM(di.basic_number), 0) 
+             FROM jsh_depot_item di 
+             INNER JOIN jsh_depot_head dh ON dh.id = di.header_id 
+             WHERE di.material_id = #{materialId} 
+               AND dh.type = '出库' 
+               AND dh.status = '1'
+               AND IFNULL(di.delete_flag, '0') != '1'
+               AND IFNULL(dh.delete_flag, '0') != '1'
+               <if test="tenantId != null">
+                   AND dh.tenant_id = #{tenantId}
+               </if>
+            ),
+            -- 上期出库（暂时设为0，后续可优化）
+            0,
+            -- 本期入库
+            (SELECT IFNULL(SUM(di.basic_number), 0) 
+             FROM jsh_depot_item di 
+             INNER JOIN jsh_depot_head dh ON dh.id = di.header_id 
+             WHERE di.material_id = #{materialId} 
+               AND dh.type = '入库' 
+               AND dh.status = '1'
+               AND IFNULL(di.delete_flag, '0') != '1'
+               AND IFNULL(dh.delete_flag, '0') != '1'
+               <if test="tenantId != null">
+                   AND dh.tenant_id = #{tenantId}
+               </if>
+            ),
+            -- 上期入库（暂时设为0，后续可优化）
+            0
+        )
+        ON DUPLICATE KEY UPDATE
+            bar_code = VALUES(bar_code),
+            material_name = VALUES(material_name),
+            material_model = VALUES(material_model),
+            material_unit = VALUES(material_unit),
+            current_period_stock = VALUES(current_period_stock),
+            previous_period_stock = VALUES(previous_period_stock),
+            current_period_out = VALUES(current_period_out),
+            previous_period_out = VALUES(previous_period_out),
+            current_period_in = VALUES(current_period_in),
+            previous_period_in = VALUES(previous_period_in),
+            last_calculation_time = CURRENT_TIMESTAMP
+    </insert>
+
+    <!-- 删除指定条件的商品期间汇总记录 -->
+    <delete id="deleteMaterialPeriodSummary">
+        DELETE FROM jsh_material_period_summary 
+        WHERE 1=1
+        <if test="materialId != null">
+            AND material_id = #{materialId}
+        </if>
+        <if test="tenantId != null">
+            AND tenant_id = #{tenantId}
+        </if>
+    </delete>
+
+    <!-- 根据时间范围查询商品出库总量 -->
+    <select id="getMaterialOutQuantityByPeriod" resultType="java.math.BigDecimal">
+        SELECT IFNULL(SUM(di.basic_number), 0)
+        FROM jsh_depot_item di 
+        INNER JOIN jsh_depot_head dh ON dh.id = di.header_id 
+        WHERE di.material_id = #{materialId} 
+          AND dh.type = '出库' 
+          AND dh.status = '1'
+          AND IFNULL(di.delete_flag, '0') != '1'
+          AND IFNULL(dh.delete_flag, '0') != '1'
+          AND DATE(dh.oper_time) >= #{startDate}
+          AND DATE(dh.oper_time) &lt;= #{endDate}
+          <if test="tenantId != null">
+              AND dh.tenant_id = #{tenantId}
+          </if>
+    </select>
+
+    <!-- 根据时间范围查询商品入库总量 -->
+    <select id="getMaterialInQuantityByPeriod" resultType="java.math.BigDecimal">
+        SELECT IFNULL(SUM(di.basic_number), 0)
+        FROM jsh_depot_item di 
+        INNER JOIN jsh_depot_head dh ON dh.id = di.header_id 
+        WHERE di.material_id = #{materialId} 
+          AND dh.type = '入库' 
+          AND dh.status = '1'
+          AND IFNULL(di.delete_flag, '0') != '1'
+          AND IFNULL(dh.delete_flag, '0') != '1'
+          AND DATE(dh.oper_time) >= #{startDate}
+          AND DATE(dh.oper_time) &lt;= #{endDate}
+          <if test="tenantId != null">
+              AND dh.tenant_id = #{tenantId}
+          </if>
+    </select>
+
+    <!-- 查询商品当前库存总量 -->
+    <select id="getMaterialCurrentStock" resultType="java.math.BigDecimal">
+        SELECT IFNULL(SUM(mcs.current_number), 0)
+        FROM jsh_material_current_stock mcs 
+        WHERE mcs.material_id = #{materialId} 
+          AND mcs.delete_flag = '0'
+          <if test="tenantId != null">
+              AND mcs.tenant_id = #{tenantId}
+          </if>
+    </select>
+
+    <!-- 简化版插入或更新商品期间汇总（只插入计算好的数据） -->
+    <insert id="insertOrUpdateMaterialPeriodSummarySimple">
+        INSERT INTO jsh_material_period_summary (
+            material_id, bar_code, material_name, material_model, material_unit,
+            current_period_stock, previous_period_stock,
+            current_period_out, previous_period_out,
+            current_period_in, previous_period_in
+        )
+        VALUES (
+            #{materialId},
+            #{barCode},
+            #{materialName},
+            #{materialModel},
+            #{materialUnit},
+            #{currentPeriodStock},
+            #{previousPeriodStock},
+            #{currentPeriodOut},
+            #{previousPeriodOut},
+            #{currentPeriodIn},
+            #{previousPeriodIn}
+        )
+        ON DUPLICATE KEY UPDATE
+            bar_code = VALUES(bar_code),
+            material_name = VALUES(material_name),
+            material_model = VALUES(material_model),
+            material_unit = VALUES(material_unit),
+            current_period_stock = VALUES(current_period_stock),
+            previous_period_stock = VALUES(previous_period_stock),
+            current_period_out = VALUES(current_period_out),
+            previous_period_out = VALUES(previous_period_out),
+            current_period_in = VALUES(current_period_in),
+            previous_period_in = VALUES(previous_period_in),
+            last_calculation_time = CURRENT_TIMESTAMP
+    </insert>
+
+    <!-- 批量初始化汇总表数据 -->
+    <insert id="batchInitializeSummaryData">
+        -- 先初始化商品期间汇总表
+        INSERT INTO jsh_material_period_summary (
+            material_id, bar_code, material_name, material_model, material_unit,
+            current_period_stock, previous_period_stock,
+            current_period_out, previous_period_out,
+            current_period_in, previous_period_in
+        )
+        SELECT 
+            m.id as material_id,
+            me.bar_code,
+            m.name as material_name,
+            m.model as material_model,
+            m.unit as material_unit,
+            COALESCE(cs.current_stock, 0) as current_period_stock,
+            GREATEST(0, COALESCE(cs.current_stock, 0) - COALESCE(ci.current_in, 0) + COALESCE(co.current_out, 0)) as previous_period_stock,
+            COALESCE(co.current_out, 0) as current_period_out,
+            COALESCE(po.previous_out, 0) as previous_period_out,
+            COALESCE(ci.current_in, 0) as current_period_in,
+            COALESCE(pi.previous_in, 0) as previous_period_in
+        FROM jsh_material m
+        LEFT JOIN jsh_material_extend me ON m.id = me.material_id 
+            AND me.default_flag = '1' 
+            AND COALESCE(me.tenant_id, m.tenant_id) = m.tenant_id
+        LEFT JOIN (
+            -- 当前库存
+            SELECT material_id, tenant_id, SUM(current_number) as current_stock
+            FROM jsh_material_current_stock 
+            WHERE delete_flag = '0'
+            GROUP BY material_id, tenant_id
+        ) cs ON m.id = cs.material_id AND m.tenant_id = cs.tenant_id
+        LEFT JOIN (
+            -- 本期出库（根据当前月份动态判断期间）
+            SELECT di.material_id, dh.tenant_id, SUM(di.basic_number) as current_out
+            FROM jsh_depot_head dh
+            INNER JOIN jsh_depot_item di ON dh.id = di.header_id
+            WHERE dh.type = '出库' AND dh.status = '1' AND dh.delete_flag = '0' AND di.delete_flag = '0'
+            AND (
+                -- 本期时间范围：根据当前月份动态判断
+                (MONTH(NOW()) >= 2 AND MONTH(NOW()) &lt;= 7 AND dh.oper_time >= CONCAT(YEAR(NOW()), '-02-01 00:00:00') AND dh.oper_time &lt;= CONCAT(YEAR(NOW()), '-07-31 23:59:59'))
+                OR
+                (MONTH(NOW()) >= 8 AND dh.oper_time >= CONCAT(YEAR(NOW()), '-08-01 00:00:00') AND dh.oper_time &lt;= CONCAT(YEAR(NOW()) + 1, '-01-31 23:59:59'))
+                OR
+                (MONTH(NOW()) = 1 AND dh.oper_time >= CONCAT(YEAR(NOW()) - 1, '-08-01 00:00:00') AND dh.oper_time &lt;= CONCAT(YEAR(NOW()), '-01-31 23:59:59'))
+            )
+            GROUP BY di.material_id, dh.tenant_id
+        ) co ON m.id = co.material_id AND m.tenant_id = co.tenant_id
+        LEFT JOIN (
+            -- 上期出库
+            SELECT di.material_id, dh.tenant_id, SUM(di.basic_number) as previous_out
+            FROM jsh_depot_head dh
+            INNER JOIN jsh_depot_item di ON dh.id = di.header_id
+            WHERE dh.type = '出库' AND dh.status = '1' AND dh.delete_flag = '0' AND di.delete_flag = '0'
+            AND (
+                -- 上期时间范围：根据当前月份判断
+                (MONTH(NOW()) >= 2 AND MONTH(NOW()) &lt;= 7 AND dh.oper_time >= CONCAT(YEAR(NOW()) - 1, '-08-01 00:00:00') AND dh.oper_time &lt;= CONCAT(YEAR(NOW()), '-01-31 23:59:59'))
+                OR
+                (MONTH(NOW()) >= 8 AND dh.oper_time >= CONCAT(YEAR(NOW()), '-02-01 00:00:00') AND dh.oper_time &lt;= CONCAT(YEAR(NOW()), '-07-31 23:59:59'))
+                OR
+                (MONTH(NOW()) = 1 AND dh.oper_time >= CONCAT(YEAR(NOW()) - 1, '-02-01 00:00:00') AND dh.oper_time &lt;= CONCAT(YEAR(NOW()) - 1, '-07-31 23:59:59'))
+            )
+            GROUP BY di.material_id, dh.tenant_id
+        ) po ON m.id = po.material_id AND m.tenant_id = po.tenant_id
+        LEFT JOIN (
+            -- 本期入库
+            SELECT di.material_id, dh.tenant_id, SUM(di.basic_number) as current_in
+            FROM jsh_depot_head dh
+            INNER JOIN jsh_depot_item di ON dh.id = di.header_id
+            WHERE dh.type = '入库' AND dh.status = '1' AND dh.delete_flag = '0' AND di.delete_flag = '0'
+            AND (
+                -- 本期时间范围：根据当前月份动态判断
+                (MONTH(NOW()) >= 2 AND MONTH(NOW()) &lt;= 7 AND dh.oper_time >= CONCAT(YEAR(NOW()), '-02-01 00:00:00') AND dh.oper_time &lt;= CONCAT(YEAR(NOW()), '-07-31 23:59:59'))
+                OR
+                (MONTH(NOW()) >= 8 AND dh.oper_time >= CONCAT(YEAR(NOW()), '-08-01 00:00:00') AND dh.oper_time &lt;= CONCAT(YEAR(NOW()) + 1, '-01-31 23:59:59'))
+                OR
+                (MONTH(NOW()) = 1 AND dh.oper_time >= CONCAT(YEAR(NOW()) - 1, '-08-01 00:00:00') AND dh.oper_time &lt;= CONCAT(YEAR(NOW()), '-01-31 23:59:59'))
+            )
+            GROUP BY di.material_id, dh.tenant_id
+        ) ci ON m.id = ci.material_id AND m.tenant_id = ci.tenant_id
+        LEFT JOIN (
+            -- 上期入库
+            SELECT di.material_id, dh.tenant_id, SUM(di.basic_number) as previous_in
+            FROM jsh_depot_head dh
+            INNER JOIN jsh_depot_item di ON dh.id = di.header_id
+            WHERE dh.type = '入库' AND dh.status = '1' AND dh.delete_flag = '0' AND di.delete_flag = '0'
+            AND (
+                -- 上期时间范围：根据当前月份判断
+                (MONTH(NOW()) >= 2 AND MONTH(NOW()) &lt;= 7 AND dh.oper_time >= CONCAT(YEAR(NOW()) - 1, '-08-01 00:00:00') AND dh.oper_time &lt;= CONCAT(YEAR(NOW()), '-01-31 23:59:59'))
+                OR
+                (MONTH(NOW()) >= 8 AND dh.oper_time >= CONCAT(YEAR(NOW()), '-02-01 00:00:00') AND dh.oper_time &lt;= CONCAT(YEAR(NOW()), '-07-31 23:59:59'))
+                OR
+                (MONTH(NOW()) = 1 AND dh.oper_time >= CONCAT(YEAR(NOW()) - 1, '-02-01 00:00:00') AND dh.oper_time &lt;= CONCAT(YEAR(NOW()) - 1, '-07-31 23:59:59'))
+            )
+            GROUP BY di.material_id, dh.tenant_id
+        ) pi ON m.id = pi.material_id AND m.tenant_id = pi.tenant_id
+        WHERE m.delete_flag = '0'
+        <if test="materialId != null">
+            AND m.id = #{materialId}
+        </if>
+        <if test="tenantId != null">
+            AND m.tenant_id = #{tenantId}
+        </if>
+        ON DUPLICATE KEY UPDATE
+            bar_code = VALUES(bar_code),
+            material_name = VALUES(material_name),
+            material_model = VALUES(material_model),
+            material_unit = VALUES(material_unit),
+            current_period_stock = VALUES(current_period_stock),
+            previous_period_stock = VALUES(previous_period_stock),
+            current_period_out = VALUES(current_period_out),
+            previous_period_out = VALUES(previous_period_out),
+            current_period_in = VALUES(current_period_in),
+            previous_period_in = VALUES(previous_period_in),
+            last_calculation_time = CURRENT_TIMESTAMP
+    </insert>
+
+    <!-- 简化版每日出库汇总更新（备用方案） -->
+    <insert id="insertOrUpdateDailyOutSummarySimple">
+        INSERT INTO jsh_daily_out_summary (
+            material_id, bar_code, material_name, out_date, shop_name,
+            total_out_quantity, depot_count, bill_count
+        )
+        VALUES (
+            #{materialId},
+            (SELECT me.bar_code FROM jsh_material_extend me WHERE me.material_id = #{materialId} AND me.default_flag = 1 LIMIT 1),
+            (SELECT m.name FROM jsh_material m WHERE m.id = #{materialId} LIMIT 1),
+            #{targetDate},
+            #{shopName},
+            (SELECT IFNULL(SUM(di.basic_number), 0) 
+             FROM jsh_depot_item di 
+             INNER JOIN jsh_depot_head dh ON dh.id = di.header_id 
+             WHERE di.material_id = #{materialId} 
+               AND DATE(dh.oper_time) = #{targetDate}
+               AND dh.type = '出库' 
+               AND dh.status = '1'
+               AND IFNULL(di.delete_flag,'0') != '1'
+               AND IFNULL(dh.delete_flag,'0') != '1'
+               AND dh.shop_name = #{shopName}
+               <if test="tenantId != null">
+                   AND dh.tenant_id = #{tenantId}
+               </if>
+            ),
+            (SELECT COUNT(DISTINCT di.depot_id) 
+             FROM jsh_depot_item di 
+             INNER JOIN jsh_depot_head dh ON dh.id = di.header_id 
+             WHERE di.material_id = #{materialId} 
+               AND DATE(dh.oper_time) = #{targetDate}
+               AND dh.type = '出库' 
+               AND dh.status = '1'
+               AND IFNULL(di.delete_flag,'0') != '1'
+               AND IFNULL(dh.delete_flag,'0') != '1'
+               AND dh.shop_name = #{shopName}
+               <if test="tenantId != null">
+                   AND dh.tenant_id = #{tenantId}
+               </if>
+            ),
+            (SELECT COUNT(DISTINCT dh.id) 
+             FROM jsh_depot_item di 
+             INNER JOIN jsh_depot_head dh ON dh.id = di.header_id 
+             WHERE di.material_id = #{materialId} 
+               AND DATE(dh.oper_time) = #{targetDate}
+               AND dh.type = '出库' 
+               AND dh.status = '1'
+               AND IFNULL(di.delete_flag,'0') != '1'
+               AND IFNULL(dh.delete_flag,'0') != '1'
+               AND dh.shop_name = #{shopName}
+               <if test="tenantId != null">
+                   AND dh.tenant_id = #{tenantId}
+               </if>
+             )
+        )
+        ON DUPLICATE KEY UPDATE
+            total_out_quantity = VALUES(total_out_quantity),
+            depot_count = VALUES(depot_count),
+            bill_count = VALUES(bill_count),
+            last_update_time = CURRENT_TIMESTAMP
+    </insert>
+
+    <!-- 简化版批量初始化汇总表数据（备用方案） -->
+    <insert id="batchInitializeSummaryDataSimple">
+        -- 清空现有数据并重新初始化
+        DELETE FROM jsh_material_period_summary WHERE 1=1
+        <if test="tenantId != null">
+            AND tenant_id = #{tenantId}
+        </if>;
+        
+        DELETE FROM jsh_daily_out_summary WHERE 1=1
+        <if test="tenantId != null">
+            AND tenant_id = #{tenantId}
+        </if>;
+        
+        -- 插入基础的商品期间汇总数据
+        INSERT INTO jsh_material_period_summary (
+            material_id, bar_code, material_name, material_model, material_unit,
+            current_period_stock, previous_period_stock,
+            current_period_out, previous_period_out,
+            current_period_in, previous_period_in
+        )
+        SELECT 
+            m.id,
+            (SELECT me.bar_code FROM jsh_material_extend me WHERE me.material_id = m.id AND me.default_flag = 1 LIMIT 1),
+            m.name,
+            m.model,
+            m.unit,
+            COALESCE((SELECT SUM(mcs.current_number) FROM jsh_material_current_stock mcs WHERE mcs.material_id = m.id AND mcs.delete_flag = '0'), 0),
+            0,
+            COALESCE((SELECT SUM(di.basic_number) FROM jsh_depot_item di 
+                     INNER JOIN jsh_depot_head dh ON dh.id = di.header_id 
+                     WHERE di.material_id = m.id AND dh.type = '出库' AND dh.status = '1' 
+                       AND di.delete_flag = '0' AND dh.delete_flag = '0'), 0),
+            0,
+            COALESCE((SELECT SUM(di.basic_number) FROM jsh_depot_item di 
+                     INNER JOIN jsh_depot_head dh ON dh.id = di.header_id 
+                     WHERE di.material_id = m.id AND dh.type = '入库' AND dh.status = '1' 
+                       AND di.delete_flag = '0' AND dh.delete_flag = '0'), 0),
+            0
+        FROM jsh_material m 
+        WHERE m.delete_flag = '0'
+        <if test="tenantId != null">
+            AND m.tenant_id = #{tenantId}
+        </if>
+    </insert>
 
 </mapper>

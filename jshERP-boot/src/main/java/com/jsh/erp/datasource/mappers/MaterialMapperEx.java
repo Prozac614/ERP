@@ -113,6 +113,16 @@ public interface MaterialMapperEx {
 
     List<String> getMaterialNameList();
 
+    List<java.util.Map<String, Object>> getDirectDailyOutStock(
+            @Param("materialId") Long materialId,
+            @Param("beginTime") String beginTime,
+            @Param("endTime") String endTime);
+
+    java.math.BigDecimal getTotalOutQuantity(
+            @Param("materialId") Long materialId,
+            @Param("beginTime") String beginTime,
+            @Param("endTime") String endTime);
+
     int setUnitIdToNull(@Param("id") Long id);
 
     int setExpiryNumToNull(@Param("id") Long id);
@@ -165,4 +175,17 @@ public interface MaterialMapperEx {
 
     MaterialExtend getMaterialExtendBySerialNumber(
             @Param("serialNumber") String serialNumber);
+
+    /**
+     * 更新库存告急状态并清空忽略时间
+     */
+    int updateStockAlertStatusAndClearIgnored(
+            @Param("materialId") Long materialId,
+            @Param("alertStatus") String alertStatus,
+            @Param("sixMonthsSales") BigDecimal sixMonthsSales);
+
+    /**
+     * 将商品状态更新为忽略风险
+     */
+    int updateStockAlertToIgnored(@Param("materialId") Long materialId);
 }

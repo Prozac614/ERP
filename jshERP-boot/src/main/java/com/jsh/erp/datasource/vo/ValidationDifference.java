@@ -1,5 +1,8 @@
 package com.jsh.erp.datasource.vo;
 
+import java.math.BigDecimal;
+import java.util.Map;
+
 /**
  * 校验差异信息
  * 用于描述单据对比中发现的差异
@@ -30,6 +33,38 @@ public class ValidationDifference {
      * 影响的单据数量
      */
     private Integer affectedBills;
+
+    /**
+     * 商品唛头
+     */
+    private String materialBarCode;
+
+    /**
+     * 商品名称
+     */
+    private String materialName;
+
+    /**
+     * 商店名称
+     */
+    private String shopName;
+
+    /**
+     * 原始商店名称（未做显示处理，可能为空字符串）
+     */
+    private String shopNameRaw;
+
+    /**
+     * 用户数量映射表 - 结构化数据
+     * key: 用户名, value: 该用户的数量
+     */
+    private Map<String, BigDecimal> userQuantities;
+
+    /**
+     * 用户明细列表
+     * key: 用户名, value: 该用户的单据明细集合
+     */
+    private Map<String, java.util.List<ValidationBillDetail>> userBillDetails;
 
     public ValidationDifference() {
     }
@@ -78,5 +113,53 @@ public class ValidationDifference {
 
     public void setAffectedBills(Integer affectedBills) {
         this.affectedBills = affectedBills;
+    }
+
+    public String getMaterialBarCode() {
+        return materialBarCode;
+    }
+
+    public void setMaterialBarCode(String materialBarCode) {
+        this.materialBarCode = materialBarCode;
+    }
+
+    public String getMaterialName() {
+        return materialName;
+    }
+
+    public void setMaterialName(String materialName) {
+        this.materialName = materialName;
+    }
+
+    public String getShopName() {
+        return shopName;
+    }
+
+    public void setShopName(String shopName) {
+        this.shopName = shopName;
+    }
+
+    public Map<String, BigDecimal> getUserQuantities() {
+        return userQuantities;
+    }
+
+    public void setUserQuantities(Map<String, BigDecimal> userQuantities) {
+        this.userQuantities = userQuantities;
+    }
+
+    public Map<String, java.util.List<ValidationBillDetail>> getUserBillDetails() {
+        return userBillDetails;
+    }
+
+    public void setUserBillDetails(Map<String, java.util.List<ValidationBillDetail>> userBillDetails) {
+        this.userBillDetails = userBillDetails;
+    }
+
+    public String getShopNameRaw() {
+        return shopNameRaw;
+    }
+
+    public void setShopNameRaw(String shopNameRaw) {
+        this.shopNameRaw = shopNameRaw;
     }
 }

@@ -34,7 +34,8 @@ public interface DepotHeadMapperEx {
                         @Param("depotId") Long depotId,
                         @Param("depotArray") String[] depotArray,
                         @Param("accountId") Long accountId,
-                        @Param("remark") String remark);
+                        @Param("remark") String remark,
+                        @Param("shopName") String shopName);
 
         List<MaterialsListVo> findMaterialsListMapByHeaderIdList(
                         @Param("idList") List<Long> idList);
@@ -60,7 +61,8 @@ public interface DepotHeadMapperEx {
                         @Param("column") String column,
                         @Param("order") String order,
                         @Param("offset") Integer offset,
-                        @Param("rows") Integer rows);
+                        @Param("rows") Integer rows,
+                        @Param("shopName") String shopName);
 
         int findInOutDetailCount(
                         @Param("beginTime") String beginTime,
@@ -237,7 +239,8 @@ public interface DepotHeadMapperEx {
                         @Param("beginTime") String beginTime,
                         @Param("endTime") String endTime,
                         @Param("creatorArray") String[] creatorArray,
-                        @Param("forceFlag") Boolean forceFlag);
+                        @Param("forceFlag") Boolean forceFlag,
+                        @Param("shopNames") List<String> shopNames);
 
         List<DepotHeadVo4List> debtList(
                         @Param("organId") Long organId,

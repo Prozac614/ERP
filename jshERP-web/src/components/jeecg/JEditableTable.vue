@@ -37,6 +37,24 @@
           </template>
         </div>
       </a-col>
+      <a-col v-if="hasBarCodeColumn" style="flex: 0 0 auto;">
+        <div class="filter-bar">
+          <div class="filter-select">
+            <j-select-list
+              :disabled="loading"
+              :multi="false"
+              kind="material"
+              :rows="getFilterSelectedRow()"
+              :value="barCodeFilterInput"
+            :allowClear="true"
+            :width="barCodeFilterWidth"
+              placeholder="搜索唛头"
+              @change="handleBarCodeFilterChange"
+            />
+          </div>
+          
+        </div>
+      </a-col>
       <a-col>
         <slot name="buttonAfter" :target="getVM()"/>
       </a-col>
@@ -53,6 +71,9 @@
             <span></span>
           </div>
           <div v-if="dragSortAndNumber" class="td td-ds" :style="style.tdLeftDs">
+            <span>#</span>
+          </div>
+          <div v-if="dragToInsert" class="td td-ds" :style="style.tdLeftDs">
             <span>#</span>
           </div>
           <div v-if="rowNumber" class="td td-num" :style="style.tdLeft">
@@ -90,13 +111,13 @@
           <!-- 扩展高度 -->
           <div class="tr-expand" :style="`height:${getExpandHeight}px; z-index:${loading?'11':'9'};`"></div>
           <!-- 无数据时显示 -->
-          <div v-if="rows.length===0" class="tr-nodata">
+          <div v-if="activeRowCount===0" class="tr-nodata">
             <span>暂无数据</span>
           </div>
           <!-- v-model="rows"-->
           <draggable
             :value="rows"
-            handle=".td-ds-icons"
+            handle=".drag-handle"
             @start="handleDragMoveStart"
             @end="handleDragMoveEnd"
           >
@@ -105,15 +126,12 @@
             <template v-for="(row,rowIndex) in rows">
               <!-- tr 如果超出200条，则只加载可见的和预加载的总共十条数据 -->
               <div
-                v-if="rows.length<=200 ||
-                (rows.length>200 &&
-                rowIndex >= parseInt(`${(scrollTop-rowHeight) / rowHeight}`) &&
-                  (parseInt(`${scrollTop / rowHeight}`) + 9) > rowIndex)"
+                v-if="shouldRenderRow(rowIndex)"
                 :id="`${caseId}tbody-tr-${rowIndex}`"
                 :data-idx="rowIndex"
                 class="tr"
                 :class="selectedRowIds.indexOf(row.id) !== -1 ? 'tr-checked' : ''"
-                :style="buildTrStyle(rowIndex)"
+                :style="buildTrStyle(getDisplayIndex(rowIndex))"
                 :key="row.id">
                 <!-- 左侧固定td  -->
 
@@ -136,7 +154,7 @@
                 <div v-if="dragSortAndNumber" class="td td-ds" :style="style.tdLeftDs">
                   <a-dropdown :trigger="['click']" :getPopupContainer="getParentContainer">
                     <div class="td-ds-icons" title="点击不放可以拖动" style="text-align: center; line-height: 32px">
-                      <span>{{ rowIndex+1 }}</span>
+                      <span>{{ getDisplayIndex(rowIndex) + 1 }}</span>
                     </div>
 
                     <a-menu slot="overlay">
@@ -148,8 +166,14 @@
                   </a-dropdown>
                 </div>
 
+                <div v-if="dragToInsert" class="td td-ds drag-handle" :style="style.tdLeftDs">
+                  <div class="td-ds-icons" title="拖拽到下方新增行" style="text-align: center; line-height: 32px; cursor: move;">
+                    <span>{{ getDisplayIndex(rowIndex) + 1 }}</span>
+                  </div>
+                </div>
+
                 <div v-if="rowNumber" class="td td-num" :style="style.tdLeft">
-                  <span>{{ rowIndex+1 }}</span>
+                  <span>{{ getDisplayIndex(rowIndex) + 1 }}</span>
                 </div>
 
                 <div v-if="rowSelection" class="td td-cb" :style="style.tdLeft">
@@ -744,7 +768,10 @@
                     </div>
 
                     <!-- else (normal) -->
-                    <span v-else :key="i" v-bind="buildProps(row,col)" class="td-span" :title="inputValues[rowIndex][col.key]">
+                    <span v-else :key="i" v-bind="buildProps(row,col)" 
+                          :class="['td-span', dragToInsert ? 'drag-handle' : '']" 
+                          :style="dragToInsert ? 'cursor: move;' : ''"
+                          :title="inputValues[rowIndex][col.key]">
                       {{ inputValues[rowIndex][col.key] }}
                     </span>
                   </template>
@@ -761,13 +788,15 @@
             v-if="showStatisticsRow"
             class="tr"
             :style="{
-              ...buildTrStyle(rows.length),
+              ...buildTrStyle(activeRowCount),
               height: '32px'
             }"
           >
             <div v-if="dragSort" class="td td-ds" :style="style.tdLeftDs">
             </div>
             <div v-if="dragSortAndNumber" class="td td-ds" :style="style.tdLeftDs">
+            </div>
+            <div v-if="dragToInsert" class="td td-ds" :style="style.tdLeftDs">
             </div>
             <div v-if="rowNumber" class="td td-num" :style="style.tdLeft">
               <span v-if="!rowSelection">统计</span>
@@ -898,6 +927,11 @@
         type: Boolean,
         default: false
       },
+      // 是否可拖拽新增行
+      dragToInsert: {
+        type: Boolean,
+        default: false
+      },
       dragSortKey: {
         type: String,
         default: 'orderNum'
@@ -905,6 +939,7 @@
     },
     data() {
       return {
+        defaultBarCodeFilterWidth: 300,
         // 是否首次运行
         isFirst: true,
         // 当前实例是否是行编辑
@@ -963,6 +998,11 @@
         deleteIds: [],
         // 存储显示tooltip的信息
         tooltips: {},
+        // 拖拽提示信息
+        dragInsertTip: {
+          visible: false,
+          message: '拖拽到目标位置释放以插入新行'
+        },
         // 存储没有通过验证的inputId
         notPassedIds: [],
 
@@ -973,6 +1013,13 @@
         statisticsColumns: {},
         // 只有在行编辑被销毁时才主动清空GroupRequest的内存
         destroyCleanGroupRequest: false,
+        // 当前可见行序列，存储行在rows中的下标
+        visibleRowOrder: [],
+        // 唛头筛选值
+        barCodeFilter: '',
+        // 输入框绑定值
+        barCodeFilterInput: '',
+        pendingPopupJshDefaults: [],
       }
     },
     created() {
@@ -983,9 +1030,54 @@
     },
     // 计算属性
     computed: {
+      activeRowCount() {
+        if (!this.rows || this.rows.length === 0) {
+          return 0
+        }
+        if (this.barCodeFilter && this.visibleRowOrder) {
+          return this.visibleRowOrder.length
+        }
+        if (this.visibleRowOrder && this.visibleRowOrder.length > 0) {
+          return this.visibleRowOrder.length
+        }
+        return this.rows.length
+      },
+      hasBarCodeColumn() {
+        if (!(this.columns instanceof Array)) {
+          return false
+        }
+        return this.columns.some(column => column && column.key === 'barCode')
+      },
+      barCodeFilterWidth() {
+        if (!this.columns || !(this.columns instanceof Array)) {
+          return `${this.defaultBarCodeFilterWidth}px`
+        }
+        const barCodeColumn = this.columns.find(column => column && column.key === 'barCode') || {}
+        const { filterWidth } = barCodeColumn
+        if (filterWidth || filterWidth === 0) {
+          if (typeof filterWidth === 'number') {
+            return `${filterWidth}px`
+          }
+          return filterWidth
+        }
+        return `${this.defaultBarCodeFilterWidth}px`
+      },
+      displayIndexMap() {
+        let map = {}
+        if (this.visibleRowOrder && this.visibleRowOrder.length > 0) {
+          this.visibleRowOrder.forEach((rowIdx, displayIdx) => {
+            map[rowIdx] = displayIdx
+          })
+        } else if (this.rows && this.rows.length > 0 && !this.barCodeFilter) {
+          this.rows.forEach((row, idx) => {
+            map[idx] = idx
+          })
+        }
+        return map
+      },
       // expandHeight = rows.length * rowHeight
       getExpandHeight() {
-        let length = this.rows.length * this.rowHeight
+        let length = this.activeRowCount * this.rowHeight
         if (this.showStatisticsRow) {
           length += 34
         }
@@ -993,29 +1085,31 @@
       },
       // 是否显示统计行
       showStatisticsRow() {
-        return this.hasStatisticsColumn && this.rows.length > 0
+        return this.hasStatisticsColumn && this.activeRowCount > 0
       },
       // 获取是否选择了部分
       getSelectIndeterminate() {
-        return (this.selectedRowIds.length > 0 &&
-          this.selectedRowIds.length < this.rows.length)
+        let activeIds = this.getActiveRowIdList()
+        if (activeIds.length === 0) {
+          return false
+        }
+        let selectedCount = this.selectedRowIds.filter(id => activeIds.includes(id)).length
+        return selectedCount > 0 && selectedCount < activeIds.length
       },
       // 获取是否选择了全部
       getSelectAll() {
-        return (this.selectedRowIds.length === this.rows.length) && this.rows.length > 0
+        let activeIds = this.getActiveRowIdList()
+        if (activeIds.length === 0) {
+          return false
+        }
+        let selectedCount = this.selectedRowIds.filter(id => activeIds.includes(id)).length
+        return selectedCount === activeIds.length
       },
       tbodyStyle() {
         let style = Object.assign({}, this.style.tbody)
         // style['max-height'] = `${this.maxHeight}px`
         style['width'] = this.realTrWidth
         return style
-      },
-      showClearSelectButton() {
-        let count = 0
-        for (let key in this.disabledRows) {
-          if (this.disabledRows.hasOwnProperty(key)) count++
-        }
-        return count > 0
       },
       accessToken() {
         return Vue.ls.get(ACCESS_TOKEN)
@@ -1050,15 +1144,9 @@
       rows: {
         immediate: true,
         handler(val, old) {
-          // val.forEach(item => {
-          //   for (let inputValue of  this.inputValues) {
-          //     if (inputValue.id === item.id) {
-          //       item['dbFieldName'] = inputValue['dbFieldName']
-          //       break
-          //     }
-          //   }
-          // })
-          // console.log('watch.rows:', cloneObject({ val, old }))
+          this.$nextTick(() => {
+            this.recalculateVisibleRows()
+          })
         }
       },
       dataSource: {
@@ -1099,6 +1187,11 @@
       // 当selectRowIds改变时触发事件
       selectedRowIds(newValue) {
         this.$emit('selectRowChange', cloneObject(newValue).map(i => this.getCleanId(i)))
+      },
+      barCodeFilterInput(val) {
+        if (!val && this.barCodeFilter) {
+          this.applyBarCodeFilter('')
+        }
       }
     },
     mounted() {
@@ -1144,6 +1237,137 @@
         })
       },
 
+      getActiveRowIndices() {
+        if (!this.rows || this.rows.length === 0) {
+          return []
+        }
+        if (this.barCodeFilter) {
+          return this.visibleRowOrder.slice()
+        }
+        if (this.visibleRowOrder && this.visibleRowOrder.length > 0) {
+          return this.visibleRowOrder.slice()
+        }
+        return this.rows.map((row, idx) => idx)
+      },
+
+      getRowBarCode(idx) {
+        let row = this.rows[idx]
+        if (!row) {
+          return ''
+        }
+        let rawValue = ''
+        let popupKey = `barCode${row.id}`
+        if (this.popupJshValues && this.popupJshValues.hasOwnProperty(popupKey)) {
+          rawValue = this.popupJshValues[popupKey]
+        } else if (this.inputValues[idx] && this.inputValues[idx].hasOwnProperty('barCode')) {
+          rawValue = this.inputValues[idx]['barCode']
+        }
+        if (rawValue == null) {
+          return ''
+        }
+        if (rawValue instanceof Array) {
+          return rawValue.join(',')
+        }
+        return rawValue.toString()
+      },
+
+      getActiveRowIdList() {
+        let indices = this.getActiveRowIndices()
+        return indices.map(idx => (this.rows[idx] || {}).id).filter(id => !!id)
+      },
+
+      getFilterSelectedRow() {
+        if (!this.barCodeFilter) {
+          return ''
+        }
+        if (this.visibleRowOrder.length === 0) {
+          return ''
+        }
+        let idx = this.visibleRowOrder[0]
+        let row = this.rows[idx]
+        if (!row) {
+          return ''
+        }
+        let barCode = this.getRowBarCode(idx)
+        return barCode ? JSON.stringify({ barCode, id: this.getCleanId(row.id) }) : ''
+      },
+
+      getDisplayIndex(rowIndex) {
+        let displayIndex = this.displayIndexMap[rowIndex]
+        return typeof displayIndex === 'number' ? displayIndex : -1
+      },
+
+      shouldRenderRow(rowIndex) {
+        let displayIndex = this.getDisplayIndex(rowIndex)
+        if (displayIndex < 0) {
+          return false
+        }
+        let activeCount = this.activeRowCount
+        if (activeCount <= 200) {
+          return true
+        }
+        let start = parseInt(`${(this.scrollTop - this.rowHeight) / this.rowHeight}`)
+        if (isNaN(start) || start < 0) {
+          start = 0
+        }
+        let end = parseInt(`${this.scrollTop / this.rowHeight}`) + 9
+        return displayIndex >= start && end > displayIndex
+      },
+
+      applyBarCodeFilter(value) {
+        let target = (value || '').toString().trim()
+        this.barCodeFilter = target
+        this.barCodeFilterInput = target
+        this.recalculateVisibleRows({ resetScroll: true })
+        this.$nextTick(() => {
+          this.forceUpdateFormValues()
+        })
+      },
+
+      handleBarCodeFilterChange(value) {
+        if (value == null) {
+          this.applyBarCodeFilter('')
+        } else {
+          this.applyBarCodeFilter(value)
+        }
+      },
+
+      filterByBarCode(value) {
+        this.applyBarCodeFilter(value)
+      },
+
+      getBarCodeFilterValue() {
+        const value = (this.barCodeFilter || '').toString().trim()
+        return value ? value : ''
+      },
+
+      recalculateVisibleRows({ resetScroll = false } = {}) {
+        if (!(this.rows instanceof Array)) {
+          this.visibleRowOrder = []
+          this.recalcAllStatisticsColumns()
+          return
+        }
+        let filterVal = (this.barCodeFilter || '').toString().trim()
+        let filterLower = filterVal.toLowerCase()
+        let order = []
+        this.rows.forEach((row, idx) => {
+          if (!filterVal) {
+            order.push(idx)
+          } else {
+            let value = this.getRowBarCode(idx).toLowerCase().trim()
+            if (value && value === filterLower) {
+              order.push(idx)
+            }
+          }
+        })
+        this.visibleRowOrder = order
+        this.recalcAllStatisticsColumns()
+        if (resetScroll) {
+          this.scrollTop = 0
+          this.resetScrollTop(0)
+        }
+      },
+
       /** 初始化列表 */
       initialize() {
         this.visibleTrEls = []
@@ -1177,6 +1401,10 @@
           this.multiSelectValues = []
           this.searchSelectValues = []
           this.scrollTop = 0
+          this.visibleRowOrder = []
+          this.barCodeFilter = ''
+          this.barCodeFilterInput = ''
+          this.pendingPopupJshDefaults = []
           this.$nextTick(() => {
             this.getElement('tbody').scrollTop = 0
           })
@@ -1193,6 +1421,9 @@
       /** 重置滚动条位置，参数留空则滚动到上次记录的位置 */
       resetScrollTop(top) {
         let { scrollView } = this.$refs
+        if (!scrollView) {
+          return
+        }
         if (top != null && typeof top === 'number') {
           scrollView.scrollTop = top
         } else {
@@ -1252,6 +1483,7 @@
         let radioValues = { ...this.radioValues }
         let multiSelectValues = { ...this.multiSelectValues }
         let searchSelectValues = { ...this.searchSelectValues }
+        let pendingPopupJshDefaults = []
         // 禁用行的id
         let disabledRowIds = (this.disabledRowIds || [])
         dataSource.forEach((data, newValueIndex) => {
@@ -1269,6 +1501,15 @@
           this.columns.forEach(column => {
             let inputId = column.key + value.id
             let sourceValue = (data[column.key] == null ? '' : data[column.key]).toString()
+            let appliedFilterDefault = false
+
+            if (setDefaultValue && column.key === 'barCode') {
+              const filterValue = this.getBarCodeFilterValue()
+              if (filterValue) {
+                sourceValue = filterValue
+                appliedFilterDefault = true
+              }
+            }
 
             let defaultValue = null;
             if (setDefaultValue) {
@@ -1333,6 +1574,14 @@
               popupValues[inputId] = sourceValue
             } else if (column.type === FormTypes.popupJsh) {
               popupJshValues[inputId] = sourceValue
+              if (appliedFilterDefault && sourceValue) {
+                pendingPopupJshDefaults.push({
+                  value: sourceValue,
+                  id: inputId,
+                  column,
+                  rowId: row.id
+                })
+              }
             } else if (column.type === FormTypes.input_pop) {
               jInputPopValues[inputId] = sourceValue
             } else if (column.type === FormTypes.radio) {
@@ -1418,12 +1667,15 @@
         this.searchSelectValues = searchSelectValues
         // 重新计算所有统计列
         this.recalcAllStatisticsColumns()
+
+        if (pendingPopupJshDefaults.length > 0) {
+          this.pendingPopupJshDefaults = (this.pendingPopupJshDefaults || []).concat(pendingPopupJshDefaults)
+        }
+
         // 更新到 dom
         if (update) {
           this.rows = rows
-
-          // 更新form表单的值
-          this.$nextTick(() => {
+          this.flushPopupJshDefaults(() => {
             this.updateFormValues()
           })
         }
@@ -1461,16 +1713,17 @@
         }
         this.rows = rows
 
-        this.$nextTick(() => {
+        this.flushPopupJshDefaults(() => {
           this.updateFormValues()
         })
         // 触发add事件
+        const emittedRow = (() => {
+          let r = Object.assign({}, row)
+          r.id = this.getCleanId(r.id)
+          return r
+        })()
         this.$emit('added', {
-          row: (() => {
-            let r = Object.assign({}, row)
-            r.id = this.getCleanId(r.id)
-            return r
-          })(),
+          row: emittedRow,
           target: this
         })
         // 设置滚动条位置
@@ -1506,8 +1759,8 @@
         }
         // 同步更改
         this.rows = rows
-        this.$nextTick(() => {
-          this.recalcSortNumber()
+        this.recalcSortNumber()
+        this.flushPopupJshDefaults(() => {
           this.forceUpdateFormValues()
         })
         // 触发 insert 事件
@@ -1531,6 +1784,8 @@
       },
       /** 删除一行或多行 */
       removeRows(id) {
+        const currentFilter = (this.barCodeFilter || '').toString()
+        const hadFilter = currentFilter.trim().length > 0
         let ids = id
         if (!(id instanceof Array)) {
           if (typeof id === 'string') {
@@ -1564,13 +1819,177 @@
         })
         this.rows = rows
         this.$emit('deleted', this.getDeleteIds(), this)
-        this.$nextTick(() => {
+        this.flushPopupJshDefaults(() => {
           // 更新formValues
           this.updateFormValues()
           // 重新计算统计
           this.recalcAllStatisticsColumns()
+          if (hadFilter) {
+            this.$nextTick(() => {
+              this.applyBarCodeFilter('')
+              this.$nextTick(() => {
+                this.applyBarCodeFilter(currentFilter)
+              })
+            })
+          }
         })
         return true
+      },
+
+      _getRequiredQuantityColumns() {
+        if (!(this.columns instanceof Array)) {
+          return []
+        }
+        return this.columns.filter(column => {
+          if (!column || !column.key) {
+            return false
+          }
+          if (column.aggregateRequired === false) {
+            return false
+          }
+          const hasRequiredRule = (column.validateRules instanceof Array) && column.validateRules.some(rule => rule && rule.required === true)
+          if (!hasRequiredRule) {
+            return false
+          }
+          if (column.aggregateRequired === true) {
+            return true
+          }
+          return column.key === 'operNumber'
+        })
+      },
+
+      _isQuantityValueEmpty(value) {
+        if (value === 0 || value === '0') {
+          return false
+        }
+        if (value == null) {
+          return true
+        }
+        if (typeof value === 'string') {
+          return value.trim() === ''
+        }
+        if (typeof value === 'number') {
+          return Number.isNaN(value)
+        }
+        return false
+      },
+
+      _collectQuantityValidationIssues(columns, rowIdSet = null) {
+        if (!(columns instanceof Array) || columns.length === 0) {
+          return []
+        }
+        const issues = []
+        const rows = this.rows || []
+        const inputValues = this.inputValues || []
+        rows.forEach((row, rowIndex) => {
+          if (!row) {
+            return
+          }
+          if (rowIdSet != null) {
+            const cleanId = this.getCleanId(row.id)
+            if (!rowIdSet.has(cleanId)) {
+              return
+            }
+          }
+          const rowValues = inputValues[rowIndex] || {}
+          const displayIndex = (() => {
+            const idx = this.getDisplayIndex(rowIndex)
+            return typeof idx === 'number' && idx >= 0 ? idx : rowIndex
+          })()
+          columns.forEach(column => {
+            if (this.shouldSkipQuantityRequired(rowIndex, column)) {
+              return
+            }
+            const value = rowValues[column.key]
+            if (this._isQuantityValueEmpty(value)) {
+              issues.push({
+                rowIndex,
+                row,
+                column,
+                inputId: `${column.key}${row.id}`,
+                displayIndex,
+                value
+              })
+            }
+          })
+        })
+        return issues
+      },
+
+      _getQuantityRuleMessage(column) {
+        if (column && column.validateRules instanceof Array) {
+          for (let i = 0; i < column.validateRules.length; i++) {
+            const rule = column.validateRules[i]
+            if (rule && rule.required && rule.message) {
+              return rule.message
+            }
+          }
+          for (let i = 0; i < column.validateRules.length; i++) {
+            const rule = column.validateRules[i]
+            if (rule && rule.message) {
+              return rule.message
+            }
+          }
+        }
+        return '${title}不能为空'
+      },
+
+      _markQuantityIssueHighlights(issues) {
+        if (!(issues instanceof Array) || issues.length === 0) {
+          return
+        }
+        const highlightLimit = 5
+        const highlightIssues = issues.slice(0, highlightLimit)
+        highlightIssues.forEach(issue => {
+          const currentValue = issue.value
+          this.validateOneInput(currentValue, issue.row, issue.column, this.notPassedIds, true, 'change')
+        })
+
+        let tooltips = Object.assign({}, this.tooltips)
+        let notPassedIds = Array.isArray(this.notPassedIds) ? [...this.notPassedIds] : []
+        issues.forEach(issue => {
+          if (!notPassedIds.includes(issue.inputId)) {
+            notPassedIds.push(issue.inputId)
+          }
+          const existing = tooltips[issue.inputId] || {}
+          const message = this.replaceProps(issue.column, this._getQuantityRuleMessage(issue.column))
+          tooltips[issue.inputId] = Object.assign({}, existing, {
+            title: message,
+            passed: false,
+            visible: existing.visible || false
+          })
+        })
+        this.tooltips = tooltips
+        this.notPassedIds = notPassedIds
+      },
+
+      _notifyQuantityIssues(issues) {
+        if (!(issues instanceof Array) || issues.length === 0) {
+          return
+        }
+        const rowNumberSet = new Set()
+        issues.forEach(issue => {
+          const idx = typeof issue.displayIndex === 'number' && issue.displayIndex >= 0 ? issue.displayIndex : issue.rowIndex
+          rowNumberSet.add(idx + 1)
+        })
+        const rowNumbers = Array.from(rowNumberSet).sort((a, b) => a - b)
+        const preview = rowNumbers.slice(0, 5).join('、')
+        const columnTitles = Array.from(new Set(issues.map(issue => (issue.column && issue.column.title) || '').filter(Boolean)))
+        const columnLabel = (columnTitles.length === 1 ? columnTitles[0] : '数量') || '数量'
+        let message = `共有${rowNumbers.length}行${columnLabel}为空`
+        if (preview) {
+          message += `：第${preview}`
+          if (rowNumbers.length > 5) {
+            message += '等'
+          }
+          message += '行'
+        }
+        message += '，请补录后再保存。'
+        if (this.$message && typeof this.$message.error === 'function') {
+          this.$message.error(message)
+        } else {
+          console.error(message)
+        }
       },
 
       /** 获取表格表单里的值（异步版） */
@@ -1580,7 +1999,27 @@
         if (!(rowIds instanceof Array)) rowIds = null
         // 是否删除临时ID，默认为 false
         if (typeof deleteTempId !== 'boolean') deleteTempId = false
+        let rowIdSet = null
+        if (rowIds instanceof Array) {
+          rowIdSet = new Set(rowIds.map(id => this.getCleanId(id)))
+        }
         // console.log('options:', { validate, rowIds })
+
+        if (validate === true) {
+          const quantityColumns = this._getRequiredQuantityColumns()
+          if (quantityColumns.length > 0) {
+            const quantityIssues = this._collectQuantityValidationIssues(quantityColumns, rowIdSet)
+            if (quantityIssues.length > 0) {
+              this._markQuantityIssueHighlights(quantityIssues)
+              this._notifyQuantityIssues(quantityIssues)
+              const result = { error: quantityIssues.length, values: [] }
+              if (typeof callback === 'function') {
+                callback(result)
+              }
+              return result
+            }
+          }
+        }
 
         let asyncCount = 0
         let error = 0
@@ -1901,6 +2340,24 @@
         let inputId = column.key + row.id
         tooltips[inputId] = tooltips[inputId] ? tooltips[inputId] : {}
 
+        const rowIndex = this.getRowIndexById(row && row.id)
+        if (this.shouldSkipQuantityRequired(rowIndex, column)) {
+          tooltips[inputId].visible = false
+          tooltips[inputId].passed = true
+          let existed = notPassedIds.indexOf(inputId)
+          if (existed !== -1) {
+            notPassedIds.splice(existed, 1)
+          }
+          if (update) {
+            this.tooltips = tooltips
+            this.notPassedIds = notPassedIds
+          }
+          if (typeof callback === 'function') {
+            callback([tooltips[inputId], notPassedIds])
+          }
+          return [tooltips[inputId], notPassedIds]
+        }
+
         let [passed, message] = this.validateValue(column, value)
 
         const nextThen = res => {
@@ -2092,6 +2549,37 @@
         this.updateFormValues()
       },
 
+      flushPopupJshDefaults(afterApply) {
+        const defaults = (this.pendingPopupJshDefaults || []).slice()
+        this.pendingPopupJshDefaults = []
+        this.$nextTick(() => {
+          if (defaults.length > 0) {
+            this.applyPopupJshDefaults(defaults)
+          }
+          if (typeof afterApply === 'function') {
+            afterApply()
+          }
+        })
+      },
+
+      applyPopupJshDefaults(defaults) {
+        if (!(defaults instanceof Array) || defaults.length === 0) {
+          return
+        }
+        defaults.forEach(item => {
+          const { value, id, column, rowId } = item || {}
+          if (value == null || value === '' || !id || !column || !rowId) {
+            return
+          }
+          const rowIndex = this.rows.findIndex(row => row && row.id === rowId)
+          if (rowIndex === -1) {
+            return
+          }
+          const row = this.rows[rowIndex]
+          this.handleChangePopupJshCommon(value, id, row, column, rowIndex)
+        })
+      },
+
       // 重新计算所有统计列
       recalcAllStatisticsColumns() {
         if (this.hasStatisticsColumn) {
@@ -2103,8 +2591,14 @@
         if (this.hasStatisticsColumn) {
           if (this.statisticsColumns.hasOwnProperty(key)) {
             // 计算合计值
+            let indices = this.getActiveRowIndices()
+            if (indices.length === 0) {
+              this.statisticsColumns[key] = '0.00'
+              return
+            }
             let count = 0
-            this.inputValues.forEach(item => {
+            for (let idx of indices) {
+              let item = this.inputValues[idx] || {}
               let value = item[key]
               if (value && count !== '-') {
                 try {
@@ -2113,8 +2607,8 @@
                   count = '-'
                 }
               }
-            })
-            this.statisticsColumns[key] = count.toFixed(2)
+            }
+            this.statisticsColumns[key] = count === '-' ? '-' : Number(count).toFixed(2)
           }
         }
       },
@@ -2133,8 +2627,10 @@
       handleChangeCheckedAll() {
         let selectedRowIds = []
         if (!this.getSelectAll) {
-          this.rows.forEach(row => {
-            if ((this.disabledRowIds || []).indexOf(row.id) === -1) {
+          let activeRowIndices = this.getActiveRowIndices()
+          activeRowIndices.forEach(idx => {
+            let row = this.rows[idx]
+            if (row && (this.disabledRowIds || []).indexOf(row.id) === -1) {
               selectedRowIds.push(row.id)
             }
           })
@@ -2227,12 +2723,23 @@
       handleDragMoveStart(event) {
         this.dragging = true
         this.$refs.scrollView.style.overflow = 'hidden'
+        
+        if (this.dragToInsert) {
+          // 显示拖拽插入提示
+          this.dragInsertTip.visible = true
+          this.$message.info(this.dragInsertTip.message, 1.5)
+        }
       },
 
       /** 拖动结束，交换inputValue中的值 */
       handleDragMoveEnd(event) {
         this.dragging = false
         this.$refs.scrollView.style.overflow = 'auto'
+        
+        if (this.dragToInsert) {
+          // 隐藏拖拽插入提示
+          this.dragInsertTip.visible = false
+        }
 
         let { oldIndex, newIndex, item: { dataset: { idx: dataIdx } } } = event
 
@@ -2241,8 +2748,35 @@
         oldIndex += diff
         newIndex += diff
 
-        this.rowResort(oldIndex, newIndex)
-        this.emitDragged(oldIndex, newIndex)
+        if (this.dragToInsert) {
+          // 拖拽新增模式：在目标位置插入空白行
+          let rows = this.rows
+          let row = { id: this.generateId(rows) }
+          rows = this.push(row, false, rows, newIndex)
+          // 同步更改
+          this.rows = rows
+          this.recalcSortNumber()
+          this.flushPopupJshDefaults(() => {
+            this.forceUpdateFormValues()
+          })
+          // 触发 added 事件，以便设置仓库默认值
+          this.$emit('added', {
+            row: (() => {
+              let r = Object.assign({}, row)
+              r.id = this.getCleanId(r.id)
+              return r
+            })(),
+            target: this
+          })
+          // 自动滚动到新增行位置
+          this.$nextTick(() => {
+            this.autoJumpNextInputBill()
+          })
+        } else {
+          // 原有的拖拽排序模式
+          this.rowResort(oldIndex, newIndex)
+          this.emitDragged(oldIndex, newIndex)
+        }
       },
 
       /** 行重新排序 */
@@ -2386,6 +2920,17 @@
 
         // 触发valueChange 事件
         this.elemValueChange(FormTypes.popupJsh, row, column, value)
+        if (column && column.key === 'barCode' && this.barCodeFilter) {
+          this.$nextTick(() => {
+            this.recalculateVisibleRows()
+          })
+        }
+        // 如果是唛头(barCode)，选择完成后跳转到当前行数量(operNumber)
+        if (column && column.key === 'barCode' && row && row.id) {
+          this.$nextTick(() => {
+            this.focusOperNumberInput(row.id)
+          })
+        }
       },
       handleChangeJDateCommon(value, id, row, column, showTime) {
         this.jdateValues = this.bindValuesChange(value, id, 'jdateValues')
@@ -2471,6 +3016,11 @@
           Object.assign(row, values[0])
         }
         this.$emit('valueChange', { type, row, column, value, target: this })
+        if (this.barCodeFilter && column.key === 'barCode') {
+          this.$nextTick(() => {
+            this.recalculateVisibleRows()
+          })
+        }
       },
 
       /** 获取干净的ID（不包含任何杂质的ID） */
@@ -2684,6 +3234,45 @@
           return value
         }
       },
+      shouldSkipQuantityRequired(rowIndex, column) {
+        if (!column || column.type !== FormTypes.inputNumber) {
+          return false
+        }
+        if (!this.hasQuantityRequiredRule(column)) {
+          return false
+        }
+        if (typeof rowIndex !== 'number' || rowIndex < 0) {
+          return false
+        }
+        const barCode = this.getRowBarCode(rowIndex)
+        return !(barCode && barCode.trim().length > 0)
+      },
+      hasQuantityRequiredRule(column) {
+        if (!column) {
+          return false
+        }
+        if (column.aggregateRequired === true) {
+          return true
+        }
+        if (column.validateRules instanceof Array) {
+          return column.validateRules.some(rule => rule && rule.required === true)
+        }
+        return false
+      },
+      getRowIndexById(rowId) {
+        if (!rowId) {
+          return -1
+        }
+        const cleanId = this.getCleanId(rowId)
+        const rows = this.rows || []
+        for (let i = 0; i < rows.length; i++) {
+          let row = rows[i]
+          if (row && this.getCleanId(row.id) === cleanId) {
+            return i
+          }
+        }
+        return -1
+      },
       /** 预览图片地址 */
       getCellImageView(id) {
         let currUploadObj = this.uploadValues[id] || null
@@ -2807,32 +3396,133 @@
       autoJumpNextInputBill() {
         let that = this
         let inputDom = $(".ant-modal-cust-warp:visible").find("#billModal");
-        inputDom.find("input:visible:not(:checkbox)").off("keydown").on("keydown", function(e){
+        const selector = "input:visible:not(:checkbox)"
+        inputDom.off("keydown.jetEnter").on("keydown.jetEnter", selector, function(e){
           //响应回车键按下的处理
           e = event || window.event || arguments.callee.caller.arguments[0];
           //捕捉是否按键为回车键，可百度JS键盘事件了解更多
           if(e && e.keyCode==13) {
-            //捕捉inputDom下的文本输入框的个数
-            let inputs = inputDom.find("input:visible:not(:checkbox)");
-            let idx = inputs.index(this); // 获取当前焦点输入框所处的位置
-            if (idx == inputs.length - 1) { // 判断是否是最后一个输入框
-              let curKey = e.which;
-              if (curKey == 13) {
-                //新增行
+            // 在当前行内判断是否还有下一个输入框
+            let curInput = $(this);
+            let curRow = curInput.closest('.tr');
+            let rowInputs = curRow.find("input:visible:not(:checkbox)");
+            let idxInRow = rowInputs.index(this);
+
+            // 如果当前行没有更多的输入框，则跳到下一行的唛头
+            if (idxInRow === rowInputs.length - 1) {
+              let nextRow = curRow.next('.tr');
+              if (nextRow && nextRow.length) {
+                // 聚焦下一行唛头
+                if (!that.focusRowBarCode(nextRow)) {
+                  // 回退：若未找到唛头，尝试聚焦下一行第一个输入
+                  let nextRowFirstInput = nextRow.find("input:visible:not(:checkbox)").first();
+                  if (nextRowFirstInput && nextRowFirstInput.length) {
+                    nextRowFirstInput[0].focus();
+                    if (typeof nextRowFirstInput[0].select === 'function') {
+                      nextRowFirstInput[0].select();
+                    }
+                  }
+                }
+              } else {
+                // 已是最后一行：新增一行并聚焦新行唛头
                 that.handleClickAdd();
-                //进行下一行的自动聚焦
                 setTimeout(function() {
-                  inputs = inputDom.find("input:visible:not(:checkbox)");
-                  inputs[idx + 1].focus(); // 设置焦点
-                  inputs[idx + 1].select(); // 选中文字
-                },100)
+                  that.focusLastRowBarCode();
+                }, 100);
               }
             } else {
-              inputs[idx + 1].focus(); // 设置焦点
-              inputs[idx + 1].select(); // 选中文字
+              // 行内仍有后续输入，跳到当前行的下一个输入
+              let nextInRow = rowInputs[idxInRow + 1];
+              if (nextInRow) {
+                nextInRow.focus();
+                if (typeof nextInRow.select === 'function') {
+                  nextInRow.select();
+                }
+              }
             }
           }
         })
+      },
+      /** 聚焦指定行的唛头(barCode)，成功返回true */
+      focusRowBarCode(rowEl) {
+        try {
+          if (!rowEl || rowEl.length === 0) {
+            return false;
+          }
+          let bar = rowEl.find("[id^='barCode']").first();
+          if (!bar || bar.length === 0) {
+            return false;
+          }
+          let cell = bar.closest('.td');
+          if (!cell || cell.length === 0) {
+            return false;
+          }
+          let selector = cell.find('.ant-select, .ant-select-selection, .ant-select-selector').first();
+          if (!selector || selector.length === 0) {
+            return false;
+          }
+          selector.click();
+          setTimeout(function() {
+            let inp = selector.find('input');
+            if (inp && inp.length > 0) {
+              inp[0].focus();
+              if (typeof inp[0].select === 'function') {
+                inp[0].select();
+              }
+            }
+          }, 50);
+          return true;
+        } catch (e) {
+          return false;
+        }
+      },
+      /** 聚焦最后一行的唛头(barCode)选择器，成功返回true */
+      focusLastRowBarCode() {
+        try {
+          let inputDom = $(".ant-modal-cust-warp:visible").find("#billModal");
+          let barCodes = inputDom.find("[id^='barCode']");
+          if (!barCodes || barCodes.length === 0) {
+            return false;
+          }
+          let last = $(barCodes[barCodes.length - 1]);
+          let cell = last.closest('.td');
+          if (!cell || cell.length === 0) {
+            return false;
+          }
+          let selector = cell.find('.ant-select, .ant-select-selection, .ant-select-selector').first();
+          if (!selector || selector.length === 0) {
+            return false;
+          }
+          selector.click();
+          setTimeout(function() {
+            let inp = selector.find('input');
+            if (inp && inp.length > 0) {
+              inp[0].focus();
+              if (typeof inp[0].select === 'function') {
+                inp[0].select();
+              }
+            }
+          }, 50);
+          return true;
+        } catch (e) {
+          return false;
+        }
+      },
+      /** 聚焦当前行数量(operNumber)输入框，成功返回true */
+      focusOperNumberInput(rowId) {
+        try {
+          let el = document.getElementById('operNumber' + rowId);
+          if (el) {
+            el.focus();
+            if (typeof el.select === 'function') {
+              el.select();
+            }
+            return true;
+          }
+          return false;
+        } catch (e) {
+          return false;
+        }
       },
       /** 自动选中特殊的key **/
       autoSelectBySpecialKey(specialKey, orderNum) {
@@ -2871,6 +3561,68 @@
       padding-left: 8px;
     }
 
+  }
+
+  .filter-bar {
+    margin: 0 0 8px 16px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 360px;
+    flex: 0 0 auto;
+
+    .filter-select {
+      flex: 0 0 320px;
+      min-width: 320px;
+
+      ::v-deep .ant-input-group {
+        display: flex !important;
+        align-items: center !important;
+        width: 100% !important;
+      }
+
+      ::v-deep .ant-select {
+        flex: 1 1 auto !important;
+        width: 100% !important;
+        min-width: 0 !important;
+      }
+
+      ::v-deep .ant-input-group > .ant-select {
+        flex: 1 1 auto !important;
+        width: 100% !important;
+        min-width: 0 !important;
+      }
+
+      ::v-deep .ant-input-group > .ant-btn,
+      ::v-deep .ant-input-group-addon,
+      ::v-deep .ant-btn,
+      ::v-deep .ant-select {
+        height: 32px !important;
+        line-height: 32px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+      }
+
+      ::v-deep .ant-input-group > .ant-btn {
+        padding: 0 8px;
+      }
+
+      ::v-deep .ant-select-selection {
+        width: 100% !important;
+        flex: 1 1 auto !important;
+        display: flex !important;
+        height: 32px !important;
+        line-height: 32px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+      }
+
+      ::v-deep .ant-select-selection__rendered {
+        flex: 1 1 auto !important;
+        width: 100% !important;
+        line-height: 30px !important;
+      }
+    }
   }
 
   /* 设定边框参数 */

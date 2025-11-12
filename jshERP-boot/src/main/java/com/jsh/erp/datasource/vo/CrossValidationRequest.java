@@ -23,6 +23,21 @@ public class CrossValidationRequest {
      */
     private String validationDate;
 
+    /**
+     * 单据类型
+     */
+    private String type;
+
+    /**
+     * 单据子类型
+     */
+    private String subType;
+
+    /**
+     * 店铺名称集合（为空或缺省表示当前租户下全部店铺）
+     */
+    private List<String> shopNames;
+
     public List<String> getCurrentUserIds() {
         return currentUserIds;
     }
@@ -45,5 +60,29 @@ public class CrossValidationRequest {
 
     public void setValidationDate(String validationDate) {
         this.validationDate = validationDate;
+    }
+
+    public String getType() {
+        return type;
+    }
+
+    public void setType(String type) {
+        this.type = type;
+    }
+
+    public String getSubType() {
+        return subType;
+    }
+
+    public void setSubType(String subType) {
+        this.subType = subType;
+    }
+
+    public List<String> getShopNames() {
+        return shopNames;
+    }
+
+    public void setShopNames(List<String> shopNames) {
+        this.shopNames = shopNames;
     }
 }

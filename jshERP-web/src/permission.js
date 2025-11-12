@@ -3,7 +3,7 @@ import router from './router'
 import store from './store'
 import NProgress from 'nprogress' // progress bar
 import 'nprogress/nprogress.css' // progress bar style
-import { USER_ID,INDEX_MAIN_PAGE_PATH } from '@/store/mutation-types'
+import { USER_ID, INDEX_MAIN_PAGE_PATH } from '@/store/mutation-types'
 import { generateIndexRouter } from "@/utils/util"
 
 NProgress.configure({ showSpinner: false }) // NProgress Configuration
@@ -31,19 +31,22 @@ router.beforeEach((to, from, next) => {
           let constRoutes = [];
           constRoutes = generateIndexRouter(menuData);
           // 添加主界面路由
-          store.dispatch('UpdateAppRouter',  { constRoutes }).then(() => {
+          store.dispatch('UpdateAppRouter', { constRoutes }).then(() => {
             // 根据roles权限生成可访问的路由表
             // 动态添加可访问路由表
-            router.addRoutes(store.getters.addRouters)
+            // 使用 addRoute 替代 addRoutes
+            store.getters.addRouters.forEach(route => {
+              router.addRoute(route)
+            })
             const redirect = decodeURIComponent(from.query.redirect || to.path)
             next({ path: redirect })
           })
         })
-        .catch(() => {
-          store.dispatch('Logout').then(() => {
-            next({ path: '/user/login' })
+          .catch(() => {
+            store.dispatch('Logout').then(() => {
+              next({ path: '/user/login' })
+            })
           })
-        })
       } else {
         if (to.path) {
           _hmt.push(['_trackPageview', '/#' + to.fullPath]);

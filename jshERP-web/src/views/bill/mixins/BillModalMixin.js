@@ -8,6 +8,16 @@ import { getCheckFlag, getMpListShort, getNowFormatDateTime } from '@/utils/util
 import { USER_INFO } from '@/store/mutation-types'
 import Vue from 'vue'
 
+const ALLOWED_VISIBLE_COLUMN_KEYS = new Set([
+  'depotId',
+  'barCode',
+  'name',
+  'stock',
+  'operNumber',
+  'unitPrice',
+  'allPrice'
+])
+
 export const BillModalMixin = {
   data() {
     return {
@@ -300,11 +310,11 @@ export const BillModalMixin = {
     manyAccountModalFormOk(idList, moneyList, allPrice) {
       this.accountIdList = idList
       this.accountMoneyList = moneyList
-      let discountLastMoney = this.form.getFieldValue('discountLastMoney') - 0
-      let otherMoney = this.form.getFieldValue('otherMoney') ? this.form.getFieldValue('otherMoney') - 0 : 0
-      let debt = (discountLastMoney + otherMoney - allPrice).toFixed(2)
+      let discountLastMoney = parseFloat(this.form.getFieldValue('discountLastMoney')) || 0
+      let otherMoney = this.form.getFieldValue('otherMoney') ? parseFloat(this.form.getFieldValue('otherMoney')) || 0 : 0
+      let debt = parseFloat((discountLastMoney + otherMoney - (parseFloat(allPrice) || 0)).toFixed(2)) || 0
       this.$nextTick(() => {
-        this.form.setFieldsValue({ 'changeAmount': allPrice, 'debt': debt })
+        this.form.setFieldsValue({ 'changeAmount': parseFloat(allPrice) || 0, 'debt': debt })
       });
     },
     addSupplier() {
@@ -406,7 +416,6 @@ export const BillModalMixin = {
     onAdded(event) {
       let that = this
       const { row, target } = event
-      target.setValues([{ rowKey: row.id, values: { operNumber: 0 } }])
       //自动下滑到最后一行
       setTimeout(function () {
         that.$refs.materialDataTable.resetScrollTop((target.rows.length + 1) * that.$refs.materialDataTable.rowHeight)
@@ -444,6 +453,7 @@ export const BillModalMixin = {
           }
           break;
         case "barCode":
+          const prevOperNumber = row.operNumber
           param = {
             barCode: value,
             organId: this.form.getFieldValue('organId'),
@@ -504,6 +514,27 @@ export const BillModalMixin = {
                     }
                     mArr.push(mObj)
                     target.setValues(mArr);
+                    if (prevOperNumber != null && prevOperNumber !== '') {
+                      let restoredOperNumber = Number(prevOperNumber)
+                      if (!isNaN(restoredOperNumber)) {
+                        const unitPriceNew = Number(mInfoEx.unitPrice) || 0
+                        const taxRateNew = Number(mInfoEx.taxRate) || 0
+                        const allPriceNew = Number((unitPriceNew * restoredOperNumber).toFixed(2))
+                        const taxMoneyNew = Number(((taxRateNew * 0.01) * allPriceNew).toFixed(2))
+                        const taxLastMoneyNew = Number((allPriceNew + taxMoneyNew).toFixed(2))
+                        target.setValues([
+                          {
+                            rowKey: row.id,
+                            values: {
+                              operNumber: restoredOperNumber,
+                              allPrice: allPriceNew,
+                              taxMoney: taxMoneyNew,
+                              taxLastMoney: taxLastMoneyNew
+                            }
+                          }
+                        ])
+                      }
+                    }
                     target.recalcAllStatisticsColumns()
                     that.autoChangePrice(target)
                     target.autoSelectBySpecialKey('operNumber', row.orderNum)
@@ -656,7 +687,6 @@ export const BillModalMixin = {
         otherField3: mInfo.otherField3,
         unit: mInfo.commodityUnit,
         sku: mInfo.sku,
-        operNumber: 1,
         unitPrice: mInfo.billPrice,
         allPrice: mInfo.billPrice,
         taxRate: 0,
@@ -664,59 +694,77 @@ export const BillModalMixin = {
         taxLastMoney: mInfo.billPrice
       }
     },
-    //使得型号、颜色、扩展信息、sku等为隐藏
+    //统一保留允许的列，隐藏其余列
     changeColumnHide() {
-      this.changeFormTypes(this.materialTable.columns, 'model', 0)
-      this.changeFormTypes(this.materialTable.columns, 'color', 0)
-      this.changeFormTypes(this.materialTable.columns, 'brand', 0)
-      this.changeFormTypes(this.materialTable.columns, 'mfrs', 0)
-      this.changeFormTypes(this.materialTable.columns, 'otherField1', 0)
-      this.changeFormTypes(this.materialTable.columns, 'otherField2', 0)
-      this.changeFormTypes(this.materialTable.columns, 'otherField3', 0)
-      this.changeFormTypes(this.materialTable.columns, 'sku', 0)
+      if (!this.materialTable || !(this.materialTable.columns instanceof Array)) {
+        return
+      }
+      this.materialTable.columns.forEach(column => {
+        if (!column || !column.key) {
+          return
+        }
+        if (column.__originType == null) {
+          column.__originType = column.type
+        }
+        if (ALLOWED_VISIBLE_COLUMN_KEYS.has(column.key)) {
+          column.type = column.__originType
+        } else {
+          this.changeFormTypes(this.materialTable.columns, column.key, 0)
+        }
+      })
     },
-    //使得sku、序列号、批号、到期日等为显示
+    //根据数据需求动态显示列（受允许列限制）
     changeColumnShow(info) {
+      if (!info) {
+        return
+      }
+      const ensureVisible = (key, handler) => {
+        if (!ALLOWED_VISIBLE_COLUMN_KEYS.has(key)) {
+          return
+        }
+        handler()
+      }
+
       if (info.model) {
-        this.changeFormTypes(this.materialTable.columns, 'model', 1)
+        ensureVisible('model', () => this.changeFormTypes(this.materialTable.columns, 'model', 1))
       }
       if (info.color) {
-        this.changeFormTypes(this.materialTable.columns, 'color', 1)
+        ensureVisible('color', () => this.changeFormTypes(this.materialTable.columns, 'color', 1))
       }
       if (info.brand) {
-        this.changeFormTypes(this.materialTable.columns, 'brand', 1)
+        ensureVisible('brand', () => this.changeFormTypes(this.materialTable.columns, 'brand', 1))
       }
       if (info.mfrs) {
-        this.changeFormTypes(this.materialTable.columns, 'mfrs', 1)
+        ensureVisible('mfrs', () => this.changeFormTypes(this.materialTable.columns, 'mfrs', 1))
       }
       if (info.otherField1) {
-        this.changeFormTypes(this.materialTable.columns, 'otherField1', 1)
+        ensureVisible('otherField1', () => this.changeFormTypes(this.materialTable.columns, 'otherField1', 1))
       }
       if (info.otherField2) {
-        this.changeFormTypes(this.materialTable.columns, 'otherField2', 1)
+        ensureVisible('otherField2', () => this.changeFormTypes(this.materialTable.columns, 'otherField2', 1))
       }
       if (info.otherField3) {
-        this.changeFormTypes(this.materialTable.columns, 'otherField3', 1)
+        ensureVisible('otherField3', () => this.changeFormTypes(this.materialTable.columns, 'otherField3', 1))
       }
       if (info.sku) {
-        this.changeFormTypes(this.materialTable.columns, 'sku', 1)
+        ensureVisible('sku', () => this.changeFormTypes(this.materialTable.columns, 'sku', 1))
       }
       if (info.enableSerialNumber === "1") {
-        //如果开启出入库管理，并且类型等于采购、采购退货、销售、销售退货，则跳过
-        if (this.inOutManageFlag && (this.prefixNo === 'CGRK' || this.prefixNo === 'CGTH' || this.prefixNo === 'XSCK' || this.prefixNo === 'XSTH')) {
-          //跳过
-        } else {
+        ensureVisible('snList', () => {
+          if (this.inOutManageFlag && (this.prefixNo === 'CGRK' || this.prefixNo === 'CGTH' || this.prefixNo === 'XSCK' || this.prefixNo === 'XSTH')) {
+            return
+          }
           this.changeFormTypes(this.materialTable.columns, 'snList', 1)
-        }
+        })
       }
       if (info.enableBatchNumber === "1") {
-        //如果开启出入库管理，并且类型等于采购、采购退货、销售、销售退货，则跳过
-        if (this.inOutManageFlag && (this.prefixNo === 'CGRK' || this.prefixNo === 'CGTH' || this.prefixNo === 'XSCK' || this.prefixNo === 'XSTH')) {
-          //跳过
-        } else {
+        ensureVisible('batchNumber', () => {
+          if (this.inOutManageFlag && (this.prefixNo === 'CGRK' || this.prefixNo === 'CGTH' || this.prefixNo === 'XSCK' || this.prefixNo === 'XSTH')) {
+            return
+          }
           this.changeFormTypes(this.materialTable.columns, 'batchNumber', 1)
-          this.changeFormTypes(this.materialTable.columns, 'expirationDate', 1)
-        }
+          ensureVisible('expirationDate', () => this.changeFormTypes(this.materialTable.columns, 'expirationDate', 1))
+        })
       }
     },
     //删除一行或多行的时候触发
@@ -735,15 +783,16 @@ export const BillModalMixin = {
     },
     //改变优惠、本次付款、欠款的值
     autoChangePrice(target) {
-      let allTaxLastMoney = target.statisticsColumns.taxLastMoney - 0
-      let discount = this.form.getFieldValue('discount') - 0
-      let otherMoney = this.form.getFieldValue('otherMoney') ? this.form.getFieldValue('otherMoney') - 0 : 0
-      let deposit = this.form.getFieldValue('deposit')
-      let discountMoney = (discount * 0.01 * allTaxLastMoney).toFixed(2) - 0
-      let discountLastMoney = (allTaxLastMoney - discountMoney).toFixed(2) - 0
-      let changeAmountNew = (discountLastMoney + otherMoney).toFixed(2) - 0
+      let allTaxLastMoney = target && target.statisticsColumns && target.statisticsColumns.taxLastMoney ?
+        parseFloat(target.statisticsColumns.taxLastMoney) || 0 : 0
+      let discount = parseFloat(this.form.getFieldValue('discount')) || 0
+      let otherMoney = this.form.getFieldValue('otherMoney') ? parseFloat(this.form.getFieldValue('otherMoney')) || 0 : 0
+      let deposit = this.form.getFieldValue('deposit') ? parseFloat(this.form.getFieldValue('deposit')) || 0 : 0
+      let discountMoney = parseFloat((discount * 0.01 * allTaxLastMoney).toFixed(2)) || 0
+      let discountLastMoney = parseFloat((allTaxLastMoney - discountMoney).toFixed(2)) || 0
+      let changeAmountNew = parseFloat((discountLastMoney + otherMoney).toFixed(2)) || 0
       if (deposit) {
-        changeAmountNew = (changeAmountNew - deposit).toFixed(2) - 0
+        changeAmountNew = parseFloat((changeAmountNew - deposit).toFixed(2)) || 0
       }
       this.$nextTick(() => {
         changeAmountNew = this.prefixNo === 'CGDD' || this.prefixNo === 'XSDD' ? 0 : changeAmountNew
@@ -756,15 +805,17 @@ export const BillModalMixin = {
     },
     //改变优惠率
     onChangeDiscount(e) {
-      const value = e.target.value - 0
-      let otherMoney = this.form.getFieldValue('otherMoney') ? this.form.getFieldValue('otherMoney') - 0 : 0
-      let deposit = this.form.getFieldValue('deposit')
-      let allTaxLastMoney = this.$refs.materialDataTable.statisticsColumns.taxLastMoney - 0
-      let discountMoneyNew = (allTaxLastMoney * value * 0.01).toFixed(2) - 0
-      let discountLastMoneyNew = (allTaxLastMoney - discountMoneyNew).toFixed(2) - 0
-      let changeAmountNew = (discountLastMoneyNew + otherMoney).toFixed(2) - 0
+      const value = parseFloat(e.target.value) || 0
+      let otherMoney = this.form.getFieldValue('otherMoney') ? parseFloat(this.form.getFieldValue('otherMoney')) || 0 : 0
+      let deposit = this.form.getFieldValue('deposit') ? parseFloat(this.form.getFieldValue('deposit')) || 0 : 0
+      let allTaxLastMoney = this.$refs.materialDataTable && this.$refs.materialDataTable.statisticsColumns &&
+        this.$refs.materialDataTable.statisticsColumns.taxLastMoney ?
+        parseFloat(this.$refs.materialDataTable.statisticsColumns.taxLastMoney) || 0 : 0
+      let discountMoneyNew = parseFloat((allTaxLastMoney * value * 0.01).toFixed(2)) || 0
+      let discountLastMoneyNew = parseFloat((allTaxLastMoney - discountMoneyNew).toFixed(2)) || 0
+      let changeAmountNew = parseFloat((discountLastMoneyNew + otherMoney).toFixed(2)) || 0
       if (deposit) {
-        changeAmountNew = (changeAmountNew - deposit).toFixed(2) - 0
+        changeAmountNew = parseFloat((changeAmountNew - deposit).toFixed(2)) || 0
       }
       this.$nextTick(() => {
         changeAmountNew = this.prefixNo === 'CGDD' || this.prefixNo === 'XSDD' ? 0 : changeAmountNew
@@ -777,15 +828,17 @@ export const BillModalMixin = {
     },
     //改变付款优惠
     onChangeDiscountMoney(e) {
-      const value = e.target.value - 0
-      let otherMoney = this.form.getFieldValue('otherMoney') ? this.form.getFieldValue('otherMoney') - 0 : 0
-      let deposit = this.form.getFieldValue('deposit')
-      let allTaxLastMoney = this.$refs.materialDataTable.statisticsColumns.taxLastMoney - 0
-      let discountNew = (value / allTaxLastMoney * 100).toFixed(2) - 0
-      let discountLastMoneyNew = (allTaxLastMoney - value).toFixed(2) - 0
-      let changeAmountNew = (discountLastMoneyNew + otherMoney).toFixed(2) - 0
+      const value = parseFloat(e.target.value) || 0
+      let otherMoney = this.form.getFieldValue('otherMoney') ? parseFloat(this.form.getFieldValue('otherMoney')) || 0 : 0
+      let deposit = this.form.getFieldValue('deposit') ? parseFloat(this.form.getFieldValue('deposit')) || 0 : 0
+      let allTaxLastMoney = this.$refs.materialDataTable && this.$refs.materialDataTable.statisticsColumns &&
+        this.$refs.materialDataTable.statisticsColumns.taxLastMoney ?
+        parseFloat(this.$refs.materialDataTable.statisticsColumns.taxLastMoney) || 0 : 0
+      let discountNew = allTaxLastMoney > 0 ? parseFloat((value / allTaxLastMoney * 100).toFixed(2)) || 0 : 0
+      let discountLastMoneyNew = parseFloat((allTaxLastMoney - value).toFixed(2)) || 0
+      let changeAmountNew = parseFloat((discountLastMoneyNew + otherMoney).toFixed(2)) || 0
       if (deposit) {
-        changeAmountNew = (changeAmountNew - deposit).toFixed(2) - 0
+        changeAmountNew = parseFloat((changeAmountNew - deposit).toFixed(2)) || 0
       }
       this.$nextTick(() => {
         changeAmountNew = this.prefixNo === 'CGDD' || this.prefixNo === 'XSDD' ? 0 : changeAmountNew
@@ -798,12 +851,12 @@ export const BillModalMixin = {
     },
     //其它费用
     onChangeOtherMoney(e) {
-      const value = e.target.value - 0
-      let discountLastMoney = this.form.getFieldValue('discountLastMoney') - 0
-      let deposit = this.form.getFieldValue('deposit')
-      let changeAmountNew = (discountLastMoney + value).toFixed(2) - 0
+      const value = parseFloat(e.target.value) || 0
+      let discountLastMoney = parseFloat(this.form.getFieldValue('discountLastMoney')) || 0
+      let deposit = this.form.getFieldValue('deposit') ? parseFloat(this.form.getFieldValue('deposit')) || 0 : 0
+      let changeAmountNew = parseFloat((discountLastMoney + value).toFixed(2)) || 0
       if (deposit) {
-        changeAmountNew = (changeAmountNew - deposit).toFixed(2) - 0
+        changeAmountNew = parseFloat((changeAmountNew - deposit).toFixed(2)) || 0
       }
       this.$nextTick(() => {
         this.form.setFieldsValue({ 'changeAmount': changeAmountNew, 'debt': 0 })
@@ -812,12 +865,12 @@ export const BillModalMixin = {
     },
     //改变扣除订金
     onChangeDeposit(e) {
-      const value = e.target.value - 0
-      let discountLastMoney = this.form.getFieldValue('discountLastMoney') - 0
-      let otherMoney = this.form.getFieldValue('otherMoney') ? this.form.getFieldValue('otherMoney') - 0 : 0
-      let changeAmountNew = (discountLastMoney + otherMoney).toFixed(2) - 0
+      const value = parseFloat(e.target.value) || 0
+      let discountLastMoney = parseFloat(this.form.getFieldValue('discountLastMoney')) || 0
+      let otherMoney = this.form.getFieldValue('otherMoney') ? parseFloat(this.form.getFieldValue('otherMoney')) || 0 : 0
+      let changeAmountNew = parseFloat((discountLastMoney + otherMoney).toFixed(2)) || 0
       if (value) {
-        changeAmountNew = (changeAmountNew - value).toFixed(2) - 0
+        changeAmountNew = parseFloat((changeAmountNew - value).toFixed(2)) || 0
       }
       this.$nextTick(() => {
         this.form.setFieldsValue({ 'changeAmount': changeAmountNew, 'debt': 0 })
@@ -826,13 +879,13 @@ export const BillModalMixin = {
     },
     //改变本次付款
     onChangeChangeAmount(e) {
-      const value = e.target.value - 0
-      let discountLastMoney = this.form.getFieldValue('discountLastMoney') - 0
-      let otherMoney = this.form.getFieldValue('otherMoney') ? this.form.getFieldValue('otherMoney') - 0 : 0
-      let deposit = this.form.getFieldValue('deposit')
-      let debtNew = (discountLastMoney + otherMoney - value).toFixed(2) - 0
+      const value = parseFloat(e.target.value) || 0
+      let discountLastMoney = parseFloat(this.form.getFieldValue('discountLastMoney')) || 0
+      let otherMoney = this.form.getFieldValue('otherMoney') ? parseFloat(this.form.getFieldValue('otherMoney')) || 0 : 0
+      let deposit = this.form.getFieldValue('deposit') ? parseFloat(this.form.getFieldValue('deposit')) || 0 : 0
+      let debtNew = parseFloat((discountLastMoney + otherMoney - value).toFixed(2)) || 0
       if (deposit) {
-        debtNew = (debtNew - deposit).toFixed(2) - 0
+        debtNew = parseFloat((debtNew - deposit).toFixed(2)) || 0
       }
       this.$nextTick(() => {
         this.form.setFieldsValue({ 'debt': debtNew })
@@ -886,17 +939,17 @@ export const BillModalMixin = {
               this.materialTable.dataSource = newDetailArr
               //更新优惠后金额、本次付款等信息
               for (let newDetail of newDetailArr) {
-                allLastMoney = allLastMoney + (newDetail.allPrice - 0)
-                allTaxLastMoney = allTaxLastMoney + (newDetail.taxLastMoney - 0)
+                allLastMoney = allLastMoney + (parseFloat(newDetail.allPrice) || 0)
+                allTaxLastMoney = allTaxLastMoney + (parseFloat(newDetail.taxLastMoney) || 0)
               }
-              let discount = this.form.getFieldValue('discount') - 0
-              let otherMoney = this.form.getFieldValue('otherMoney') ? this.form.getFieldValue('otherMoney') - 0 : 0
-              let deposit = this.form.getFieldValue('deposit')
-              let discountMoney = (discount * 0.01 * allTaxLastMoney).toFixed(2) - 0
-              let discountLastMoney = (allTaxLastMoney - discountMoney).toFixed(2) - 0
-              let changeAmountNew = (discountLastMoney + otherMoney).toFixed(2) - 0
+              let discount = parseFloat(this.form.getFieldValue('discount')) || 0
+              let otherMoney = this.form.getFieldValue('otherMoney') ? parseFloat(this.form.getFieldValue('otherMoney')) || 0 : 0
+              let deposit = this.form.getFieldValue('deposit') ? parseFloat(this.form.getFieldValue('deposit')) || 0 : 0
+              let discountMoney = parseFloat((discount * 0.01 * allTaxLastMoney).toFixed(2)) || 0
+              let discountLastMoney = parseFloat((allTaxLastMoney - discountMoney).toFixed(2)) || 0
+              let changeAmountNew = parseFloat((discountLastMoney + otherMoney).toFixed(2)) || 0
               if (deposit) {
-                changeAmountNew = (changeAmountNew - deposit).toFixed(2) - 0
+                changeAmountNew = parseFloat((changeAmountNew - deposit).toFixed(2)) || 0
               }
               this.$nextTick(() => {
                 changeAmountNew = this.prefixNo === 'XSDD' ? 0 : changeAmountNew
@@ -1016,17 +1069,17 @@ export const BillModalMixin = {
               this.materialTable.dataSource = newDetailArr
               //更新优惠后金额、本次付款等信息
               for (let newDetail of newDetailArr) {
-                allLastMoney = allLastMoney + (newDetail.allPrice - 0)
-                allTaxLastMoney = allTaxLastMoney + (newDetail.taxLastMoney - 0)
+                allLastMoney = allLastMoney + (parseFloat(newDetail.allPrice) || 0)
+                allTaxLastMoney = allTaxLastMoney + (parseFloat(newDetail.taxLastMoney) || 0)
               }
-              let discount = this.form.getFieldValue('discount') - 0
-              let otherMoney = this.form.getFieldValue('otherMoney') ? this.form.getFieldValue('otherMoney') - 0 : 0
-              let deposit = this.form.getFieldValue('deposit')
-              let discountMoney = (discount * 0.01 * allTaxLastMoney).toFixed(2) - 0
-              let discountLastMoney = (allTaxLastMoney - discountMoney).toFixed(2) - 0
-              let changeAmountNew = (discountLastMoney + otherMoney).toFixed(2) - 0
+              let discount = parseFloat(this.form.getFieldValue('discount')) || 0
+              let otherMoney = this.form.getFieldValue('otherMoney') ? parseFloat(this.form.getFieldValue('otherMoney')) || 0 : 0
+              let deposit = this.form.getFieldValue('deposit') ? parseFloat(this.form.getFieldValue('deposit')) || 0 : 0
+              let discountMoney = parseFloat((discount * 0.01 * allTaxLastMoney).toFixed(2)) || 0
+              let discountLastMoney = parseFloat((allTaxLastMoney - discountMoney).toFixed(2)) || 0
+              let changeAmountNew = parseFloat((discountLastMoney + otherMoney).toFixed(2)) || 0
               if (deposit) {
-                changeAmountNew = (changeAmountNew - deposit).toFixed(2) - 0
+                changeAmountNew = parseFloat((changeAmountNew - deposit).toFixed(2)) || 0
               }
               if (this.prefixNo === 'LSCK' || this.prefixNo === 'LSTH') {
                 this.$nextTick(() => {
@@ -1065,7 +1118,7 @@ export const BillModalMixin = {
       this.$nextTick(() => {
         let discountLastMoney = 0
         for (let i = 0; i < data.length; i++) {
-          discountLastMoney += data[i].taxLastMoney
+          discountLastMoney += parseFloat(data[i].taxLastMoney) || 0
           this.changeColumnShow(data[i])
         }
         this.form.setFieldsValue({ 'discountLastMoney': discountLastMoney })

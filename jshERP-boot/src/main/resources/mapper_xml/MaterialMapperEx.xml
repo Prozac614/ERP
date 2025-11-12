@@ -113,12 +113,12 @@
         </if>
         and ifnull(m.delete_flag,'0') !='1'
         group by m.id
-        order by m.id desc) tb
+        order by CASE WHEN me.bar_code LIKE 'W%' THEN 1 WHEN me.bar_code LIKE 'B%' THEN 2 ELSE 3 END, m.id ASC) tb
         left join jsh_material jm on tb.id = jm.id and ifnull(jm.delete_Flag,'0') !='1'
         left join jsh_material_extend jme on tb.meId = jme.id and ifnull(jme.delete_Flag,'0') !='1'
         left join jsh_unit u on jm.unit_id = u.id and ifnull(u.delete_Flag,'0') !='1'
         left join jsh_material_category mc on jm.category_id = mc.id and ifnull(mc.delete_Flag,'0') !='1'
-        order by tb.id desc
+        order by CASE WHEN jme.bar_code LIKE 'W%' THEN 1 WHEN jme.bar_code LIKE 'B%' THEN 2 ELSE 3 END, jm.id ASC
     </select>
 
     <insert id="insertSelectiveEx" parameterType="com.jsh.erp.datasource.entities.Material" useGeneratedKeys="true" keyProperty="id">
@@ -313,7 +313,17 @@
             and (me.bar_code like #{bindKey} or m.name like #{bindKey} or m.standard like #{bindKey} or m.model like #{bindKey} or m.mnemonic like #{bindKey})
         </if>
         and ifnull(m.delete_flag,'0') !='1'
-        order by m.id desc, me.default_flag desc, me.id asc
+        <choose>
+            <when test="materialParam != null and materialParam !=''">
+                order by CASE WHEN me.bar_code LIKE #{bindKey} THEN 0 ELSE 1 END,
+                CASE WHEN me.bar_code LIKE 'W%' THEN 1 WHEN me.bar_code LIKE 'B%' THEN 2 ELSE 3 END,
+                m.id ASC, me.default_flag desc, me.id asc
+            </when>
+            <otherwise>
+                order by CASE WHEN me.bar_code LIKE 'W%' THEN 1 WHEN me.bar_code LIKE 'B%' THEN 2 ELSE 3 END,
+                m.id ASC, me.default_flag desc, me.id asc
+            </otherwise>
+        </choose>
         limit 0,20
     </select>
 
@@ -369,7 +379,17 @@
             and m.enable_batch_number = #{enableBatchNumber}
         </if>
         and ifnull(m.delete_flag,'0') !='1'
-        ORDER BY m.id desc, me.default_flag desc, me.id asc
+        <choose>
+            <when test="q != null and q !=''">
+                ORDER BY CASE WHEN me.bar_code LIKE #{bindKey} THEN 0 ELSE 1 END,
+                CASE WHEN me.bar_code LIKE 'W%' THEN 1 WHEN me.bar_code LIKE 'B%' THEN 2 ELSE 3 END,
+                m.id ASC, me.default_flag desc, me.id asc
+            </when>
+            <otherwise>
+                ORDER BY CASE WHEN me.bar_code LIKE 'W%' THEN 1 WHEN me.bar_code LIKE 'B%' THEN 2 ELSE 3 END,
+                m.id ASC, me.default_flag desc, me.id asc
+            </otherwise>
+        </choose>
         <if test="offset != null and rows != null">
             limit #{offset},#{rows}
         </if>
@@ -476,7 +496,7 @@
             </foreach>
         </if>
         and ifnull(m.delete_flag,'0') !='1'
-        order by m.id desc, me.default_flag desc, me.id asc
+        order by CASE WHEN me.bar_code LIKE 'W%' THEN 1 WHEN me.bar_code LIKE 'B%' THEN 2 ELSE 3 END, m.id ASC, me.default_flag desc, me.id asc
     </select>
 
     <select id="getOtherMaterialList" resultType="com.jsh.erp.datasource.entities.MaterialExtend">
@@ -507,7 +527,7 @@
             and (me.bar_code like #{bindKey} or m.name like #{bindKey} or m.standard like #{bindKey} or m.model like #{bindKey})
         </if>
         and ifnull(m.delete_flag,'0') !='1'
-        order by m.id desc
+        order by CASE WHEN me.bar_code LIKE 'W%' THEN 1 WHEN me.bar_code LIKE 'B%' THEN 2 ELSE 3 END, m.id ASC
         <if test="offset != null and rows != null">
             limit #{offset},#{rows}
         </if>
@@ -600,7 +620,7 @@
         </foreach>
         )
         and ifnull(m.delete_flag,'0') !='1'
-        order by m.id desc, me.default_flag desc, me.id asc
+        order by CASE WHEN me.bar_code LIKE 'W%' THEN 1 WHEN me.bar_code LIKE 'B%' THEN 2 ELSE 3 END, m.id ASC, me.default_flag desc, me.id asc
     </select>
 
     <select id="getMaterialByBarCodeAndWithOutMId" parameterType="com.jsh.erp.datasource.entities.MaterialExample" resultMap="ResultAndUnitMap">
@@ -617,7 +637,7 @@
         )
         and me.material_id!=#{mId}
         and ifnull(m.delete_flag,'0') !='1'
-        order by me.id desc
+        order by CASE WHEN me.bar_code LIKE 'W%' THEN 1 WHEN me.bar_code LIKE 'B%' THEN 2 ELSE 3 END, m.id ASC
     </select>
 
     <update id="setUnitIdToNull">
@@ -694,7 +714,7 @@
             having ifnull(sum(mcs.current_number),0)!=0
         </if>
         <if test="column == 'createTime'">
-            order by m.id desc
+            order by CASE WHEN me.bar_code LIKE 'W%' THEN 1 WHEN me.bar_code LIKE 'B%' THEN 2 ELSE 3 END, m.id ASC
         </if>
         <if test="column != 'createTime'">
             order by ${column} ${order}
@@ -784,6 +804,9 @@
     <select id="checkIsExist" resultType="java.lang.Integer">
         select count(1) from jsh_material m
         where ifnull(m.delete_flag,'0') !='1'
+        <if test="name != null">
+            and m.name = #{name}
+        </if>
         <if test="model != null">
             and m.model = #{model}
         </if>
@@ -826,5 +849,71 @@
         and ifnull(m.delete_flag,'0') !='1'
         limit 0,1
     </select>
+
+    <!-- 直接查询每日出库数据（备用方案） -->
+    <select id="getDirectDailyOutStock" resultType="java.util.Map">
+        select
+            me.bar_code as barCode,
+            m.name as materialName,
+            date_format(dh.oper_time, '%Y-%m-%d') as outDate,
+            sum(ifnull(di.basic_number, 0)) as outQuantity
+        from jsh_depot_item di
+        left join jsh_depot_head dh on dh.id = di.header_id
+        left join jsh_material m on m.id = di.material_id
+        left join jsh_material_extend me on me.material_id = m.id and ifnull(me.delete_flag,'0') !='1' and me.default_flag = 1
+        where dh.type = '出库'
+        and ifnull(di.delete_flag,'0') !='1'
+        and ifnull(dh.delete_flag,'0') !='1'
+        and ifnull(m.delete_flag,'0') !='1'
+        and dh.status = '1'
+        and di.material_id = #{materialId}
+        <if test="beginTime != null and beginTime !=''">
+            and dh.oper_time >= #{beginTime}
+        </if>
+        <if test="endTime != null and endTime !=''">
+            and dh.oper_time &lt;= #{endTime}
+        </if>
+        group by date_format(dh.oper_time, '%Y-%m-%d')
+        order by date_format(dh.oper_time, '%Y-%m-%d') asc
+    </select>
+
+    <!-- 简化查询：获取商品总出库量（备用方案） -->
+    <select id="getTotalOutQuantity" resultType="java.math.BigDecimal">
+        select sum(ifnull(di.basic_number, 0)) as totalOutQuantity
+        from jsh_depot_item di
+        left join jsh_depot_head dh on dh.id = di.header_id
+        where dh.type = '出库'
+        and ifnull(di.delete_flag,'0') !='1'
+        and ifnull(dh.delete_flag,'0') !='1'
+        and dh.status = '1'
+        and di.material_id = #{materialId}
+        <if test="beginTime != null and beginTime !=''">
+            and dh.oper_time >= #{beginTime}
+        </if>
+        <if test="endTime != null and endTime !=''">
+            and dh.oper_time &lt;= #{endTime}
+        </if>
+    </select>
+
+    <!-- 更新库存告急状态并清空忽略时间 -->
+    <update id="updateStockAlertStatusAndClearIgnored">
+        UPDATE jsh_material
+        SET stock_alert_status = #{alertStatus},
+            last_six_months_sales = #{sixMonthsSales},
+            stock_alert_ignored_at = NULL,
+            stock_alert_updated_at = NOW()
+        WHERE id = #{materialId}
+        AND IFNULL(delete_flag, '0') != '1'
+    </update>
+
+    <!-- 将商品状态更新为忽略风险 -->
+    <update id="updateStockAlertToIgnored">
+        UPDATE jsh_material
+        SET stock_alert_status = 'RISK_IGNORED',
+            stock_alert_ignored_at = NOW(),
+            stock_alert_updated_at = NOW()
+        WHERE id = #{materialId}
+        AND IFNULL(delete_flag, '0') != '1'
+    </update>
 
 </mapper>

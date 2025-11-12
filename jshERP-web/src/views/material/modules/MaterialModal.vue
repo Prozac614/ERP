@@ -19,23 +19,42 @@
       <a-form :form="form">
         <a-tabs v-model:activeKey="activeKey" size="small">
           <a-tab-pane key="1" tab="基本信息" id="materialHeadModal" forceRender>
+            <a-row class="form-row" :gutter="24" style="max-width:900px;margin-left:24px;padding-right:24px;">
+              <a-col :xl="8" :lg="8" :md="8" :sm="24">
+                <a-form-item :labelCol="labelCol" :wrapperCol="wrapperCol" label="唛头">
+                  <a-input placeholder="请输入唛头" v-decorator.trim="[ 'singleBarCode', validatorRules.singleBarCode ]" />
+                </a-form-item>
+              </a-col>
+              <a-col :xl="8" :lg="8" :md="8" :sm="24">
+                <a-form-item :labelCol="labelCol" :wrapperCol="wrapperCol" label="名称" data-step="1" data-title="名称" data-intro="名称必填，可以重复">
+                  <a-input placeholder="请输入名称" v-decorator.trim="[ 'name', validatorRules.name ]" @change="handleNameChange" />
+                </a-form-item>
+              </a-col>
+              <a-col :xl="8" :lg="8" :md="8" :sm="24">
+                <a-form-item :labelCol="labelCol" :wrapperCol="wrapperCol" label="单价">
+                  <a-input-number style="width: 100%" placeholder="请输入单价" v-decorator="[ 'singlePrice', validatorRules.singlePrice ]" />
+                </a-form-item>
+              </a-col>
+            </a-row>
+            <div id="materialDetailModal" style="display:none;"></div>
+            <template v-if="false">
             <a-row class="form-row" :gutter="24">
               <a-col :md="6" :sm="24">
                 <a-form-item :labelCol="labelCol" :wrapperCol="wrapperCol" label="名称" data-step="1" data-title="名称" data-intro="名称必填，可以重复">
                   <a-input placeholder="请输入名称" v-decorator.trim="[ 'name', validatorRules.name ]" @change="handleNameChange" />
                 </a-form-item>
               </a-col>
-              <a-col :md="6" :sm="24">
+              <a-col :md="6" :sm="24" style="display: none">
                 <a-form-item :labelCol="labelCol" :wrapperCol="wrapperCol" label="规格" data-step="2" data-title="规格" data-intro="规格不必填，比如：10克">
                   <a-input placeholder="请输入规格" v-decorator.trim="[ 'standard', validatorRules.standard ]"/>
                 </a-form-item>
               </a-col>
-              <a-col :md="6" :sm="24">
+              <a-col :md="6" :sm="24" style="display: none">
                 <a-form-item :labelCol="labelCol" :wrapperCol="wrapperCol" label="型号" data-step="3" data-title="型号" data-intro="型号是比规格更小的属性，比如：RX-01">
                   <a-input placeholder="请输入型号" v-decorator.trim="[ 'model', validatorRules.model ]" />
                 </a-form-item>
               </a-col>
-              <a-col :md="6" :sm="24">
+              <a-col :md="6" :sm="24" style="display: none">
                 <a-form-item :labelCol="labelCol" :wrapperCol="wrapperCol" label="单位"
                   data-step="4" data-title="单位" data-intro="此处支持单个单位和多单位，勾选多单位就可以切换到多单位的下拉框，多单位需要先在【多单位】页面进行录入。
                   比如牛奶有瓶和箱两种单位，12瓶=1箱，这就构成了多单位，多单位中有个换算比例">
@@ -64,25 +83,25 @@
               </a-col>
             </a-row>
             <a-row class="form-row" :gutter="24">
-              <a-col :md="6" :sm="24">
+              <a-col :md="6" :sm="24" style="display: none">
                 <a-form-item :labelCol="labelCol" :wrapperCol="wrapperCol" label="颜色" data-step="5" data-title="颜色"
                              data-intro="请填写商品的颜色，如果是多属性商品可以不填（下面有多属性开关）">
                   <a-input placeholder="请输入颜色" v-decorator.trim="[ 'color' ]" />
                 </a-form-item>
               </a-col>
-              <a-col :md="6" :sm="24">
+              <a-col :md="6" :sm="24" style="display: none">
                 <a-form-item :labelCol="labelCol" :wrapperCol="wrapperCol" label="品牌" data-step="6" data-title="品牌"
                              data-intro="请填写商品的品牌，方便区别不同品牌的商品">
                   <a-input placeholder="请输入品牌" v-decorator.trim="[ 'brand' ]" />
                 </a-form-item>
               </a-col>
-              <a-col :md="6" :sm="24">
+              <a-col :md="6" :sm="24" style="display: none">
                 <a-form-item :labelCol="labelCol" :wrapperCol="wrapperCol" label="助记码" data-step="7" data-title="助记码"
                              data-intro="助记码自动生成，助记码是商品名称的首字母缩写">
                   <a-input placeholder="" v-decorator.trim="[ 'mnemonic' ]" :readOnly="true" />
                 </a-form-item>
               </a-col>
-              <a-col :md="6" :sm="24">
+              <a-col :md="6" :sm="24" style="display: none">
                 <a-form-item :labelCol="labelCol" :wrapperCol="wrapperCol" label="类别"
                              data-step="8" data-title="类别" data-intro="类别需要在【商品类别】页面进行录入，录入之后在此处进行调用">
                   <a-tree-select style="width:100%" :dropdownStyle="{maxHeight:'200px',overflow:'auto'}" allow-clear
@@ -92,25 +111,25 @@
               </a-col>
             </a-row>
             <a-row class="form-row" :gutter="24">
-              <a-col :md="6" :sm="24">
+              <a-col :md="6" :sm="24" style="display: none">
                 <a-form-item :labelCol="labelCol" :wrapperCol="wrapperCol" label="基础重量" data-step="9" data-title="基础重量"
                   data-intro="请填写基本单位对应的重量，用于计算按重量分摊费用时单据中各行商品分摊的费用成本">
                   <a-input-number style="width: 100%" placeholder="请输入基础重量(kg)" v-decorator.trim="[ 'weight' ]" />
                 </a-form-item>
               </a-col>
-              <a-col :md="6" :sm="24">
+              <a-col :md="6" :sm="24" style="display: none">
                 <a-form-item :labelCol="labelCol" :wrapperCol="wrapperCol" label="保质期" data-step="10" data-title="保质期"
                   data-intro="保质期指的是商品的保质期(天)，主要针对带生产日期的，此类商品一般有批号">
                   <a-input-number style="width: 100%" placeholder="请输入保质期(天)" v-decorator.trim="[ 'expiryNum' ]" />
                 </a-form-item>
               </a-col>
-              <a-col :md="6" :sm="24">
+              <a-col :md="6" :sm="24" style="display: none">
                 <a-form-item :labelCol="labelCol" :wrapperCol="wrapperCol" label="仓位货架" data-step="11" data-title="仓位货架"
                              data-intro="仓位货架指的是仓库中的仓位和货架号，主要适用于仓库较大的场景，方便查找商品的准确位置">
                   <a-input style="width: 100%" placeholder="请输入仓位货架" v-decorator.trim="[ 'position' ]" />
                 </a-form-item>
               </a-col>
-              <a-col :md="6" :sm="24">
+              <a-col :md="6" :sm="24" style="display: none">
                 <a-form-item :labelCol="labelCol" :wrapperCol="wrapperCol" label="制造商" data-step="12" data-title="制造商"
                              data-intro="请填写商品的制造商，一般适用于制造行业">
                   <a-input placeholder="请输入制造商" v-decorator.trim="[ 'mfrs' ]" />
@@ -118,24 +137,24 @@
               </a-col>
             </a-row>
             <a-row class="form-row" :gutter="24">
-              <a-col :lg="6" :md="6" :sm="6">
+              <a-col :lg="6" :md="6" :sm="6" style="display: none">
                 <a-form-item :labelCol="labelCol" :wrapperCol="wrapperCol" :label="mpShort.otherField1.name">
                   <a-input :placeholder="'请输入'+ mpShort.otherField1.name" v-decorator.trim="[ 'otherField1' ]" />
                 </a-form-item>
               </a-col>
-              <a-col :lg="6" :md="6" :sm="6">
+              <a-col :lg="6" :md="6" :sm="6" style="display: none">
                 <a-form-item :labelCol="labelCol" :wrapperCol="wrapperCol" :label="mpShort.otherField2.name">
                   <a-input :placeholder="'请输入'+ mpShort.otherField2.name" v-decorator.trim="[ 'otherField2' ]" />
                 </a-form-item>
               </a-col>
-              <a-col :lg="6" :md="6" :sm="6">
+              <a-col :lg="6" :md="6" :sm="6" style="display: none">
                 <a-form-item :labelCol="labelCol" :wrapperCol="wrapperCol" :label="mpShort.otherField3.name">
                   <a-input :placeholder="'请输入'+ mpShort.otherField3.name" v-decorator.trim="[ 'otherField3' ]" />
                 </a-form-item>
               </a-col>
             </a-row>
             <a-row class="form-row" :gutter="24">
-              <a-col :md="6" :sm="24">
+              <a-col :md="6" :sm="24" style="display: none">
                 <a-form-item :labelCol="labelCol" :wrapperCol="wrapperCol" label="序列号" data-step="13" data-title="序列号"
                   data-intro="此处是商品的序列号开关，如果选择了有，则在采购入库单据需要录入该商品的序列号，在销售出库单据需要选择该商品的序列号进行出库">
                   <a-tooltip title="如果选择为有，则在采购入库单需要录入该商品的序列号">
@@ -146,7 +165,7 @@
                   </a-tooltip>
                 </a-form-item>
               </a-col>
-              <a-col :md="6" :sm="24">
+              <a-col :md="6" :sm="24" style="display: none">
                 <a-form-item :labelCol="labelCol" :wrapperCol="wrapperCol" label="批号" data-step="14" data-title="批号"
                   data-intro="此处是商品的批号开关，如果选择了有，则在采购入库单据需要录入该商品的批号和有效期，在销售出库单据需要选择该商品的批号进行出库">
                   <a-tooltip title="如果选择为有，则在采购入库单需要录入该商品的批号和有效期">
@@ -157,7 +176,7 @@
                   </a-tooltip>
                 </a-form-item>
               </a-col>
-              <a-col :md="6" :sm="24">
+              <a-col :md="6" :sm="24" style="display: none">
                 <a-form-item :labelCol="labelCol" :wrapperCol="wrapperCol" label="多属性" data-step="15" data-title="多属性"
                   data-intro="多属性是针对的sku商品（比如服装、鞋帽、家纺行业），此处开关如果启用就可以在下方进行多sku的配置，配置具体的颜色、尺码之类的组合">
                   <a-tooltip title="多属性针对服装、鞋帽、家纺等行业（注意不要勾选多单位，因为多属性商品不支持多单位，只支持单个的单位）">
@@ -241,8 +260,9 @@
                 </a-form-item>
               </a-col>
             </a-row>
+            </template>
           </a-tab-pane>
-          <a-tab-pane key="2" tab="库存数量" forceRender>
+          <a-tab-pane key="2" tab="库存数量" forceRender v-if="false">
             <j-editable-table
               ref="editableDepotTable"
               :loading="depotTable.loading"
@@ -262,7 +282,7 @@
             <!-- 表单区域 -->
             <batch-set-stock-modal ref="stockModalForm" @ok="batchSetStockModalFormOk"></batch-set-stock-modal>
           </a-tab-pane>
-          <a-tab-pane key="3" tab="图片信息" forceRender>
+          <a-tab-pane key="3" tab="图片信息" forceRender v-if="false">
             <a-row class="form-row" :gutter="24" style="padding-top:20px">
               <a-col :lg="18" :md="18" :sm="24">
                 <a-form-item :labelCol="{xs: { span: 24 },sm: { span: 3 }}" :wrapperCol="{xs: { span: 24 },sm: { span: 20 }}" label="图片信息">
@@ -292,7 +312,7 @@
   import BatchSetStockModal from './BatchSetStockModal'
   import UnitModal from '../../system/modules/UnitModal'
   import JEditableTable from '@/components/jeecg/JEditableTable'
-  import { FormTypes, getRefPromise, VALIDATE_NO_PASSED, validateFormAndTables } from '@/utils/JEditableTableUtil'
+  import { FormTypes } from '@/utils/JEditableTableUtil'
   import { changeNameToPinYin, checkMaterial, checkMaterialBarCode, getMaterialAttributeNameList, getMaterialAttributeValueListById, getMaxBarCode, queryMaterialCategoryTreeList } from '@/api/api'
   import { autoJumpNextInput, handleIntroJs, removeByVal } from '@/utils/util'
   import { getAction, httpAction } from '@/api/manage'
@@ -372,23 +392,23 @@
                 { handler: this.validateBarCode}]
             },
             {
-              title: '单位', key: 'commodityUnit', width: '8%', type: FormTypes.input, defaultValue: '', placeholder: '请输入${title}',
-              validateRules: [{ required: true, message: '${title}不能为空' }]
+              title: '单位', key: 'commodityUnit', width: '8%', type: FormTypes.hidden, defaultValue: '件', placeholder: '请输入${title}',
+              validateRules: [{ required: false }]
             },
             {
-              title: '多属性', key: 'sku', width: '25%', type: FormTypes.input, defaultValue: '', readonly:true, placeholder: '请输入${title}'
+              title: '多属性', key: 'sku', width: '25%', type: FormTypes.hidden, defaultValue: '', readonly:true, placeholder: '请输入${title}'
             },
             {
-              title: '采购价', key: 'purchaseDecimal', width: '9%', type: FormTypes.inputNumber, defaultValue: '', placeholder: '请输入${title}'
+              title: '采购价', key: 'purchaseDecimal', width: '9%', type: FormTypes.hidden, defaultValue: '0', placeholder: '请输入${title}'
             },
             {
               title: '零售价', key: 'commodityDecimal', width: '9%', type: FormTypes.inputNumber, defaultValue: '', placeholder: '请输入${title}'
             },
             {
-              title: '销售价', key: 'wholesaleDecimal', width: '9%', type: FormTypes.inputNumber, defaultValue: '', placeholder: '请输入${title}'
+              title: '销售价', key: 'wholesaleDecimal', width: '9%', type: FormTypes.hidden, defaultValue: '0', placeholder: '请输入${title}'
             },
             {
-              title: '最低售价', key: 'lowDecimal', width: '9%', type: FormTypes.inputNumber, defaultValue: '', placeholder: '请输入${title}'
+              title: '最低售价', key: 'lowDecimal', width: '9%', type: FormTypes.hidden, defaultValue: '0', placeholder: '请输入${title}'
             }
           ]
         },
@@ -413,6 +433,18 @@
         confirmLoading: false,
         form: this.$form.createForm(this),
         validatorRules:{
+          singleBarCode:{
+            rules: [
+              { required: true, message: '请输入唛头!' },
+              { min: 2, max: 40, message: '长度为2到40位', trigger: 'blur' }
+            ]
+          },
+          singlePrice:{
+            rules: [
+              { required: true, message: '请输入单价!' },
+              { pattern: /^(0|[1-9]\d*)(\.\d{1,2})?$/, message: '请输入合法的单价', trigger: 'blur' }
+            ]
+          },
           name:{
             rules: [
               { required: true, message: '请输入名称!' },
@@ -431,7 +463,7 @@
           },
           unit:{
             rules: [
-              { required: true, message: '请输入单位!' }
+              { required: false }
             ]
           },
           unitId:{
@@ -452,6 +484,8 @@
       this.loadParseMaterialProperty()
       let realScreenWidth = window.screen.width
       this.width = realScreenWidth<1500?'1200px':'1400px'
+      // 设置默认单位为"件"
+      this.unitChecked = false
     },
     mounted() {
       document.getElementById(this.prefixNo).addEventListener('keydown', this.handleOkKey)
@@ -469,22 +503,12 @@
           e.preventDefault()
         }
       },
-      // 获取所有的editableTable实例
-      getAllTable() {
-        return Promise.all([
-          getRefPromise(this, 'editableMeTable'),
-          getRefPromise(this, 'editableDepotTable')
-        ])
-      },
       add () {
         //隐藏多属性
         this.meTable.columns[2].type = FormTypes.hidden
-        // 默认新增一条数据
-        this.getAllTable().then(editableTables => {
-          editableTables[0].add()
-        })
         this.edit({})
         this.$nextTick(() => {
+          this.form.setFieldsValue({ singleBarCode: '', singlePrice: undefined })
           handleIntroJs('material', 11)
         })
       },
@@ -492,6 +516,12 @@
         let that = this
         this.form.resetFields();
         this.model = Object.assign({}, record);
+        this.model.singleBarCode = record.mBarCode || ''
+        this.model.singlePrice = record.commodityDecimal || undefined
+        // 设置默认单位
+        if (!this.model.unit) {
+          this.model.unit = '件'
+        }
         let attribute = record.attribute
         if(attribute) {
           //构造多属性
@@ -518,9 +548,12 @@
           }
         }
         this.$nextTick(() => {
-          this.form.setFieldsValue(pick(this.model, 'name', 'standard', 'unit', 'unitId', 'model', 'color', 'brand', 'mnemonic',
+          this.form.setFieldsValue(Object.assign({}, pick(this.model, 'name', 'standard', 'unit', 'unitId', 'model', 'color', 'brand', 'mnemonic',
             'categoryId','enableSerialNumber','enableBatchNumber','position','expiryNum','weight','remark','mfrs',
-            'otherField1','otherField2','otherField3','manySku','skuOne','skuTwo','skuThree'))
+            'otherField1','otherField2','otherField3','manySku','skuOne','skuTwo','skuThree'), {
+            singleBarCode: this.model.singleBarCode,
+            singlePrice: this.model.singlePrice
+          }))
           autoJumpNextInput('materialHeadModal')
           autoJumpNextInput('materialDetailModal')
         });
@@ -573,6 +606,19 @@
             }
           }
           tab.dataSource = res.data.rows || []
+          if (tab.dataSource && tab.dataSource.length > 0) {
+            const firstRow = tab.dataSource[0]
+            this.model.singleBarCode = firstRow.barCode
+            this.model.singlePrice = firstRow.commodityDecimal
+            this.$nextTick(() => {
+              if (this.form) {
+                this.form.setFieldsValue({
+                  singleBarCode: firstRow.barCode,
+                  singlePrice: firstRow.commodityDecimal
+                })
+              }
+            })
+          }
           this.meOldDataSource = res.data.rows || []
           //复制新增商品-初始化唛头信息
           if(this.action === 'copyAdd') {
@@ -609,10 +655,15 @@
         this.unitStatus = false
         this.manyUnitStatus = true
         this.unitChecked = false
-        this.getAllTable().then(editableTables => {
-          editableTables[0].initialize()
-          editableTables[1].initialize()
-        })
+        if (this.form) {
+          this.form.resetFields()
+        }
+        if (this.meTable && this.meTable.dataSource) {
+          this.meTable.dataSource = []
+        }
+        if (this.depotTable && this.depotTable.dataSource) {
+          this.depotTable.dataSource = []
+        }
       },
       handleOk () {
         this.validateFields()
@@ -622,24 +673,54 @@
       },
       /** 触发表单验证 */
       validateFields() {
-        this.getAllTable().then(tables => {
-          /** 一次性验证主表和所有的次表 */
-          return validateFormAndTables(this.form, tables)
-        }).then(allValues => {
-          let formData = this.classifyIntoFormData(allValues)
-          formData.sortList = [];
-          if(formData.unit === undefined) {formData.unit = ''}
-          if(formData.unitId === undefined) {formData.unitId = ''}
-          if(this.unitChecked) {formData.unit = ''} else {formData.unitId = ''}
-          // 发起请求
-          return this.requestAddOrEdit(formData)
-        }).catch(e => {
-          if (e.error === VALIDATE_NO_PASSED) {
-            // 如果有未通过表单验证的子表，就自动跳转到它所在的tab
-            this.activeKey = e.index == null ? this.activeKey : (e.index + 1).toString()
-          } else {
-            console.error(e)
+        this.form.validateFields((err, values) => {
+          if (err) {
+            return
           }
+          const params = {
+            barCode: values.singleBarCode,
+            id: this.model && this.model.id ? this.model.id : 0
+          }
+          checkMaterialBarCode(params).then(res => {
+            if (res && res.code === 200) {
+              if (res.data && res.data.status) {
+                this.$message.warning('抱歉，该唛头已经存在！')
+                return
+              }
+              const materialMain = Object.assign({}, this.model, values)
+              materialMain.unit = '件'
+              materialMain.unitId = ''
+              materialMain.name = values.name
+              materialMain.remark = values.remark
+              materialMain.mBarCode = values.singleBarCode
+              const existingMe = (this.meTable && this.meTable.dataSource && this.meTable.dataSource.length > 0)
+                ? this.meTable.dataSource[0] : {}
+              const meItem = {
+                barCode: values.singleBarCode,
+                commodityUnit: existingMe.commodityUnit || materialMain.unit,
+                sku: existingMe.sku || '',
+                purchaseDecimal: existingMe.purchaseDecimal || 0,
+                commodityDecimal: values.singlePrice,
+                wholesaleDecimal: existingMe.wholesaleDecimal || 0,
+                lowDecimal: existingMe.lowDecimal || 0
+              }
+              if (existingMe && existingMe.id) {
+                meItem.id = existingMe.id
+              }
+              materialMain.meList = [meItem]
+              materialMain.stock = []
+              materialMain.sortList = []
+              materialMain.meDeleteIdList = this.meDeleteIdList || []
+              delete materialMain.singleBarCode
+              delete materialMain.singlePrice
+              this.model = Object.assign({}, materialMain)
+              this.requestAddOrEdit(materialMain)
+            } else {
+              this.$message.warning((res && res.data) || '唛头校验失败')
+            }
+          }).catch(() => {
+            this.$message.warning('唛头校验失败')
+          })
         })
       },
       /** 整理成formData */
@@ -1073,21 +1154,24 @@
       },
       onAdded(event) {
         const { row, target } = event
-        let unit = ''
+        let unit = '件'  // 默认单位设为"件"
         if(this.unitStatus == false) {
-          unit = this.form.getFieldValue('unit')
+          let formUnit = this.form.getFieldValue('unit')
+          if(formUnit) {
+            unit = formUnit
+          }
         }
         if(this.maxBarCodeInfo === '') {
           getMaxBarCode({}).then((res)=> {
             if (res && res.code === 200) {
               this.maxBarCodeInfo = res.data.barCode - 0
               this.maxBarCodeInfo = this.maxBarCodeInfo + 1
-              target.setValues([{rowKey: row.id, values: {barCode: this.maxBarCodeInfo, commodityUnit: unit?unit:''}}])
+              target.setValues([{rowKey: row.id, values: {barCode: this.maxBarCodeInfo, commodityUnit: unit}}])
             }
           })
         } else {
           this.maxBarCodeInfo = this.maxBarCodeInfo + 1
-          target.setValues([{rowKey: row.id, values: {barCode: this.maxBarCodeInfo, commodityUnit: unit?unit:''}}])
+          target.setValues([{rowKey: row.id, values: {barCode: this.maxBarCodeInfo, commodityUnit: unit}}])
         }
       },
       onDeleted(value) {

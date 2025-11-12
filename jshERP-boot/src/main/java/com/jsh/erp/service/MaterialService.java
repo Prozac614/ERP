@@ -27,6 +27,8 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.File;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.text.SimpleDateFormat;
 import java.util.*;
 
 @Service
@@ -237,7 +239,7 @@ public class MaterialService {
                                     lowSafeStock, highSafeStock);
                         }
                         // 更新当前库存
-                        depotItemService.updateCurrentStockFun(material.getId(), depotId);
+                        depotItemService.updateCurrentStockFun(material.getId(), depotId, new Date(), null);
                     }
                 }
             }
@@ -1333,7 +1335,7 @@ public class MaterialService {
 
     /**
      * 根据商品和仓库获取安全库存信息
-     * 
+     *
      * @param materialId
      * @param depotId
      * @return
@@ -1348,6 +1350,143 @@ public class MaterialService {
             materialInitialStock = list.get(0);
         }
         return materialInitialStock;
+    }
+
+    /**
+     * 计算商品过去6个月的平均日销量
+     *
+     * @param materialId 商品ID
+     * @return 平均日销量
+     */
+    public BigDecimal calculateAverageDailySales(Long materialId) {
+        try {
+            // 计算6个月前的日期
+            Calendar calendar = Calendar.getInstance();
+            calendar.add(Calendar.MONTH, -6);
+            String beginTime = new SimpleDateFormat("yyyy-MM-dd").format(calendar.getTime()) + " 00:00:00";
+            String endTime = new SimpleDateFormat("yyyy-MM-dd").format(new Date()) + " 23:59:59";
+
+            logger.info("开始计算商品{}的平均日销量，时间范围：{} - {}", materialId, beginTime, endTime);
+
+            // 获取该商品的每日出库数据
+            List<Map<String, Object>> dailyOutList = null;
+            try {
+                dailyOutList = depotItemService.getDailyOutStock(materialId.toString(), beginTime, endTime);
+                logger.info("商品{}获取到{}条每日出库记录", materialId, dailyOutList != null ? dailyOutList.size() : 0);
+            } catch (Exception e) {
+                logger.warn("获取商品{}的每日出库数据失败，原因：{}", materialId, e.getMessage());
+                // 如果汇总表查询失败，尝试直接查询原始数据
+                try {
+                    dailyOutList = getDirectDailyOutStock(materialId, beginTime, endTime);
+                    logger.info("商品{}直接查询获取到{}条每日出库记录", materialId, dailyOutList != null ? dailyOutList.size() : 0);
+                } catch (Exception e2) {
+                    logger.error("商品{}直接查询每日出库数据也失败，返回空列表", materialId, e2);
+                    dailyOutList = new ArrayList<>();
+                }
+            }
+
+            if (dailyOutList == null || dailyOutList.isEmpty()) {
+                logger.info("商品{}没有出库记录，平均日销量设为0", materialId);
+                return BigDecimal.ZERO;
+            }
+
+            // 计算总出库量
+            BigDecimal totalOutQuantity = BigDecimal.ZERO;
+            for (Map<String, Object> dailyOut : dailyOutList) {
+                Object outQuantity = dailyOut.get("outQuantity");
+                if (outQuantity != null) {
+                    BigDecimal dayQuantity = new BigDecimal(outQuantity.toString());
+                    totalOutQuantity = totalOutQuantity.add(dayQuantity);
+                    logger.debug("商品{}日期{}出库量：{}", materialId, dailyOut.get("outDate"), dayQuantity);
+                }
+            }
+
+            logger.info("商品{}总出库量：{}", materialId, totalOutQuantity);
+
+            // 计算天数（6个月按180天计算）
+            int days = 180;
+
+            // 计算平均日销量
+            if (days > 0) {
+                BigDecimal averageDailySales = totalOutQuantity.divide(new BigDecimal(days), 6, RoundingMode.HALF_UP);
+                logger.info("商品{}平均日销量：{}", materialId, averageDailySales);
+                return averageDailySales;
+            }
+
+            return BigDecimal.ZERO;
+        } catch (Exception e) {
+            logger.error("计算商品{}平均日销量失败", materialId, e);
+            return BigDecimal.ZERO;
+        }
+    }
+
+    /**
+     * 根据平均日销量计算最低安全库存阈值
+     *
+     * @param averageDailySales 平均日销量
+     * @return 最低安全库存阈值（6个月的销量）
+     */
+    public BigDecimal calculateLowSafeStock(BigDecimal averageDailySales) {
+        if (averageDailySales == null || averageDailySales.compareTo(BigDecimal.ZERO) <= 0) {
+            logger.info("平均日销量为0或null，最低安全库存设为0");
+            return BigDecimal.ZERO;
+        }
+
+        // 6个月按180天计算
+        BigDecimal lowSafeStock = averageDailySales.multiply(new BigDecimal(180)).setScale(0, RoundingMode.HALF_UP);
+        logger.info("根据平均日销量{}计算出最低安全库存：{}", averageDailySales, lowSafeStock);
+        return lowSafeStock;
+    }
+
+    /**
+     * 直接从原始表查询每日出库数据（当汇总表查询失败时使用）
+     *
+     * @param materialId 商品ID
+     * @param beginTime  开始时间
+     * @param endTime    结束时间
+     * @return 每日出库数据列表
+     */
+    private List<Map<String, Object>> getDirectDailyOutStock(Long materialId, String beginTime, String endTime) {
+        try {
+            // 直接查询原始数据
+            return materialMapperEx.getDirectDailyOutStock(materialId, beginTime, endTime);
+        } catch (Exception e) {
+            logger.error("直接查询商品{}的每日出库数据失败，使用简化计算", materialId, e);
+            // 如果直接查询也失败，使用简化的计算方法
+            return getSimplifiedDailyOutStock(materialId, beginTime, endTime);
+        }
+    }
+
+    /**
+     * 简化的每日出库数据计算（最后的备用方案）
+     *
+     * @param materialId 商品ID
+     * @param beginTime  开始时间
+     * @param endTime    结束时间
+     * @return 简化的每日出库数据列表
+     */
+    private List<Map<String, Object>> getSimplifiedDailyOutStock(Long materialId, String beginTime, String endTime) {
+        try {
+            // 使用简化的查询，只获取总出库量，不按日期分组
+            BigDecimal totalOut = materialMapperEx.getTotalOutQuantity(materialId, beginTime, endTime);
+
+            List<Map<String, Object>> result = new ArrayList<>();
+            if (totalOut != null && totalOut.compareTo(BigDecimal.ZERO) > 0) {
+                Map<String, Object> record = new HashMap<>();
+                record.put("barCode", "");
+                record.put("materialName", "");
+                record.put("outDate", beginTime.substring(0, 10)); // 使用开始日期
+                record.put("outQuantity", totalOut);
+                result.add(record);
+
+                logger.info("商品{}使用简化计算，总出库量：{}", materialId, totalOut);
+            }
+
+            return result;
+        } catch (Exception e) {
+            logger.error("商品{}简化计算也失败", materialId, e);
+            return new ArrayList<>();
+        }
     }
 
     public List<MaterialVo4Unit> getMaterialByMeId(Long meId) {
@@ -1482,7 +1621,7 @@ public class MaterialService {
         List<Depot> depotList = depotService.getAllList();
         for (Long mId : idList) {
             for (Depot depot : depotList) {
-                depotItemService.updateCurrentStockFun(mId, depot.getId());
+                depotItemService.updateCurrentStockFun(mId, depot.getId(), new Date(), null);
                 res = 1;
             }
         }
@@ -1496,7 +1635,7 @@ public class MaterialService {
         for (Long mId : idList) {
             DepotItem depotItem = new DepotItem();
             depotItem.setMaterialId(mId);
-            depotItemService.updateCurrentUnitPrice(depotItem);
+            // depotItemService.updateCurrentUnitPrice(depotItem);
             res = 1;
         }
         return res;
@@ -1536,6 +1675,136 @@ public class MaterialService {
             return attributeObj.toJSONString();
         } else {
             return null;
+        }
+    }
+
+    /**
+     * 更新商品的库存告急状态
+     * 
+     * @param materialId     商品ID
+     * @param alertStatus    告急状态
+     * @param sixMonthsSales 六个月销量
+     */
+    public void updateStockAlertStatus(Long materialId, String alertStatus, BigDecimal sixMonthsSales) {
+        try {
+            Material material = new Material();
+            material.setId(materialId);
+            material.setStockAlertStatus(alertStatus);
+            material.setLastSixMonthsSales(sixMonthsSales);
+            material.setStockAlertUpdatedAt(new Date());
+
+            materialMapper.updateByPrimaryKeySelective(material);
+            logger.info("更新商品{}库存告急状态为：{}", materialId, alertStatus);
+        } catch (Exception e) {
+            logger.error("更新商品{}库存告急状态失败", materialId, e);
+            throw new RuntimeException("更新库存告急状态失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 忽略商品的库存风险
+     * 
+     * @param materialId 商品ID
+     */
+    public void ignoreStockRisk(Long materialId) {
+        try {
+            // 使用直接SQL更新，确保数据库更新成功
+            int result = materialMapperEx.updateStockAlertToIgnored(materialId);
+            logger.info("忽略商品{}库存风险，更新结果：{}", materialId, result);
+
+            if (result == 0) {
+                throw new RuntimeException("更新失败，可能商品不存在或已被删除");
+            }
+        } catch (Exception e) {
+            logger.error("忽略商品{}库存风险失败", materialId, e);
+            throw new RuntimeException("忽略库存风险失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 重新关注商品的库存风险
+     * 
+     * @param materialId 商品ID
+     */
+    public void focusStockRisk(Long materialId) {
+        try {
+            // 重新计算库存告急状态
+            BigDecimal currentStock = getCurrentStockByMaterialId(materialId);
+
+            // 获取六个月销量数据，需要通过DepotItemMapperEx获取
+            BigDecimal sixMonthsSales = BigDecimal.ZERO;
+            try {
+                // 获取当前用户的租户ID
+                User currentUser = userService.getCurrentUser();
+                Long tenantId = currentUser != null ? currentUser.getTenantId() : null;
+
+                // 通过DepotItemMapperEx获取六个月销量
+                sixMonthsSales = depotItemMapperEx.getSixMonthsSalesByMaterialId(materialId, tenantId);
+                if (sixMonthsSales == null) {
+                    sixMonthsSales = BigDecimal.ZERO;
+                }
+            } catch (Exception e) {
+                logger.warn("获取商品{}六个月销量失败，使用默认值0", materialId, e);
+                sixMonthsSales = BigDecimal.ZERO;
+            }
+
+            String alertStatus;
+            if (currentStock.compareTo(sixMonthsSales) >= 0) {
+                alertStatus = "NO_RISK";
+            } else {
+                alertStatus = "STOCK_ALERT";
+            }
+
+            // 使用直接SQL更新，确保能清空ignored_at字段
+            materialMapperEx.updateStockAlertStatusAndClearIgnored(materialId, alertStatus, sixMonthsSales);
+            logger.info("重新关注商品{}库存风险，新状态：{}，当前库存：{}，六个月销量：{}",
+                    materialId, alertStatus, currentStock, sixMonthsSales);
+
+        } catch (Exception e) {
+            logger.error("重新关注商品{}库存风险失败", materialId, e);
+            throw new RuntimeException("重新关注库存风险失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 获取商品的当前总库存
+     * 
+     * @param materialId 商品ID
+     * @return 当前总库存
+     */
+    public BigDecimal getCurrentStockByMaterialId(Long materialId) {
+        try {
+            MaterialCurrentStockExample example = new MaterialCurrentStockExample();
+            example.createCriteria().andMaterialIdEqualTo(materialId)
+                    .andDeleteFlagNotEqualTo(BusinessConstants.DELETE_FLAG_DELETED);
+
+            List<MaterialCurrentStock> stockList = materialCurrentStockMapper.selectByExample(example);
+            BigDecimal totalStock = BigDecimal.ZERO;
+
+            for (MaterialCurrentStock stock : stockList) {
+                if (stock.getCurrentNumber() != null) {
+                    totalStock = totalStock.add(stock.getCurrentNumber());
+                }
+            }
+
+            return totalStock;
+        } catch (Exception e) {
+            logger.error("获取商品{}当前库存失败", materialId, e);
+            return BigDecimal.ZERO;
+        }
+    }
+
+    /**
+     * 直接使用实体对象更新商品信息
+     * 
+     * @param material 商品实体对象
+     */
+    public void updateMaterialByEntity(Material material) {
+        try {
+            materialMapper.updateByPrimaryKeySelective(material);
+            logger.debug("更新商品{}信息成功", material.getId());
+        } catch (Exception e) {
+            logger.error("更新商品{}信息失败", material.getId(), e);
         }
     }
 }

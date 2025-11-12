@@ -157,6 +157,9 @@
             <bind name="bindRemark" value="'%'+remark+'%'"/>
             and (dh.remark like #{bindRemark} or di.remark like #{bindRemark})
         </if>
+        <if test="shopName != null and shopName != ''">
+            and dh.shop_name = #{shopName}
+        </if>
         and ifnull(dh.delete_flag,'0') !='1'
         group by dh.id
         order by dh.id desc) tb
@@ -168,10 +171,10 @@
     </select>
 
     <select id="findMaterialsListMapByHeaderIdList" resultType="com.jsh.erp.datasource.vo.MaterialsListVo">
-        select jsh_depot_item.header_id, group_concat(concat(jsh_material.name,' ',ifnull(jsh_material.standard,''),' ',
-            ifnull(jsh_material.model,''),' ',ifnull(jsh_material.color,''))) as materialsList
+        select jsh_depot_item.header_id, group_concat(me.bar_code) as materialsList
         from jsh_depot_item
         left join jsh_material on jsh_depot_item.material_id = jsh_material.Id and ifnull(jsh_material.delete_Flag,'0') !='1'
+        left join jsh_material_extend me on jsh_depot_item.material_extend_id = me.id and ifnull(me.delete_flag,'0') !='1'
         where 1=1
         <if test="idList.size()>0">
             and jsh_depot_item.header_id in
@@ -262,6 +265,9 @@
         <if test="remark != null and remark !=''">
             <bind name="bindRemark" value="'%'+remark+'%'"/>
             and (dh.remark like #{bindRemark} or di.remark like #{bindRemark})
+        </if>
+        <if test="shopName != null and shopName != ''">
+            and dh.shop_name = #{shopName}
         </if>
         and dh.sub_type!='调拨'
         and ifnull(dh.delete_flag,'0') !='1'
@@ -1142,6 +1148,17 @@
                 #{creator}
             </foreach>
             )
+        </if>
+        <!-- 仅对销售子类型应用店铺过滤：若提供shopNames则限制在列表内，否则要求非空 -->
+        <if test="shopNames != null and shopNames.size() > 0">
+            and (dh.sub_type != '销售' or dh.shop_name in
+            <foreach collection="shopNames" item="shopName" open="(" close=")" separator=",">
+                #{shopName}
+            </foreach>
+            )
+        </if>
+        <if test="shopNames == null or shopNames.size() == 0">
+            and (dh.sub_type != '销售' or dh.shop_name is not null)
         </if>
         and ifnull(dh.delete_flag,'0') !='1'
     </select>

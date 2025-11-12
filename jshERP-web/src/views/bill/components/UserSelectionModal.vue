@@ -10,7 +10,7 @@
     cancelText="取消"
   >
     <div>
-      <p>今日有以下用户保存了销售出库单据，请选择要进行校验的用户：</p>
+      <p>{{ introText }}</p>
       <a-table
         :columns="columns"
         :data-source="userList"
@@ -43,6 +43,11 @@ export default {
       selectedUserIds: [],
       currentUserIds: [],
       validationDate: null,
+      type: null,
+      subType: null,
+      shopNames: [],
+      billLabel: '',
+      introText: '今日有以下用户保存了销售出库单据，请选择要进行校验的用户：',
       columns: [
         {
           title: '用户名',
@@ -70,12 +75,38 @@ export default {
     }
   },
   methods: {
-    show(data, validationDate) {
+    show(data, validationDate, type = null, subType = null, shopNames = []) {
       this.visible = true
       this.userList = data.otherUsers || []
       this.currentUserIds = data.currentUserIds || []
       this.selectedUserIds = []
       this.validationDate = validationDate
+      this.type = type
+      this.subType = subType
+      this.shopNames = Array.isArray(shopNames) ? shopNames : []
+      this.billLabel = this.getBillLabel(type, subType)
+      this.introText = `今日有以下用户保存了${this.billLabel}单据，请选择要进行校验的用户：`
+    },
+    getBillLabel(type, subType) {
+      if (!type && !subType) {
+        return '销售出库'
+      }
+      const typeValue = type || ''
+      const subTypeValue = subType || ''
+      const key = `${typeValue}-${subTypeValue}`
+      const mapping = {
+        '入库-采购': '采购入库',
+        '入库-其它': '其它入库',
+        '出库-销售': '销售出库',
+        '出库-其它': '其它出库'
+      }
+      if (mapping[key]) {
+        return mapping[key]
+      }
+      if (typeValue && subTypeValue) {
+        return `${typeValue}${subTypeValue}`
+      }
+      return typeValue || subTypeValue || '销售出库'
     },
     
     handleOk() {
@@ -85,14 +116,21 @@ export default {
       }
       
       this.confirmLoading = true
+      
+      // 向后兼容：如果type和subType为null，默认使用销售出库的参数
+      const requestType = this.type || "出库"
+      const requestSubType = this.subType || "销售"
+      
       const request = {
         currentUserIds: this.currentUserIds,
         selectedUserIds: this.selectedUserIds,
-        validationDate: this.validationDate
+        validationDate: this.validationDate,
+        type: requestType,
+        subType: requestSubType,
+        shopNames: Array.isArray(this.shopNames) ? this.shopNames : []
       }
       
       postAction('/depotHead/performCrossValidation', request).then((res) => {
-        console.log('performCrossValidation响应:', res);
         if (res.code === 200) {
           this.handleValidationResult(res.data)
         } else {
@@ -112,6 +150,9 @@ export default {
       this.userList = []
       this.currentUserIds = []
       this.validationDate = null
+      this.shopNames = []
+      this.billLabel = ''
+      this.introText = '今日有以下用户保存了销售出库单据，请选择要进行校验的用户：'
     },
     
     onSelectChange(selectedRowKeys) {
@@ -119,9 +160,11 @@ export default {
     },
     
     handleValidationResult(result) {
-      console.log('处理校验结果:', result);
-      if (result.isConsistent) {
-        this.$message.success(`校验通过！共有 ${result.totalBills} 张单据已自动进入审核状态。`)
+      // 兼容处理字段名（可能是 consistent 或 isConsistent）
+      const isConsistent = result.isConsistent !== undefined ? result.isConsistent : result.consistent;
+      
+      if (isConsistent) {
+        this.$message.success(`校验通过！共有 ${result.totalBills} 种商品数据一致，相关单据状态已自动更新。`)
         this.visible = false
         this.$emit('validation-success', result)
       } else {
@@ -131,9 +174,6 @@ export default {
     },
     
     showValidationDifferences(differences) {
-      // TODO: 显示校验差异界面，后续在阶段二完善
-       console.log('显示校验差异:', differences);
-      
       // 发送校验失败事件，让父组件处理差异显示
       this.$emit('validation-failed', differences)
       this.visible = false

@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>库存预警功能测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        .button {
+            background-color: #1890ff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+
+        .button:hover {
+            background-color: #40a9ff;
+        }
+
+        .button:disabled {
+            background-color: #d9d9d9;
+            cursor: not-allowed;
+        }
+
+        .result {
+            background-color: #f6f6f6;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 10px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .success {
+            background-color: #f6ffed;
+            border: 1px solid #b7eb8f;
+            color: #389e0d;
+        }
+
+        .error {
+            background-color: #fff2f0;
+            border: 1px solid #ffccc7;
+            color: #cf1322;
+        }
+
+        .warning {
+            background-color: #fffbe6;
+            border: 1px solid #ffe58f;
+            color: #d48806;
+        }
+
+        .progress {
+            background-color: #e6f7ff;
+            border: 1px solid #91d5ff;
+            color: #0050b3;
+        }
+
+        .input-group {
+            margin: 10px 0;
+        }
+
+        .input-group label {
+            display: inline-block;
+            width: 120px;
+            font-weight: bold;
+        }
+
+        .input-group input {
+            padding: 8px;
+            border: 1px solid #d9d9d9;
+            border-radius: 4px;
+            width: 200px;
+        }
+
+        h2 {
+            color: #1890ff;
+            border-bottom: 2px solid #1890ff;
+            padding-bottom: 10px;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-running {
+            background-color: #1890ff;
+        }
+
+        .status-completed {
+            background-color: #52c41a;
+        }
+
+        .status-failed {
+            background-color: #ff4d4f;
+        }
+
+        .status-unknown {
+            background-color: #d9d9d9;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🔍 库存预警功能测试</h1>
+
+    <!-- 基础功能测试 -->
+    <div class="container">
+        <h2>1. 基础功能测试</h2>
+        <p><strong>🔄 新功能：</strong>库存预警计算现在会同时更新当前库存表</p>
+        <button class="button" onclick="testConnection()">测试后端连接</button>
+        <button class="button warning" onclick="startCalculation()">启动库存预警计算（含库存更新）</button>
+        <button class="button" onclick="cleanupTasks()">清理已完成任务</button>
+        <div id="basicResult" class="result"></div>
+    </div>
+
+    <!-- 任务状态查询 -->
+    <div class="container">
+        <h2>2. 任务状态查询</h2>
+        <div class="input-group">
+            <label>任务ID:</label>
+            <input type="text" id="taskIdInput" placeholder="输入任务ID或启动计算后自动填入">
+            <button class="button" onclick="queryTaskStatus()">查询状态</button>
+            <button class="button" onclick="startPolling()" id="pollingBtn">开始轮询</button>
+        </div>
+        <div id="statusResult" class="result"></div>
+    </div>
+
+    <!-- 单个商品测试 -->
+    <div class="container">
+        <h2>3. 单个商品测试</h2>
+        <div class="input-group">
+            <label>商品ID:</label>
+            <input type="number" id="materialIdInput" placeholder="输入商品ID" value="1">
+            <button class="button" onclick="testSingleMaterial()">测试计算</button>
+            <button class="button" onclick="forceUpdateSingleMaterial()">强制更新</button>
+        </div>
+        <div id="singleResult" class="result"></div>
+    </div>
+
+    <!-- 库存预警报表 -->
+    <div class="container">
+        <h2>4. 库存预警报表</h2>
+        <button class="button" onclick="viewWarningReport()">查看预警报表</button>
+        <div id="reportResult" class="result"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:9999/jshERP-boot';
+        let currentTaskId = null;
+        let pollingInterval = null;
+
+        // 测试后端连接
+        async function testConnection() {
+            const resultDiv = document.getElementById('basicResult');
+            resultDiv.className = 'result progress';
+            resultDiv.textContent = '正在测试连接...';
+
+            try {
+                const response = await fetch(`${API_BASE}/stockWarning/cleanupTasks`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    resultDiv.className = 'result success';
+                    resultDiv.textContent = '✅ 后端连接正常\n' + JSON.stringify(data, null, 2);
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.textContent = `❌ 连接失败: HTTP ${response.status}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = '❌ 连接失败: ' + error.message;
+            }
+        }
+
+        // 启动库存预警计算
+        async function startCalculation() {
+            const resultDiv = document.getElementById('basicResult');
+            resultDiv.className = 'result progress';
+            resultDiv.textContent = '正在启动库存预警计算...\n🔄 同时更新当前库存表数据\n';
+
+            try {
+                const response = await fetch(`${API_BASE}/stockWarning/startCalculation`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({})
+                });
+
+                const data = await response.json();
+
+                if (data.code === 200) {
+                    currentTaskId = data.data.taskId;
+                    document.getElementById('taskIdInput').value = currentTaskId;
+
+                    resultDiv.className = 'result success';
+                    resultDiv.textContent = '✅ 计算任务启动成功!\n' +
+                        `任务ID: ${currentTaskId}\n` +
+                        `消息: ${data.data.message}\n` +
+                        '任务ID已自动填入查询框，可以查询状态。';
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.textContent = '❌ 启动失败: ' + (data.data || '未知错误');
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = '❌ 请求失败: ' + error.message;
+            }
+        }
+
+        // 查询任务状态
+        async function queryTaskStatus() {
+            const taskId = document.getElementById('taskIdInput').value.trim();
+            const resultDiv = document.getElementById('statusResult');
+
+            if (!taskId) {
+                resultDiv.className = 'result warning';
+                resultDiv.textContent = '⚠️ 请输入任务ID';
+                return;
+            }
+
+            resultDiv.className = 'result progress';
+            resultDiv.textContent = '正在查询任务状态...';
+
+            try {
+                const response = await fetch(`${API_BASE}/stockWarning/getTaskStatus?taskId=${taskId}`);
+                const data = await response.json();
+
+                if (data.code === 200) {
+                    const status = data.data;
+                    const statusIcon = getStatusIcon(status.status);
+
+                    resultDiv.className = `result ${getStatusClass(status.status)}`;
+                    resultDiv.textContent = `${statusIcon} 任务状态查询成功\n\n` +
+                        `状态: ${status.status}\n` +
+                        `总商品数: ${status.totalCount || 0}\n` +
+                        `已处理: ${status.processedCount || 0}\n` +
+                        `成功: ${status.successCount || 0}\n` +
+                        `失败: ${status.failedCount || 0}\n` +
+                        `开始时间: ${status.startTime || '未知'}\n` +
+                        `结束时间: ${status.endTime || '进行中'}\n` +
+                        (status.errorMessage ? `错误信息: ${status.errorMessage}\n` : '');
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.textContent = '❌ 查询失败: ' + (data.data || '未知错误');
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = '❌ 请求失败: ' + error.message;
+            }
+        }
+
+        // 开始/停止轮询
+        function startPolling() {
+            const btn = document.getElementById('pollingBtn');
+
+            if (pollingInterval) {
+                // 停止轮询
+                clearInterval(pollingInterval);
+                pollingInterval = null;
+                btn.textContent = '开始轮询';
+                btn.style.backgroundColor = '#1890ff';
+            } else {
+                // 开始轮询
+                pollingInterval = setInterval(queryTaskStatus, 2000);
+                btn.textContent = '停止轮询';
+                btn.style.backgroundColor = '#ff4d4f';
+            }
+        }
+
+        // 清理任务
+        async function cleanupTasks() {
+            const resultDiv = document.getElementById('basicResult');
+            resultDiv.className = 'result progress';
+            resultDiv.textContent = '正在清理已完成任务...';
+
+            try {
+                const response = await fetch(`${API_BASE}/stockWarning/cleanupTasks`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.code === 200) {
+                    resultDiv.className = 'result success';
+                    resultDiv.textContent = '✅ 任务清理完成: ' + data.data;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.textContent = '❌ 清理失败: ' + (data.data || '未知错误');
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = '❌ 请求失败: ' + error.message;
+            }
+        }
+
+        // 测试单个商品
+        async function testSingleMaterial() {
+            const materialId = document.getElementById('materialIdInput').value.trim();
+            const resultDiv = document.getElementById('singleResult');
+
+            if (!materialId) {
+                resultDiv.className = 'result warning';
+                resultDiv.textContent = '⚠️ 请输入商品ID';
+                return;
+            }
+
+            resultDiv.className = 'result progress';
+            resultDiv.textContent = '正在测试商品计算...';
+
+            try {
+                const response = await fetch(`${API_BASE}/stockWarning/testCalculation?materialId=${materialId}`);
+                const data = await response.json();
+
+                if (data.code === 200) {
+                    const result = data.data;
+                    resultDiv.className = 'result success';
+                    resultDiv.textContent = '✅ 商品计算测试成功\n\n' +
+                        `商品ID: ${result.materialId}\n` +
+                        `商品名称: ${result.materialName}\n` +
+                        `商品编码: ${result.barCode}\n` +
+                        `平均日销量: ${result.averageDailySales}\n` +
+                        `建议安全库存: ${result.calculatedLowSafeStock}\n` +
+                        `仓库数量: ${result.depotCount}\n` +
+                        `计算时间: ${result.calculationTime}\n\n` +
+                        '当前安全库存设置:\n' +
+                        JSON.stringify(result.currentSafeStockSettings, null, 2);
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.textContent = '❌ 测试失败: ' + (data.data || '未知错误');
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = '❌ 请求失败: ' + error.message;
+            }
+        }
+
+        // 强制更新单个商品
+        async function forceUpdateSingleMaterial() {
+            const materialId = document.getElementById('materialIdInput').value.trim();
+            const resultDiv = document.getElementById('singleResult');
+
+            if (!materialId) {
+                resultDiv.className = 'result warning';
+                resultDiv.textContent = '⚠️ 请输入商品ID';
+                return;
+            }
+
+            resultDiv.className = 'result progress';
+            resultDiv.textContent = '正在强制更新商品安全库存...';
+
+            try {
+                const response = await fetch(`${API_BASE}/stockWarning/forceCalculateAndUpdate?materialId=${materialId}`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+
+                if (data.code === 200) {
+                    const result = data.data;
+                    resultDiv.className = 'result success';
+                    resultDiv.textContent = '✅ 商品安全库存强制更新成功\n\n' +
+                        `商品ID: ${result.materialId}\n` +
+                        `商品名称: ${result.materialName}\n` +
+                        `状态: ${result.status}\n` +
+                        `仓库数量: ${result.depotCount}\n` +
+                        `开始时间: ${result.startTime}\n` +
+                        `结束时间: ${result.endTime}\n\n` +
+                        '更新后的设置:\n' +
+                        JSON.stringify(result.updatedSettings, null, 2);
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.textContent = '❌ 更新失败: ' + (data.data || '未知错误');
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = '❌ 请求失败: ' + error.message;
+            }
+        }
+
+        // 查看库存预警报表
+        async function viewWarningReport() {
+            const resultDiv = document.getElementById('reportResult');
+            resultDiv.className = 'result progress';
+            resultDiv.textContent = '正在获取库存预警报表...';
+
+            try {
+                const response = await fetch(`${API_BASE}/depotItem/findStockWarningCount?currentPage=1&pageSize=10&materialParam=`);
+                const data = await response.json();
+
+                if (data.code === 200) {
+                    const reportData = data.data;
+                    if (reportData.rows && reportData.rows.length > 0) {
+                        resultDiv.className = 'result warning';
+                        resultDiv.textContent = `⚠️ 发现 ${reportData.total} 个商品需要预警\n\n` +
+                            '预警商品列表 (前10个):\n' +
+                            reportData.rows.map((item, index) =>
+                                `${index + 1}. ${item.materialName || '未知商品'}\n` +
+                                `   编码: ${item.barCode || '无'}\n` +
+                                `   仓库: ${item.depotName || '无'}\n` +
+                                `   当前库存: ${item.currentNumber || 0}\n` +
+                                `   最低安全库存: ${item.lowSafeStock || '未设置'}\n` +
+                                `   最高安全库存: ${item.highSafeStock || '未设置'}\n` +
+                                `   建议入库量: ${item.lowCritical || 0}\n` +
+                                `   建议出库量: ${item.highCritical || 0}\n`
+                            ).join('\n');
+                    } else {
+                        resultDiv.className = 'result success';
+                        resultDiv.textContent = '✅ 暂无库存预警\n\n所有商品库存正常，无需预警。';
+                    }
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.textContent = '❌ 获取报表失败: ' + (data.data || '未知错误');
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = '❌ 请求失败: ' + error.message;
+            }
+        }
+
+        // 辅助函数
+        function getStatusIcon(status) {
+            switch (status) {
+                case 'RUNNING': return '🔄';
+                case 'COMPLETED': return '✅';
+                case 'FAILED': return '❌';
+                default: return '❓';
+            }
+        }
+
+        function getStatusClass(status) {
+            switch (status) {
+                case 'RUNNING': return 'progress';
+                case 'COMPLETED': return 'success';
+                case 'FAILED': return 'error';
+                default: return 'warning';
+            }
+        }
+
+        // 页面加载完成后自动测试连接
+        window.onload = function () {
+            console.log('库存预警功能测试页面已加载');
+            testConnection();
+        };
+
+        // 页面卸载时清理轮询
+        window.onbeforeunload = function () {
+            if (pollingInterval) {
+                clearInterval(pollingInterval);
+            }
+        };
+    </script>
+</body>
+
+</html>

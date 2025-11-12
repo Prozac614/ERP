@@ -186,7 +186,8 @@ public class MaterialController extends BaseController {
             @RequestParam("unitId") Long unitId,
             HttpServletRequest request) throws Exception {
         Map<String, Object> objectMap = new HashMap<String, Object>();
-        int exist = materialService.checkIsExist(id, name, StringUtil.toNull(model), StringUtil.toNull(color),
+        int exist = materialService.checkIsExist(id, StringUtil.toNull(name), StringUtil.toNull(model),
+                StringUtil.toNull(color),
                 StringUtil.toNull(standard), StringUtil.toNull(mfrs), StringUtil.toNull(otherField1),
                 StringUtil.toNull(otherField2), StringUtil.toNull(otherField3), StringUtil.toNull(unit), unitId);
         if (exist > 0) {
@@ -631,21 +632,29 @@ public class MaterialController extends BaseController {
             if (list != null && list.size() > 0) {
                 for (MaterialVo4Unit mvo : list) {
                     mvo.setMaterialOther(materialService.getMaterialOtherByParam(mpArr, mvo));
-                    if ("LSCK".equals(prefixNo) || "LSTH".equals(prefixNo)) {
+                    if ("LSCK".equals(prefixNo) || "LSTH".equals(prefixNo) || "CGRK".equals(prefixNo)
+                            || "XSCK".equals(prefixNo)) {
                         // 零售价
                         mvo.setBillPrice(mvo.getCommodityDecimal());
-                    } else if ("CGDD".equals(prefixNo) || "CGRK".equals(prefixNo) || "CGTH".equals(prefixNo)) {
+                    } else if ("CGDD".equals(prefixNo) || "CGTH".equals(prefixNo)) {
                         // 采购价
                         mvo.setBillPrice(mvo.getPurchaseDecimal());
-                    } else if ("QTRK".equals(prefixNo) || "DBCK".equals(prefixNo) || "ZZD".equals(prefixNo)
+                    } else if ("QTRK".equals(prefixNo)) {
+                        // 其它入库：零售价-按采购维度屏蔽
+                        mvo.setBillPrice(roleService.parseBillPriceByLimit(mvo.getCommodityDecimal(), "buy", priceLimit,
+                                request));
+                    } else if ("DBCK".equals(prefixNo) || "ZZD".equals(prefixNo)
                             || "CXD".equals(prefixNo)
                             || "PDLR".equals(prefixNo) || "PDFP".equals(prefixNo)) {
-                        // 采购价-给录入界面按权限屏蔽
+                        // 其他类型保持现状：采购价-按采购维度屏蔽
                         mvo.setBillPrice(roleService.parseBillPriceByLimit(mvo.getPurchaseDecimal(), "buy", priceLimit,
                                 request));
                     }
-                    if ("XSDD".equals(prefixNo) || "XSCK".equals(prefixNo) || "XSTH".equals(prefixNo)
-                            || "QTCK".equals(prefixNo)) {
+                    if ("QTCK".equals(prefixNo)) {
+                        // 其它出库：零售价-按销售维度屏蔽（不使用最近一次销售价）
+                        mvo.setBillPrice(roleService.parseBillPriceByLimit(mvo.getCommodityDecimal(), "sale",
+                                priceLimit, request));
+                    } else if ("XSDD".equals(prefixNo) || "XSTH".equals(prefixNo)) {
                         // 销售价
                         if (organId == null) {
                             mvo.setBillPrice(mvo.getWholesaleDecimal());
@@ -659,11 +668,6 @@ public class MaterialController extends BaseController {
                                         mvo.getMeId(), prefixNo);
                                 mvo.setBillPrice(lastUnitPrice != null ? lastUnitPrice : mvo.getWholesaleDecimal());
                             }
-                        }
-                        // 销售价-给录入界面按权限屏蔽价格
-                        if ("QTCK".equals(prefixNo)) {
-                            mvo.setBillPrice(roleService.parseBillPriceByLimit(mvo.getWholesaleDecimal(), "sale",
-                                    priceLimit, request));
                         }
                     }
                     // 仓库id

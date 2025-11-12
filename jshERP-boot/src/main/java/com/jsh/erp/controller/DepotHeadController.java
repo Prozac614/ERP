@@ -101,9 +101,10 @@ public class DepotHeadController extends BaseController {
         Long depotId = StringUtil.parseStrLong(StringUtil.getInfo(search, "depotId"));
         Long accountId = StringUtil.parseStrLong(StringUtil.getInfo(search, "accountId"));
         String remark = StringUtil.getInfo(search, "remark");
+        String shopName = StringUtil.getInfo(search, "shopName");
         List<DepotHeadVo4List> list = depotHeadService.select(type, subType, hasDebt, status, purchaseStatus, number,
                 linkApply, linkNumber,
-                beginTime, endTime, materialParam, organId, creator, depotId, accountId, remark);
+                beginTime, endTime, materialParam, organId, creator, depotId, accountId, remark, shopName);
         return getDataTable(list);
     }
 
@@ -234,11 +235,12 @@ public class DepotHeadController extends BaseController {
             endTime = Tools.parseDayToTime(endTime, BusinessConstants.DAY_LAST_TIME);
             Boolean forceFlag = systemConfigService.getForceApprovalFlag();
             Boolean inOutManageFlag = systemConfigService.getInOutManageFlag();
+            String shopName = null;
             List<DepotHeadVo4InDetail> list = depotHeadService.findInOutDetail(beginTime, endTime, type, creatorArray,
                     organArray, categoryList, forceFlag, inOutManageFlag,
                     StringUtil.toNull(materialParam), depotList, oId, StringUtil.toNull(number), creator, remark,
                     StringUtil.safeSqlParse(column), StringUtil.safeSqlParse(order), (currentPage - 1) * pageSize,
-                    pageSize);
+                    pageSize, shopName);
             int total = depotHeadService.findInOutDetailCount(beginTime, endTime, type, creatorArray, organArray,
                     categoryList, forceFlag, inOutManageFlag,
                     StringUtil.toNull(materialParam), depotList, oId, StringUtil.toNull(number), creator, remark);
@@ -660,7 +662,8 @@ public class DepotHeadController extends BaseController {
      */
     @GetMapping(value = "/getBuyAndSaleStatistics")
     @ApiOperation(value = "统计今日采购额、昨日采购额、本月采购额、今年采购额|销售额|零售额")
-    public BaseResponseInfo getBuyAndSaleStatistics(HttpServletRequest request) {
+    public BaseResponseInfo getBuyAndSaleStatistics(
+            @RequestParam(value = "shopNames", required = false) List<String> shopNames, HttpServletRequest request) {
         BaseResponseInfo res = new BaseResponseInfo();
         try {
             Map<String, Object> map = new HashMap<>();
@@ -674,7 +677,7 @@ public class DepotHeadController extends BaseController {
                 String yearBegin = Tools.getYearBegin() + BusinessConstants.DAY_FIRST_TIME;
                 String yearEnd = Tools.getYearEnd() + BusinessConstants.DAY_LAST_TIME;
                 map = depotHeadService.getBuyAndSaleStatistics(today, monthFirstDay, yesterdayBegin, yesterdayEnd,
-                        yearBegin, yearEnd, request);
+                        yearBegin, yearEnd, request, shopNames);
             }
             res.code = 200;
             res.data = map;
@@ -873,6 +876,8 @@ public class DepotHeadController extends BaseController {
     @ApiOperation(value = "检查指定日期其他用户的单据情况")
     public Object checkTodayUsers(@RequestBody JSONObject jsonObject,
             HttpServletRequest request) throws Exception {
+        logger.info("=== checkTodayUsers方法被调用了！===");
+        logger.info("请求参数: {}", jsonObject.toString());
         logger.info("开始执行checkTodayUsers方法");
 
         JSONObject result = null;
@@ -880,10 +885,28 @@ public class DepotHeadController extends BaseController {
             logger.info("执行指定日期用户单据校验");
 
             String validationDate = jsonObject.getString("validationDate");
-            logger.info("获取到校验日期: {}", validationDate);
+            String type = jsonObject.getString("type");
+            String subType = jsonObject.getString("subType");
+            List<String> shopNames = new ArrayList<>();
+            if (jsonObject.get("shopNames") != null) {
+                shopNames = com.alibaba.fastjson.JSONArray.parseArray(jsonObject.getString("shopNames"), String.class);
+            }
+
+            // 向后兼容：如果type和subType为null，默认使用销售出库的参数
+            if (type == null || type.trim().isEmpty()) {
+                type = "出库";
+                logger.info("type参数为空，设置默认值为销售出库: {}", type);
+            }
+            if (subType == null || subType.trim().isEmpty()) {
+                subType = "销售";
+                logger.info("subType参数为空，设置默认值为销售出库: {}", subType);
+            }
+
+            logger.info("获取到的校验日期: {}, 单据类型: {}, 子类型: {}", validationDate, type, subType);
 
             logger.info("准备调用crossValidationService.checkTodayUsers方法");
-            CrossValidationCheckResult checkResult = crossValidationService.checkTodayUsers(validationDate);
+            CrossValidationCheckResult checkResult = crossValidationService.checkTodayUsers(validationDate, type,
+                    subType, shopNames);
             logger.info("crossValidationService.checkTodayUsers方法调用完成，结果: {}", checkResult);
 
             result = ExceptionConstants.standardSuccess();
@@ -891,11 +914,17 @@ public class DepotHeadController extends BaseController {
             logger.info("成功构建返回结果: {}", result.toString());
 
         } catch (Exception e) {
-            logger.error("checkTodayUsers方法执行出现异常: {}", e.getMessage(), e);
+            logger.debug("checkTodayUsers方法执行出现异常: {}", e.getMessage(), e);
             result = new JSONObject();
             result.put("code", ExceptionConstants.SERVICE_SYSTEM_ERROR_CODE);
-            result.put("msg", ExceptionConstants.SERVICE_SYSTEM_ERROR_MSG);
-            logger.error("构建错误返回结果: {}", result.toString());
+
+            // 返回具体的错误信息而不是通用的"未知异常"
+            String errorMsg = e.getMessage();
+            if (errorMsg == null || errorMsg.trim().isEmpty()) {
+                errorMsg = ExceptionConstants.SERVICE_SYSTEM_ERROR_MSG;
+            }
+            result.put("msg", errorMsg);
+            logger.debug("构建错误返回结果: {}", result.toString());
         }
 
         logger.info("checkTodayUsers方法执行完成，最终返回结果: {}", result.toString());
@@ -911,8 +940,8 @@ public class DepotHeadController extends BaseController {
      */
     @PostMapping(value = "/performCrossValidation")
     @ApiOperation(value = "执行交叉校验")
-    public Object performCrossValidation(@RequestBody CrossValidationRequest request,
-            HttpServletRequest httpRequest) throws Exception {
+    public Object performCrossValidation(@RequestBody CrossValidationRequest request, HttpServletRequest httpRequest)
+            throws Exception {
         JSONObject result = ExceptionConstants.standardSuccess();
         try {
             CrossValidationResult validationResult = crossValidationService.performCrossValidation(request);
@@ -921,7 +950,13 @@ public class DepotHeadController extends BaseController {
             logger.error(e.getMessage(), e);
             result = new JSONObject();
             result.put("code", ExceptionConstants.SERVICE_SYSTEM_ERROR_CODE);
-            result.put("msg", ExceptionConstants.SERVICE_SYSTEM_ERROR_MSG);
+
+            // 返回具体的错误信息而不是通用的"未知异常"
+            String errorMsg = e.getMessage();
+            if (errorMsg == null || errorMsg.trim().isEmpty()) {
+                errorMsg = ExceptionConstants.SERVICE_SYSTEM_ERROR_MSG;
+            }
+            result.put("msg", errorMsg);
         }
         return result;
     }

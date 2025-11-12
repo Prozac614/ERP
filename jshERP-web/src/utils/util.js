@@ -1,5 +1,5 @@
 import { isURL } from '@/utils/validate'
-import { downFilePost} from '@/api/manage'
+import { downFilePost } from '@/api/manage'
 import Vue from 'vue'
 import introJs from 'intro.js'
 
@@ -11,7 +11,7 @@ export function timeFix() {
 
 export function welcome() {
   const arr = ['休息一会儿吧', '准备吃什么呢?', '要不要打一把 DOTA', '我猜你可能累了']
-  let index = Math.floor((Math.random()*arr.length))
+  let index = Math.floor((Math.random() * arr.length))
   return arr[index]
 }
 
@@ -35,7 +35,7 @@ export function filterObj(obj) {
     return;
   }
 
-  for ( let key in obj) {
+  for (let key in obj) {
     if (obj.hasOwnProperty(key)
       && (obj[key] == null || obj[key] == undefined || obj[key] === '')) {
       delete obj[key];
@@ -52,7 +52,7 @@ export function filterObj(obj) {
  */
 export function formatDate(value, fmt) {
   let regPos = /^\d+(\.\d+)?$/;
-  if(regPos.test(value)){
+  if (regPos.test(value)) {
     //如果是数字
     let getDate = new Date(value);
     let o = {
@@ -73,19 +73,19 @@ export function formatDate(value, fmt) {
       }
     }
     return fmt;
-  }else{
+  } else {
     //TODO
     value = value.trim();
-    return value.substr(0,fmt.length);
+    return value.substr(0, fmt.length);
   }
 }
 
 // 生成首页路由
 export function generateIndexRouter(data) {
   let indexRouter = generateChildRouters(data)
-  indexRouter.splice(0,0, {
+  indexRouter.splice(0, 0, {
     path: '/',
-    name: '首页',
+    name: 'dashboard',
     component: () => import('@/components/layouts/TabLayout'),
     meta: {
       title: '首页',
@@ -99,23 +99,23 @@ export function generateIndexRouter(data) {
 
 // 生成嵌套路由（子路由）
 
-function generateChildRouters (data) {
+function generateChildRouters(data) {
   const routers = [];
   for (let item of data) {
     let componentPath = "";
     item.route = "1";
-    if(item.component.indexOf("layouts")>=0){
-      componentPath = () => import('@/components'+item.component);
+    if (item.component.indexOf("layouts") >= 0) {
+      componentPath = () => import('@/components' + item.component);
     } else {
-      componentPath = () => import('@/views'+item.component);
+      componentPath = () => import('@/views' + item.component);
     }
     // eslint-disable-next-line
-    let URL = (item.url|| '').replace(/{{([^}}]+)?}}/g, (s1, s2) => eval(s2)) // URL支持{{ window.xxx }}占位符变量
+    let URL = (item.url || '').replace(/{{([^}}]+)?}}/g, (s1, s2) => eval(s2)) // URL支持{{ window.xxx }}占位符变量
     if (isURL(URL)) {
       item.url = URL;
     }
-    let componentName =''
-    if(item.component) {
+    let componentName = ''
+    if (item.component) {
       let index = item.component.lastIndexOf("\/");
       componentName = item.component.substring(index + 1, item.component.length);
     }
@@ -127,26 +127,26 @@ function generateChildRouters (data) {
         title: item.text,
         icon: item.icon,
         url: item.url,
-        componentName:componentName,
-        internalOrExternal:true,
+        componentName: componentName,
+        internalOrExternal: true,
         keepAlive: true
       }
     }
-    if(item.component.indexOf("IframePageView")>-1){
+    if (item.component.indexOf("IframePageView") > -1) {
       //给带iframe的页面进行改造
       menu.iframeComponent = componentPath
     } else {
       menu.component = componentPath
     }
     if (item.children && item.children.length > 0) {
-      menu.children = [...generateChildRouters( item.children)];
+      menu.children = [...generateChildRouters(item.children)];
     }
     //--update-begin----author:scott---date:20190320------for:根据后台菜单配置，判断是否路由菜单字段，动态选择是否生成路由（为了支持参数URL菜单）------
     //判断是否生成路由
-    if(item.route && item.route === '0'){
+    if (item.route && item.route === '0') {
       //console.log(' 不生成路由 item.route：  '+item.route);
       //console.log(' 不生成路由 item.path：  '+item.path);
-    }else{
+    } else {
       routers.push(menu);
     }
     //--update-end----author:scott---date:20190320------for:根据后台菜单配置，判断是否路由菜单字段，动态选择是否生成路由（为了支持参数URL菜单）------
@@ -180,7 +180,7 @@ export function randomNumber() {
   }
   if (arguments.length === 1) {
     let [length] = arguments
-  // 生成指定长度的随机数字，首位一定不是 0
+    // 生成指定长度的随机数字，首位一定不是 0
     let nums = [...Array(length).keys()].map((i) => (i > 0 ? random(0, 9) : random(1, 9)))
     return parseInt(nums.join(''))
   } else if (arguments.length >= 2) {
@@ -222,8 +222,8 @@ export function randomUUID() {
  * @param string
  * @returns {*}
  */
-export function underLine2CamelCase(string){
-  return string.replace( /_([a-z])/g, function( all, letter ) {
+export function underLine2CamelCase(string) {
+  return string.replace(/_([a-z])/g, function (all, letter) {
     return letter.toUpperCase();
   });
 }
@@ -233,8 +233,8 @@ export function underLine2CamelCase(string){
  * @param bpmStatus
  * @returns {*}
  */
-export function showDealBtn(bpmStatus){
-  if(bpmStatus!="1"&&bpmStatus!="3"&&bpmStatus!="4"){
+export function showDealBtn(bpmStatus) {
+  if (bpmStatus != "1" && bpmStatus != "3" && bpmStatus != "4") {
     return true;
   }
   return false;
@@ -525,7 +525,7 @@ export function getNowFormatStr() {
   if (strSeconds >= 0 && strSeconds <= 9) {
     strSeconds = "0" + strSeconds;
   }
-  return year +''+ month +''+ strDate +''+ strHours +''+ strMinutes +''+ strSeconds;
+  return year + '' + month + '' + strDate + '' + strHours + '' + strMinutes + '' + strSeconds;
 }
 
 /**
@@ -570,18 +570,18 @@ export function getPrevMonthFormatDate(monthNum) {
  * @param val
  */
 export function removeByVal(arrylist, val) {
-  for(var i = 0; i < arrylist .length; i++) {
-    if(arrylist [i] == val) {
-      arrylist .splice(i, 1);
+  for (var i = 0; i < arrylist.length; i++) {
+    if (arrylist[i] == val) {
+      arrylist.splice(i, 1);
       break;
     }
   }
 }
 
 export function getCheckFlag(multiBillType, multiLevelApprovalFlag, prefixNo) {
-  if(multiLevelApprovalFlag==='1') {
+  if (multiLevelApprovalFlag === '1') {
     //开启
-    if(multiBillType) {
+    if (multiBillType) {
       let multiBillTypeArr = multiBillType.split(',')
       return multiBillTypeArr.indexOf(prefixNo) <= -1
     } else {
@@ -600,16 +600,16 @@ export function getCheckFlag(multiBillType, multiLevelApprovalFlag, prefixNo) {
  */
 export function changeListFmtMinus(str) {
   let newArr = new Array()
-  if(str) {
+  if (str) {
     let arr = []
-    if(str.indexOf(',')>-1) {
+    if (str.indexOf(',') > -1) {
       arr = str.split(',')
     } else {
       arr = str
     }
-    for(let i=0; i<arr.length; i++) {
-      if(arr[i] < 0){
-        newArr.push((arr[i]-0).toString());
+    for (let i = 0; i < arr.length; i++) {
+      if (arr[i] < 0) {
+        newArr.push((arr[i] - 0).toString());
       }
       else {
         newArr.push((0 - arr[i]).toString());
@@ -621,24 +621,24 @@ export function changeListFmtMinus(str) {
 
 //通过post方式导出Excel
 export function exportXlsPost(fileName, title, head, tip, list) {
-  if(!fileName || typeof fileName != "string"){
+  if (!fileName || typeof fileName != "string") {
     fileName = "导出文件"
   }
-  let paramObj = {'title': title, 'head': head, 'tip': tip, 'list': list}
+  let paramObj = { 'title': title, 'head': head, 'tip': tip, 'list': list }
   console.log("导出参数", paramObj)
-  downFilePost(paramObj).then((data)=>{
+  downFilePost(paramObj).then((data) => {
     if (!data) {
       this.$message.warning("文件下载失败")
       return
     }
     if (typeof window.navigator.msSaveBlob !== 'undefined') {
-      window.navigator.msSaveBlob(new Blob([data],{type: 'application/vnd.ms-excel'}), fileName+'.xls')
-    }else{
-      let url = window.URL.createObjectURL(new Blob([data],{type: 'application/vnd.ms-excel'}))
+      window.navigator.msSaveBlob(new Blob([data], { type: 'application/vnd.ms-excel' }), fileName + '.xls')
+    } else {
+      let url = window.URL.createObjectURL(new Blob([data], { type: 'application/vnd.ms-excel' }))
       let link = document.createElement('a')
       link.style.display = 'none'
       link.href = url
-      link.setAttribute('download', fileName + '_' + getNowFormatStr()+'.xls')
+      link.setAttribute('download', fileName + '_' + getNowFormatStr() + '.xls')
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link); //下载完成移除元素
@@ -656,7 +656,7 @@ export function handleIntroJs(module, cur_version) {
   //每个页面设置不同的缓存变量名称，不可以重复，有新版本时，更新cur_version
   //有新版本更新时才出现一次引导页， 第二次进入进不再出现， 这里有缓存来判断
   let introJsObj = introJs()
-  if(module !== 'indexChart') {
+  if (module !== 'indexChart') {
     let idElement = '#' + module
     introJsObj = introJs(idElement)
   }
@@ -668,10 +668,10 @@ export function handleIntroJs(module, cur_version) {
     nextLabel: '下一步 &rarr;',
     doneLabel: '知道了',
     exitOnOverlayClick: false //点击空白区域是否关闭提示组件
-  }).oncomplete(function(){
+  }).oncomplete(function () {
     //点击跳过按钮后执行的事件(这里保存对应的版本号到缓存,并且设置有效期为100天）
     Vue.ls.set('intro_cache_' + module, cur_version, 100 * 24 * 60 * 60 * 1000);
-  }).onexit(function(){
+  }).onexit(function () {
     //点击结束按钮后， 执行的事件
     Vue.ls.set('intro_cache_' + module, cur_version, 100 * 24 * 60 * 60 * 1000);
   }).start()
@@ -684,16 +684,16 @@ export function autoJumpNextInput(domInfo) {
   let domIndex = 0
   let inputs = document.getElementById(domInfo).getElementsByTagName('input')
   inputs[domIndex].focus()
-  document.getElementById(domInfo).addEventListener('keydown',function(e){
-    if(e.keyCode === 13){
+  document.getElementById(domInfo).addEventListener('keydown', function (e) {
+    if (e.keyCode === 13) {
       domIndex++
-      if(domIndex === inputs.length) {
+      if (domIndex === inputs.length) {
         domIndex = 0
       }
       inputs[domIndex].focus()
     }
   })
-  for(let i=0; i<inputs.length; i++){
+  for (let i = 0; i < inputs.length; i++) {
     //这个index就是做个介质，来获取当前的i是第几个
     inputs[i].index = i;
     inputs[i].onclick = function () {

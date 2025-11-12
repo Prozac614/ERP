@@ -102,7 +102,7 @@ public class DepotHeadService {
     public List<DepotHeadVo4List> select(String type, String subType, String hasDebt, String status,
             String purchaseStatus, String number, String linkApply, String linkNumber,
             String beginTime, String endTime, String materialParam, Long organId, Long creator, Long depotId,
-            Long accountId, String remark) throws Exception {
+            Long accountId, String remark, String shopName) throws Exception {
         List<DepotHeadVo4List> list = new ArrayList<>();
         try {
             HttpServletRequest request = ((ServletRequestAttributes) RequestContextHolder.getRequestAttributes())
@@ -124,7 +124,7 @@ public class DepotHeadService {
             PageUtils.startPage();
             list = depotHeadMapperEx.selectByConditionDepotHead(type, subType, creatorArray, hasDebt,
                     statusArray, purchaseStatusArray, number, linkApply, linkNumber, beginTime, endTime,
-                    materialParam, organId, organArray, creator, depotId, depotArray, accountId, remark);
+                    materialParam, organId, organArray, creator, depotId, depotArray, accountId, remark, shopName);
             if (null != list) {
                 List<Long> idList = new ArrayList<>();
                 List<String> numberList = new ArrayList<>();
@@ -558,7 +558,7 @@ public class DepotHeadService {
                 // 更新当前库存
                 depotItemService.updateCurrentStock(depotItem);
                 // 更新当前成本价
-                depotItemService.updateCurrentUnitPrice(depotItem);
+                // depotItemService.updateCurrentUnitPrice(depotItem);
             }
         }
         // 路径列表
@@ -705,6 +705,7 @@ public class DepotHeadService {
     public int batchSetStatus(String status, String depotHeadIDs) throws Exception {
         int result = 0;
         List<Long> dhIds = new ArrayList<>();
+        List<Long> dhIdsNeedStockUpdate = new ArrayList<>(); // 需要更新库存的单据ID
         List<Long> ids = StringUtil.strToLongList(depotHeadIDs);
         for (Long id : ids) {
             DepotHead depotHead = getDepotHead(id);
@@ -712,6 +713,11 @@ public class DepotHeadService {
                 // 进行反审核操作
                 if ("1".equals(depotHead.getStatus()) && "0".equals(depotHead.getPurchaseStatus())) {
                     dhIds.add(id);
+                    dhIdsNeedStockUpdate.add(id); // 从已审核状态反审核需要更新库存
+                } else if ("2".equals(depotHead.getStatus()) && "0".equals(depotHead.getPurchaseStatus())) {
+                    // 允许从完成出库状态反审核到未审核状态（支持校验后的状态回退）
+                    dhIds.add(id);
+                    // 从完成出库状态反审核不需要更新库存，所以不加入dhIdsNeedStockUpdate
                 } else if ("2".equals(depotHead.getPurchaseStatus())) {
                     throw new BusinessRunTimeException(ExceptionConstants.DEPOT_HEAD_PURCHASE_STATUS_TWO_CODE,
                             String.format(ExceptionConstants.DEPOT_HEAD_PURCHASE_STATUS_TWO_MSG));
@@ -726,6 +732,9 @@ public class DepotHeadService {
                 // 进行审核操作
                 if ("0".equals(depotHead.getStatus())) {
                     dhIds.add(id);
+                    dhIdsNeedStockUpdate.add(id); // 审核操作需要更新库存
+                    // 审核时更新商品价格
+                    depotItemService.updateMaterialExtendPriceOnAudit(id);
                 } else {
                     throw new BusinessRunTimeException(ExceptionConstants.DEPOT_HEAD_UN_AUDIT_TO_AUDIT_FAILED_CODE,
                             String.format(ExceptionConstants.DEPOT_HEAD_UN_AUDIT_TO_AUDIT_FAILED_MSG));
@@ -738,13 +747,136 @@ public class DepotHeadService {
             DepotHeadExample example = new DepotHeadExample();
             example.createCriteria().andIdIn(dhIds);
             result = depotHeadMapper.updateByExampleSelective(depotHead, example);
-            // 更新当前库存
-            if (systemConfigService.getForceApprovalFlag()) {
-                for (Long dhId : dhIds) {
+            // 只对需要更新库存的单据进行库存更新（优化：批内去重合并 + 跳过0数量行）
+            if (systemConfigService.getForceApprovalFlag() && dhIdsNeedStockUpdate.size() > 0) {
+                // 请求级统计
+                long totalBills = 0L;
+                long totalItems = 0L;
+                long totalNonZero = 0L;
+                long totalUniquePairs = 0L;
+                long totalUniqueAnotherPairs = 0L;
+                long totalBuildMs = 0L;
+                long totalApplyMs = 0L;
+                long outBills = 0L, inBills = 0L, otherBills = 0L;
+                Set<Long> globalUniqueMaterials = new HashSet<>();
+                Set<String> globalUniquePairs = new HashSet<>();
+                Set<String> globalUniqueAnotherPairs = new HashSet<>();
+
+                for (Long dhId : dhIdsNeedStockUpdate) {
                     List<DepotItem> list = depotItemService.getListByHeaderId(dhId);
-                    for (DepotItem depotItem : list) {
-                        depotItemService.updateCurrentStock(depotItem);
+                    if (list == null || list.isEmpty()) {
+                        continue;
                     }
+
+                    // 解析单据操作时间，避免在逐明细调用里重复读取
+                    Date operTime = null;
+                    DepotHead dhOne = null;
+                    try {
+                        dhOne = getDepotHead(dhId);
+                        operTime = dhOne != null ? dhOne.getOperTime() : null;
+                    } catch (Exception e) {
+                        logger.debug("获取单据操作时间失败，使用当前时间, billId={}, error={}", dhId, e.getMessage());
+                    }
+                    if (operTime == null) {
+                        operTime = new Date();
+                    }
+
+                    String type = dhOne != null ? dhOne.getType() : null;
+                    String subType = dhOne != null ? dhOne.getSubType() : null;
+                    if ("出库".equals(type)) {
+                        outBills++;
+                    } else if ("入库".equals(type)) {
+                        inBills++;
+                    } else {
+                        otherBills++;
+                    }
+
+                    // 单据级上下文：物料级操作去重、批末清缓存
+                    depotItemService.beginBillProcessingContext(type);
+
+                    int originalCount = list.size();
+                    int nonZeroCount = 0;
+                    long t0 = System.nanoTime();
+                    // 使用唯一键(materialId, depotId)去重；对调拨行同时加入(anotherDepotId)
+                    Set<String> uniqueKeys = new HashSet<>();
+                    Set<String> uniqueAnotherKeys = new HashSet<>();
+                    Set<Long> uniqueMaterials = new HashSet<>();
+                    for (DepotItem depotItem : list) {
+                        BigDecimal basicNumber = depotItem.getBasicNumber();
+                        if (basicNumber == null || basicNumber.compareTo(BigDecimal.ZERO) == 0) {
+                            continue; // 跳过库存变动为0的明细
+                        }
+                        nonZeroCount++;
+                        Long materialId = depotItem.getMaterialId();
+                        if (materialId != null) {
+                            uniqueMaterials.add(materialId);
+                            globalUniqueMaterials.add(materialId);
+                        }
+                        Long depotId = depotItem.getDepotId();
+                        if (materialId != null && depotId != null) {
+                            String key = materialId + "_" + depotId;
+                            uniqueKeys.add(key);
+                            globalUniquePairs.add(key);
+                        }
+                        Long anotherDepotId = depotItem.getAnotherDepotId();
+                        if (materialId != null && anotherDepotId != null) {
+                            String aKey = materialId + "_" + anotherDepotId;
+                            uniqueKeys.add(aKey);
+                            uniqueAnotherKeys.add(aKey);
+                            globalUniqueAnotherPairs.add(aKey);
+                        }
+                    }
+                    long t1 = System.nanoTime();
+                    long buildMs = (t1 - t0) / 1_000_000L;
+
+                    // 记录聚合后的规模，用于观测优化收益
+                    try {
+                        logger.info(
+                                "batchSetStatus stock update: billId={}, type={}, subType={}, items={}, nonZeroItems={}, uniquePairs={}, uniqueAnotherPairs={}, uniqueMaterials={}, buildMs={}",
+                                dhId, type, subType, originalCount, nonZeroCount, uniqueKeys.size(),
+                                uniqueAnotherKeys.size(), uniqueMaterials.size(), buildMs);
+                    } catch (Exception ignore) {
+                        // 忽略日志异常
+                    }
+
+                    // 按唯一(物料, 仓库)调用一次库存更新（内部会执行库存/汇总/缓存/预警）
+                    long t2 = System.nanoTime();
+                    for (String key : uniqueKeys) {
+                        String[] parts = key.split("_");
+                        if (parts.length != 2) {
+                            continue;
+                        }
+                        Long mId = Long.valueOf(parts[0]);
+                        Long dId = Long.valueOf(parts[1]);
+                        depotItemService.updateCurrentStockFun(mId, dId, operTime, dhId);
+                    }
+                    long t3 = System.nanoTime();
+                    long applyMs = (t3 - t2) / 1_000_000L;
+
+                    // 单据级批末清缓存（仅当本单据确实发生了汇总或预警写入）
+                    depotItemService.clearAllCachesOnceForCurrentBill();
+                    depotItemService.endBillProcessingContext();
+
+                    // 单据级累计
+                    totalBills++;
+                    totalItems += originalCount;
+                    totalNonZero += nonZeroCount;
+                    totalUniquePairs += uniqueKeys.size();
+                    totalUniqueAnotherPairs += uniqueAnotherKeys.size();
+                    totalBuildMs += buildMs;
+                    totalApplyMs += applyMs;
+                }
+
+                // 请求级聚合日志
+                try {
+                    logger.info(
+                            "batchSetStatus summary: bills={}, items={}, nonZero={}, uniquePairs(sum)={}, uniqueAnotherPairs(sum)={}, uniqueMaterials(global)={}, outBills={}, inBills={}, otherBills={}, buildMs(sum)={}, applyMs(sum)={}",
+                            totalBills, totalItems, totalNonZero, totalUniquePairs, totalUniqueAnotherPairs,
+                            globalUniqueMaterials.size(), outBills, inBills, otherBills, totalBuildMs, totalApplyMs);
+                    // 额外输出全局唯一(物料,仓库)对数量（用于判断跨单据重复度）
+                    logger.info("batchSetStatus summary: uniquePairs(global)={}, uniqueAnotherPairs(global)={}",
+                            globalUniquePairs.size(), globalUniqueAnotherPairs.size());
+                } catch (Exception ignore) {
                 }
             }
         }
@@ -781,12 +913,13 @@ public class DepotHeadService {
             String[] creatorArray,
             String[] organArray, List<Long> categoryList, Boolean forceFlag, Boolean inOutManageFlag,
             String materialParam, List<Long> depotList, Integer oId, String number,
-            Long creator, String remark, String column, String order, Integer offset, Integer rows) throws Exception {
+            Long creator, String remark, String column, String order, Integer offset, Integer rows, String shopName)
+            throws Exception {
         List<DepotHeadVo4InDetail> list = null;
         try {
             list = depotHeadMapperEx.findInOutDetail(beginTime, endTime, type, creatorArray, organArray, categoryList,
                     forceFlag, inOutManageFlag,
-                    materialParam, depotList, oId, number, creator, remark, column, order, offset, rows);
+                    materialParam, depotList, oId, number, creator, remark, column, order, offset, rows, shopName);
         } catch (Exception e) {
             JshException.readFail(logger, e);
         }
@@ -1188,6 +1321,19 @@ public class DepotHeadService {
             throw new BusinessRunTimeException(ExceptionConstants.DEPOT_HEAD_BILL_NUMBER_EXIST_CODE,
                     String.format(ExceptionConstants.DEPOT_HEAD_BILL_NUMBER_EXIST_MSG));
         }
+        // 销售出库的店铺处理
+        if (BusinessConstants.DEPOTHEAD_TYPE_OUT.equals(depotHead.getType())
+                && BusinessConstants.SUB_TYPE_SALES.equals(depotHead.getSubType())) {
+            // 如果是"未指定店铺"，则设置为空字符串
+            if ("未指定店铺".equals(depotHead.getShopName())) {
+                depotHead.setShopName("");
+            }
+            // 否则检查是否有选择店铺
+            else if (StringUtil.isEmpty(depotHead.getShopName())) {
+                throw new BusinessRunTimeException(ExceptionConstants.DEPOT_HEAD_SHOP_REQUIRED_CODE,
+                        ExceptionConstants.DEPOT_HEAD_SHOP_REQUIRED_MSG);
+            }
+        }
         // 校验是否同时录入关联请购单号和关联订单号
         if (StringUtil.isNotEmpty(depotHead.getLinkNumber()) && StringUtil.isNotEmpty(depotHead.getLinkApply())) {
             throw new BusinessRunTimeException(ExceptionConstants.DEPOT_ITEM_EXIST_REPEAT_NO_FAILED_CODE,
@@ -1289,10 +1435,34 @@ public class DepotHeadService {
     public void updateDepotHeadAndDetail(String beanJson, String rows, HttpServletRequest request) throws Exception {
         /** 更新单据主表信息 */
         DepotHead depotHead = JSONObject.parseObject(beanJson, DepotHead.class);
+        DepotHead oldBill = getDepotHead(depotHead.getId());
+        if (oldBill == null) {
+            throw new BusinessRunTimeException(ExceptionConstants.DEPOT_HEAD_EDIT_FAILED_CODE,
+                    String.format(ExceptionConstants.DEPOT_HEAD_EDIT_FAILED_MSG));
+        }
+        Long currentUserId = userService.getCurrentUser().getId();
+        Long creatorId = oldBill.getCreator();
+        if (creatorId != null && !creatorId.equals(currentUserId)) {
+            throw new BusinessRunTimeException(ExceptionConstants.DEPOT_HEAD_NOT_OWNER_EDIT_FAILED_CODE,
+                    String.format(ExceptionConstants.DEPOT_HEAD_NOT_OWNER_EDIT_FAILED_MSG));
+        }
         // 校验单号是否重复
         if (checkIsBillNumberExist(depotHead.getId(), depotHead.getNumber()) > 0) {
             throw new BusinessRunTimeException(ExceptionConstants.DEPOT_HEAD_BILL_NUMBER_EXIST_CODE,
                     String.format(ExceptionConstants.DEPOT_HEAD_BILL_NUMBER_EXIST_MSG));
+        }
+        // 销售出库的店铺处理
+        if (BusinessConstants.DEPOTHEAD_TYPE_OUT.equals(depotHead.getType())
+                && BusinessConstants.SUB_TYPE_SALES.equals(depotHead.getSubType())) {
+            // 如果是"未指定店铺"，则设置为空字符串
+            if ("未指定店铺".equals(depotHead.getShopName())) {
+                depotHead.setShopName("");
+            }
+            // 否则检查是否有选择店铺
+            else if (StringUtil.isEmpty(depotHead.getShopName())) {
+                throw new BusinessRunTimeException(ExceptionConstants.DEPOT_HEAD_SHOP_REQUIRED_CODE,
+                        ExceptionConstants.DEPOT_HEAD_SHOP_REQUIRED_MSG);
+            }
         }
         // 校验是否同时录入关联请购单号和关联订单号
         if (StringUtil.isNotEmpty(depotHead.getLinkNumber()) && StringUtil.isNotEmpty(depotHead.getLinkApply())) {
@@ -1300,12 +1470,12 @@ public class DepotHeadService {
                     String.format(ExceptionConstants.DEPOT_ITEM_EXIST_REPEAT_NO_FAILED_MSG));
         }
         // 校验单据状态，如果不是未审核则提示
-        if (!"0".equals(getDepotHead(depotHead.getId()).getStatus())) {
+        if (!BusinessConstants.BILLS_STATUS_UN_AUDIT.equals(oldBill.getStatus())) {
             throw new BusinessRunTimeException(ExceptionConstants.DEPOT_HEAD_BILL_CANNOT_EDIT_CODE,
                     String.format(ExceptionConstants.DEPOT_HEAD_BILL_CANNOT_EDIT_MSG));
         }
         // 获取之前的会员id
-        Long preOrganId = getDepotHead(depotHead.getId()).getOrganId();
+        Long preOrganId = oldBill.getOrganId();
         String subType = depotHead.getSubType();
         // 结算账户校验
         if ("采购".equals(subType) || "采购退货".equals(subType) || "销售".equals(subType) || "销售退货".equals(subType)) {
@@ -1383,13 +1553,13 @@ public class DepotHeadService {
 
     public Map<String, Object> getBuyAndSaleStatistics(String today, String monthFirstDay, String yesterdayBegin,
             String yesterdayEnd,
-            String yearBegin, String yearEnd, HttpServletRequest request) throws Exception {
+            String yearBegin, String yearEnd, HttpServletRequest request, List<String> shopNames) throws Exception {
         Long userId = userService.getUserId(request);
         String priceLimit = userService.getRoleTypeByUserId(userId).getPriceLimit();
         Boolean forceFlag = systemConfigService.getForceApprovalFlag();
         String[] creatorArray = getCreatorArray();
         List<InOutPriceVo> inOutPriceVoList = depotHeadMapperEx.getBuyAndSaleStatisticsList(yearBegin, yearEnd,
-                creatorArray, forceFlag);
+                creatorArray, forceFlag, shopNames);
 
         String[] periods = { "today", "month", "yesterday", "year" };
         String[] types = { "Buy", "BuyBack", "Sale", "SaleBack", "RetailSale", "RetailSaleBack" };

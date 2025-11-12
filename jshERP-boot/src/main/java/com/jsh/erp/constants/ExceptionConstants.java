@@ -412,6 +412,9 @@ public class ExceptionConstants {
     // 单据录入-商品唛头XXX的单价低于最低售价
     public static final int DEPOT_HEAD_UNIT_PRICE_LOW_CODE = 8500018;
     public static final String DEPOT_HEAD_UNIT_PRICE_LOW_MSG = "商品唛头%s的单价低于最低售价";
+    // 单据审核-同一商品存在多个单价
+    public static final int DEPOT_HEAD_PRICE_INCONSISTENT_CODE = 8500019;
+    public static final String DEPOT_HEAD_PRICE_INCONSISTENT_MSG = "抱歉，商品唛头%s在单据中存在多个单价，请调整后再审核";
     // 单据录入-单据明细中必须要有组合件和普通子件
     public static final int DEPOT_HEAD_CHECK_ASSEMBLE_EMPTY_CODE = 8500020;
     public static final String DEPOT_HEAD_CHECK_ASSEMBLE_EMPTY_MSG = "抱歉，单据明细中必须要有组合件和普通子件";
@@ -427,6 +430,9 @@ public class ExceptionConstants {
     // 单据删除-单据中的序列号已经出库，不能删除
     public static final int DEPOT_HEAD_SERIAL_IS_SELL_CODE = 8500024;
     public static final String DEPOT_HEAD_SERIAL_IS_SELL_MSG = "抱歉，单据%s的序列号已经出库，不能删除";
+    // 单据编辑-只能编辑自己创建的单据
+    public static final int DEPOT_HEAD_NOT_OWNER_EDIT_FAILED_CODE = 8500033;
+    public static final String DEPOT_HEAD_NOT_OWNER_EDIT_FAILED_MSG = "抱歉，只能编辑自己创建的单据！";
     // 单据录入-单据附件不能超过规定数量
     public static final int DEPOT_HEAD_FILE_NUM_LIMIT_CODE = 8500025;
     public static final String DEPOT_HEAD_FILE_NUM_LIMIT_MSG = "抱歉，单据附件不能超过%s份";
@@ -448,6 +454,9 @@ public class ExceptionConstants {
     // 单据录入-单据在该状态不能强制结单
     public static final int DEPOT_HEAD_FORCE_CLOSE_FAILED_CODE = 8500031;
     public static final String DEPOT_HEAD_FORCE_CLOSE_FAILED_MSG = "抱歉，单据:%s在该状态不能强制结单";
+    // 单据录入-销售出库需选择店铺
+    public static final int DEPOT_HEAD_SHOP_REQUIRED_CODE = 8500032;
+    public static final String DEPOT_HEAD_SHOP_REQUIRED_MSG = "销售出库需选择店铺";
 
     /**
      * 单据明细信息

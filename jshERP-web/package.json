@@ -15,6 +15,7 @@
     "clipboard": "^2.0.4",
     "codemirror": "^5.46.0",
     "dayjs": "^1.8.0",
+    "echarts": "^5.4.3",
     "enquire.js": "^2.1.6",
     "intro.js": "^4.2.2",
     "jquery": "^1.12.4",
@@ -22,6 +23,7 @@
     "lodash.get": "^4.4.2",
     "lodash.pick": "^4.4.0",
     "md5": "^2.2.1",
+    "moment": "^2.29.4",
     "nprogress": "^0.2.0",
     "viser-vue": "^2.4.4",
     "vue": "^2.7.16",
@@ -107,5 +109,9 @@
     "> 1%",
     "last 2 versions",
     "not ie <= 10"
-  ]
+  ],
+  "resolutions": {
+    "minimatch": "^3.0.4",
+    "glob": "^7.2.3"
+  }
 }
