@@ -18,6 +18,19 @@ const ALLOWED_VISIBLE_COLUMN_KEYS = new Set([
   'allPrice'
 ])
 
+const FORCE_HIDE_COLUMNS_BY_PREFIX = {
+  CGRK: new Set(['allPrice']),
+  XSCK: new Set(['unitPrice', 'allPrice']),
+  QTRK: new Set(['unitPrice', 'allPrice']),
+  QTCK: new Set(['unitPrice', 'allPrice'])
+}
+
+const FORCE_SHOW_COLUMNS_BY_PREFIX = {
+  CGRK: new Set(['unitPrice'])
+}
+
+const AMOUNT_DISABLED_PREFIXES = new Set(['CGRK', 'XSCK', 'QTRK', 'QTCK'])
+
 export const BillModalMixin = {
   data() {
     return {
@@ -445,6 +458,7 @@ export const BillModalMixin = {
       let that = this
       const { type, row, column, value, target } = event
       let param, snList, batchNumber, operNumber, unitPrice, allPrice, taxRate, taxMoney, taxLastMoney
+      const amountDisabled = this.amountCalculationDisabled()
       switch (column.key) {
         case "depotId":
           that.currentSelectDepotId = row.depotId
@@ -489,12 +503,15 @@ export const BillModalMixin = {
                     }
                   }
                   this.materialTable.dataSource = mArr
-                  if (this.prefixNo === 'LSCK' || this.prefixNo === 'LSTH') {
-                    target.statisticsColumns.allPrice = allPriceTotal
-                  } else {
-                    target.statisticsColumns.taxLastMoney = taxLastMoneyTotal
+                  this.normalizeAmountsForDisabled()
+                  if (!amountDisabled) {
+                    if (this.prefixNo === 'LSCK' || this.prefixNo === 'LSTH') {
+                      target.statisticsColumns.allPrice = allPriceTotal
+                    } else {
+                      target.statisticsColumns.taxLastMoney = taxLastMoneyTotal
+                    }
+                    that.autoChangePrice(target)
                   }
-                  that.autoChangePrice(target)
                   //强制渲染
                   target.$forceUpdate()
                 })
@@ -514,7 +531,13 @@ export const BillModalMixin = {
                     }
                     mArr.push(mObj)
                     target.setValues(mArr);
-                    if (prevOperNumber != null && prevOperNumber !== '') {
+                    if (amountDisabled) {
+                      target.setValues([{
+                        rowKey: row.id,
+                        values: { allPrice: 0, taxMoney: 0, taxLastMoney: 0 }
+                      }])
+                    }
+                    if (!amountDisabled && prevOperNumber != null && prevOperNumber !== '') {
                       let restoredOperNumber = Number(prevOperNumber)
                       if (!isNaN(restoredOperNumber)) {
                         const unitPriceNew = Number(mInfoEx.unitPrice) || 0
@@ -535,8 +558,11 @@ export const BillModalMixin = {
                         ])
                       }
                     }
-                    target.recalcAllStatisticsColumns()
-                    that.autoChangePrice(target)
+                    if (!amountDisabled) {
+                      target.recalcAllStatisticsColumns()
+                      that.autoChangePrice(target)
+                    }
+                    this.normalizeAmountsForDisabled()
                     target.autoSelectBySpecialKey('operNumber', row.orderNum)
                     //强制渲染
                     target.$forceUpdate()
@@ -547,6 +573,9 @@ export const BillModalMixin = {
           });
           break;
         case "snList":
+          if (amountDisabled) {
+            break;
+          }
           snList = value
           if (snList) {
             snList = snList.replaceAll('，', ',')
@@ -563,6 +592,9 @@ export const BillModalMixin = {
           }
           break;
         case "batchNumber":
+          if (amountDisabled) {
+            break;
+          }
           //只针对销售出库、采购退货、其它出库
           if (this.prefixNo === 'XSCK' || this.prefixNo === 'CGTH' || this.prefixNo === 'QTCK') {
             batchNumber = value
@@ -609,6 +641,9 @@ export const BillModalMixin = {
           }
           break;
         case "operNumber":
+          if (amountDisabled) {
+            break;
+          }
           operNumber = value - 0
           taxRate = row.taxRate - 0 //税率
           unitPrice = row.unitPrice - 0 //单价
@@ -620,6 +655,9 @@ export const BillModalMixin = {
           that.autoChangePrice(target)
           break;
         case "unitPrice":
+          if (amountDisabled) {
+            break;
+          }
           operNumber = row.operNumber - 0 //数量
           unitPrice = value - 0 //单价
           taxRate = row.taxRate - 0 //税率
@@ -631,6 +669,9 @@ export const BillModalMixin = {
           that.autoChangePrice(target)
           break;
         case "allPrice":
+          if (amountDisabled) {
+            break;
+          }
           operNumber = row.operNumber - 0 //数量
           taxRate = row.taxRate - 0 //税率
           allPrice = value - 0
@@ -642,6 +683,9 @@ export const BillModalMixin = {
           that.autoChangePrice(target)
           break;
         case "taxRate":
+          if (amountDisabled) {
+            break;
+          }
           operNumber = row.operNumber - 0 //数量
           allPrice = row.allPrice - 0
           unitPrice = row.unitPrice - 0
@@ -653,6 +697,9 @@ export const BillModalMixin = {
           that.autoChangePrice(target)
           break;
         case "taxLastMoney":
+          if (amountDisabled) {
+            break;
+          }
           operNumber = row.operNumber - 0 //数量
           taxLastMoney = value - 0
           taxRate = row.taxRate - 0 //税率
@@ -674,6 +721,7 @@ export const BillModalMixin = {
     },
     //转为商品对象
     parseInfoToObj(mInfo) {
+      const amountDisabled = this.amountCalculationDisabled()
       return {
         barCode: mInfo.mBarCode,
         name: mInfo.name,
@@ -688,10 +736,10 @@ export const BillModalMixin = {
         unit: mInfo.commodityUnit,
         sku: mInfo.sku,
         unitPrice: mInfo.billPrice,
-        allPrice: mInfo.billPrice,
+        allPrice: amountDisabled ? 0 : mInfo.billPrice,
         taxRate: 0,
         taxMoney: 0,
-        taxLastMoney: mInfo.billPrice
+        taxLastMoney: amountDisabled ? 0 : mInfo.billPrice
       }
     },
     //统一保留允许的列，隐藏其余列
@@ -705,6 +753,16 @@ export const BillModalMixin = {
         }
         if (column.__originType == null) {
           column.__originType = column.type
+        }
+        const forceHideSet = FORCE_HIDE_COLUMNS_BY_PREFIX[this.prefixNo]
+        if (forceHideSet && forceHideSet.has(column.key)) {
+          this.changeFormTypes(this.materialTable.columns, column.key, 0)
+          return
+        }
+        const forceShowSet = FORCE_SHOW_COLUMNS_BY_PREFIX[this.prefixNo]
+        if (forceShowSet && forceShowSet.has(column.key)) {
+          column.type = column.__originType
+          return
         }
         if (ALLOWED_VISIBLE_COLUMN_KEYS.has(column.key)) {
           column.type = column.__originType
@@ -767,6 +825,24 @@ export const BillModalMixin = {
         })
       }
     },
+    amountCalculationDisabled() {
+      return AMOUNT_DISABLED_PREFIXES.has(this.prefixNo)
+    },
+    normalizeAmountsForDisabled() {
+      if (!this.amountCalculationDisabled()) {
+        return
+      }
+      if (!this.materialTable || !(this.materialTable.dataSource instanceof Array)) {
+        return
+      }
+      this.materialTable.dataSource.forEach(item => {
+        if (item) {
+          item.allPrice = 0
+          item.taxMoney = 0
+          item.taxLastMoney = 0
+        }
+      })
+    },
     //删除一行或多行的时候触发
     onDeleted(ids, target) {
       target.recalcAllStatisticsColumns()
@@ -783,6 +859,9 @@ export const BillModalMixin = {
     },
     //改变优惠、本次付款、欠款的值
     autoChangePrice(target) {
+      if (this.amountCalculationDisabled()) {
+        return
+      }
       let allTaxLastMoney = target && target.statisticsColumns && target.statisticsColumns.taxLastMoney ?
         parseFloat(target.statisticsColumns.taxLastMoney) || 0 : 0
       let discount = parseFloat(this.form.getFieldValue('discount')) || 0
@@ -805,6 +884,9 @@ export const BillModalMixin = {
     },
     //改变优惠率
     onChangeDiscount(e) {
+      if (this.amountCalculationDisabled()) {
+        return
+      }
       const value = parseFloat(e.target.value) || 0
       let otherMoney = this.form.getFieldValue('otherMoney') ? parseFloat(this.form.getFieldValue('otherMoney')) || 0 : 0
       let deposit = this.form.getFieldValue('deposit') ? parseFloat(this.form.getFieldValue('deposit')) || 0 : 0
@@ -828,6 +910,9 @@ export const BillModalMixin = {
     },
     //改变付款优惠
     onChangeDiscountMoney(e) {
+      if (this.amountCalculationDisabled()) {
+        return
+      }
       const value = parseFloat(e.target.value) || 0
       let otherMoney = this.form.getFieldValue('otherMoney') ? parseFloat(this.form.getFieldValue('otherMoney')) || 0 : 0
       let deposit = this.form.getFieldValue('deposit') ? parseFloat(this.form.getFieldValue('deposit')) || 0 : 0
@@ -851,6 +936,9 @@ export const BillModalMixin = {
     },
     //其它费用
     onChangeOtherMoney(e) {
+      if (this.amountCalculationDisabled()) {
+        return
+      }
       const value = parseFloat(e.target.value) || 0
       let discountLastMoney = parseFloat(this.form.getFieldValue('discountLastMoney')) || 0
       let deposit = this.form.getFieldValue('deposit') ? parseFloat(this.form.getFieldValue('deposit')) || 0 : 0
@@ -865,6 +953,9 @@ export const BillModalMixin = {
     },
     //改变扣除订金
     onChangeDeposit(e) {
+      if (this.amountCalculationDisabled()) {
+        return
+      }
       const value = parseFloat(e.target.value) || 0
       let discountLastMoney = parseFloat(this.form.getFieldValue('discountLastMoney')) || 0
       let otherMoney = this.form.getFieldValue('otherMoney') ? parseFloat(this.form.getFieldValue('otherMoney')) || 0 : 0
@@ -879,6 +970,9 @@ export const BillModalMixin = {
     },
     //改变本次付款
     onChangeChangeAmount(e) {
+      if (this.amountCalculationDisabled()) {
+        return
+      }
       const value = parseFloat(e.target.value) || 0
       let discountLastMoney = parseFloat(this.form.getFieldValue('discountLastMoney')) || 0
       let otherMoney = this.form.getFieldValue('otherMoney') ? parseFloat(this.form.getFieldValue('otherMoney')) || 0 : 0
@@ -894,6 +988,7 @@ export const BillModalMixin = {
     //切换客户信息改变商品单价
     handleOrganChange(value) {
       let organId = value
+      const amountDisabled = this.amountCalculationDisabled()
       this.getAllTable().then(tables => {
         return getListData(this.form, tables)
       }).then(allValues => {
@@ -937,6 +1032,19 @@ export const BillModalMixin = {
                 }
               }
               this.materialTable.dataSource = newDetailArr
+              if (amountDisabled) {
+                this.normalizeAmountsForDisabled()
+                this.$nextTick(() => {
+                  this.form.setFieldsValue({
+                    'discount': 0,
+                    'discountMoney': 0,
+                    'discountLastMoney': 0,
+                    'changeAmount': 0,
+                    'debt': 0
+                  })
+                })
+                return
+              }
               //更新优惠后金额、本次付款等信息
               for (let newDetail of newDetailArr) {
                 allLastMoney = allLastMoney + (parseFloat(newDetail.allPrice) || 0)
@@ -982,6 +1090,7 @@ export const BillModalMixin = {
     //扫码之后回车
     scanPressEnter() {
       let that = this
+      const amountDisabled = this.amountCalculationDisabled()
       if (this.scanBarCode) {
         this.getAllTable().then(tables => {
           return getListData(this.form, tables)
@@ -1067,32 +1176,45 @@ export const BillModalMixin = {
                 }
               }
               this.materialTable.dataSource = newDetailArr
-              //更新优惠后金额、本次付款等信息
-              for (let newDetail of newDetailArr) {
-                allLastMoney = allLastMoney + (parseFloat(newDetail.allPrice) || 0)
-                allTaxLastMoney = allTaxLastMoney + (parseFloat(newDetail.taxLastMoney) || 0)
-              }
-              let discount = parseFloat(this.form.getFieldValue('discount')) || 0
-              let otherMoney = this.form.getFieldValue('otherMoney') ? parseFloat(this.form.getFieldValue('otherMoney')) || 0 : 0
-              let deposit = this.form.getFieldValue('deposit') ? parseFloat(this.form.getFieldValue('deposit')) || 0 : 0
-              let discountMoney = parseFloat((discount * 0.01 * allTaxLastMoney).toFixed(2)) || 0
-              let discountLastMoney = parseFloat((allTaxLastMoney - discountMoney).toFixed(2)) || 0
-              let changeAmountNew = parseFloat((discountLastMoney + otherMoney).toFixed(2)) || 0
-              if (deposit) {
-                changeAmountNew = parseFloat((changeAmountNew - deposit).toFixed(2)) || 0
-              }
-              if (this.prefixNo === 'LSCK' || this.prefixNo === 'LSTH') {
+              this.normalizeAmountsForDisabled()
+              if (amountDisabled) {
                 this.$nextTick(() => {
-                  this.form.setFieldsValue({ 'changeAmount': allLastMoney, 'getAmount': allLastMoney, 'backAmount': 0 })
-                });
-              } else {
-                this.$nextTick(() => {
-                  changeAmountNew = this.prefixNo === 'CGDD' || this.prefixNo === 'XSDD' ? 0 : changeAmountNew
                   this.form.setFieldsValue({
-                    'discount': discount, 'discountMoney': discountMoney, 'discountLastMoney': discountLastMoney,
-                    'changeAmount': changeAmountNew, 'debt': 0
+                    'discount': 0,
+                    'discountMoney': 0,
+                    'discountLastMoney': 0,
+                    'changeAmount': 0,
+                    'debt': 0
                   })
-                });
+                })
+              } else {
+                //更新优惠后金额、本次付款等信息
+                for (let newDetail of newDetailArr) {
+                  allLastMoney = allLastMoney + (parseFloat(newDetail.allPrice) || 0)
+                  allTaxLastMoney = allTaxLastMoney + (parseFloat(newDetail.taxLastMoney) || 0)
+                }
+                let discount = parseFloat(this.form.getFieldValue('discount')) || 0
+                let otherMoney = this.form.getFieldValue('otherMoney') ? parseFloat(this.form.getFieldValue('otherMoney')) || 0 : 0
+                let deposit = this.form.getFieldValue('deposit') ? parseFloat(this.form.getFieldValue('deposit')) || 0 : 0
+                let discountMoney = parseFloat((discount * 0.01 * allTaxLastMoney).toFixed(2)) || 0
+                let discountLastMoney = parseFloat((allTaxLastMoney - discountMoney).toFixed(2)) || 0
+                let changeAmountNew = parseFloat((discountLastMoney + otherMoney).toFixed(2)) || 0
+                if (deposit) {
+                  changeAmountNew = parseFloat((changeAmountNew - deposit).toFixed(2)) || 0
+                }
+                if (this.prefixNo === 'LSCK' || this.prefixNo === 'LSTH') {
+                  this.$nextTick(() => {
+                    this.form.setFieldsValue({ 'changeAmount': allLastMoney, 'getAmount': allLastMoney, 'backAmount': 0 })
+                  });
+                } else {
+                  this.$nextTick(() => {
+                    changeAmountNew = this.prefixNo === 'CGDD' || this.prefixNo === 'XSDD' ? 0 : changeAmountNew
+                    this.form.setFieldsValue({
+                      'discount': discount, 'discountMoney': discountMoney, 'discountLastMoney': discountLastMoney,
+                      'changeAmount': changeAmountNew, 'debt': 0
+                    })
+                  });
+                }
               }
               //置空扫码的内容
               this.scanBarCode = ''
@@ -1115,11 +1237,25 @@ export const BillModalMixin = {
     },
     importItemModalFormOk(data) {
       this.materialTable.dataSource = data
+      this.normalizeAmountsForDisabled()
+      const amountDisabled = this.amountCalculationDisabled()
       this.$nextTick(() => {
+        for (let i = 0; i < data.length; i++) {
+          this.changeColumnShow(data[i])
+        }
+        if (amountDisabled) {
+          this.form.setFieldsValue({
+            'discount': 0,
+            'discountMoney': 0,
+            'discountLastMoney': 0,
+            'changeAmount': 0,
+            'debt': 0
+          })
+          return
+        }
         let discountLastMoney = 0
         for (let i = 0; i < data.length; i++) {
           discountLastMoney += parseFloat(data[i].taxLastMoney) || 0
-          this.changeColumnShow(data[i])
         }
         this.form.setFieldsValue({ 'discountLastMoney': discountLastMoney })
       });

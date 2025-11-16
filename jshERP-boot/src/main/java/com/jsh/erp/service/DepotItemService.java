@@ -26,6 +26,7 @@ import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -38,6 +39,7 @@ public class DepotItemService {
     private final static String SUM_TYPE = "number";
     private final static String IN = "in";
     private final static String OUT = "out";
+    private static final BigDecimal ONE_HUNDRED = new BigDecimal("100");
 
     @Resource
     private DepotItemMapper depotItemMapper;
@@ -474,6 +476,8 @@ public class DepotItemService {
             if (BusinessConstants.SUB_TYPE_PURCHASE.equals(depotHead.getSubType())) {
                 purchasePriceMap = new HashMap<>();
             }
+            boolean recalcAmounts = shouldRecalculateAmounts(depotHead);
+            BigDecimal totalAllPrice = BigDecimal.ZERO;
             // 针对组装单、拆卸单校验是否存在组合件和普通子件
             checkAssembleWithMaterialType(rowArr, depotHead.getSubType());
             for (int i = 0; i < rowArr.size(); i++) {
@@ -745,6 +749,20 @@ public class DepotItemService {
                 if (StringUtil.isExist(rowObj.get("taxLastMoney"))) {
                     depotItem.setTaxLastMoney(rowObj.getBigDecimal("taxLastMoney"));
                 }
+                if (recalcAmounts) {
+                    BigDecimal operNum = depotItem.getOperNumber() == null ? BigDecimal.ZERO
+                            : depotItem.getOperNumber();
+                    BigDecimal unitPriceVal = depotItem.getUnitPrice() == null ? BigDecimal.ZERO
+                            : depotItem.getUnitPrice();
+                    BigDecimal calculatedAllPrice = unitPriceVal.multiply(operNum).setScale(2, RoundingMode.HALF_UP);
+                    depotItem.setAllPrice(calculatedAllPrice);
+                    BigDecimal taxRateVal = depotItem.getTaxRate() == null ? BigDecimal.ZERO : depotItem.getTaxRate();
+                    BigDecimal taxMoneyVal = calculatedAllPrice.multiply(taxRateVal)
+                            .divide(ONE_HUNDRED, 2, RoundingMode.HALF_UP);
+                    depotItem.setTaxMoney(taxMoneyVal);
+                    depotItem.setTaxLastMoney(calculatedAllPrice.add(taxMoneyVal).setScale(2, RoundingMode.HALF_UP));
+                    totalAllPrice = totalAllPrice.add(calculatedAllPrice);
+                }
                 if (StringUtil.isExist(rowObj.get("mType"))) {
                     depotItem.setMaterialType(rowObj.getString("mType"));
                 }
@@ -806,6 +824,9 @@ public class DepotItemService {
                     updateMaterialExtendPrice(materialExtend.getId(), depotHead.getSubType(), depotHead.getBillType(),
                             rowObj);
                 }
+            }
+            if (recalcAmounts) {
+                updateHeadTotals(depotHead, totalAllPrice);
             }
             // 如果关联单据号非空则更新订单的状态,单据类型：采购入库单、销售出库单、盘点复盘单、其它入库单、其它出库单
             if (BusinessConstants.SUB_TYPE_PURCHASE.equals(depotHead.getSubType())
@@ -1335,6 +1356,41 @@ public class DepotItemService {
             updateCurrentStockFun(depotItem.getMaterialId(), depotItem.getAnotherDepotId(), operTime,
                     depotItem.getHeaderId());
         }
+    }
+
+    private boolean shouldRecalculateAmounts(DepotHead depotHead) {
+        if (depotHead == null) {
+            return false;
+        }
+        String type = depotHead.getType();
+        String subType = depotHead.getSubType();
+        if (BusinessConstants.DEPOTHEAD_TYPE_IN.equals(type)
+                && BusinessConstants.SUB_TYPE_PURCHASE.equals(subType)) {
+            return true;
+        }
+        if (BusinessConstants.DEPOTHEAD_TYPE_OUT.equals(type)
+                && BusinessConstants.SUB_TYPE_SALES.equals(subType)) {
+            return true;
+        }
+        if (BusinessConstants.SUB_TYPE_OTHER.equals(subType)
+                && (BusinessConstants.DEPOTHEAD_TYPE_IN.equals(type)
+                        || BusinessConstants.DEPOTHEAD_TYPE_OUT.equals(type))) {
+            return true;
+        }
+        return false;
+    }
+
+    private void updateHeadTotals(DepotHead depotHead, BigDecimal totalAllPrice) {
+        if (depotHead == null) {
+            return;
+        }
+        BigDecimal safeTotal = totalAllPrice == null ? BigDecimal.ZERO : totalAllPrice;
+        BigDecimal signedTotal = safeTotal.setScale(2, RoundingMode.HALF_UP);
+        if (BusinessConstants.DEPOTHEAD_TYPE_IN.equals(depotHead.getType())) {
+            signedTotal = signedTotal.negate();
+        }
+        depotHead.setTotalPrice(signedTotal);
+        depotHeadMapper.updateByPrimaryKeySelective(depotHead);
     }
 
     /**

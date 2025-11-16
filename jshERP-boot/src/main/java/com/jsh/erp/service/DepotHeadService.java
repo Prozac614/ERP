@@ -29,6 +29,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.File;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.sql.Timestamp;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -1372,6 +1373,10 @@ public class DepotHeadService {
             }
             depotHead.setAccountMoneyList(accountMoneyList);
         }
+        if (shouldRecalculateTotals(depotHead)) {
+            BigDecimal recalculated = calculateRowsTotalPrice(rows);
+            depotHead.setTotalPrice(applySignedTotal(depotHead.getType(), recalculated));
+        }
         // 校验累计扣除订金是否超出订单中的金额
         if (depotHead.getDeposit() != null && StringUtil.isNotEmpty(depotHead.getLinkNumber())) {
             BigDecimal finishDeposit = depotHeadMapperEx
@@ -1499,6 +1504,10 @@ public class DepotHeadService {
                         String.format(ExceptionConstants.DEPOT_HEAD_MANY_ACCOUNT_FAILED_MSG));
             }
             depotHead.setAccountMoneyList(accountMoneyList);
+        }
+        if (shouldRecalculateTotals(depotHead)) {
+            BigDecimal recalculated = calculateRowsTotalPrice(rows);
+            depotHead.setTotalPrice(applySignedTotal(depotHead.getType(), recalculated));
         }
         // 校验累计扣除订金是否超出订单中的金额
         if (depotHead.getDeposit() != null && StringUtil.isNotEmpty(depotHead.getLinkNumber())) {
@@ -1896,6 +1905,60 @@ public class DepotHeadService {
             dhList.add(dh);
         }
         return dhList;
+    }
+
+    private boolean shouldRecalculateTotals(DepotHead depotHead) {
+        if (depotHead == null) {
+            return false;
+        }
+        String type = depotHead.getType();
+        String subType = depotHead.getSubType();
+        if (BusinessConstants.DEPOTHEAD_TYPE_IN.equals(type)
+                && BusinessConstants.SUB_TYPE_PURCHASE.equals(subType)) {
+            return true;
+        }
+        if (BusinessConstants.DEPOTHEAD_TYPE_OUT.equals(type)
+                && BusinessConstants.SUB_TYPE_SALES.equals(subType)) {
+            return true;
+        }
+        if (BusinessConstants.SUB_TYPE_OTHER.equals(subType)
+                && (BusinessConstants.DEPOTHEAD_TYPE_IN.equals(type)
+                        || BusinessConstants.DEPOTHEAD_TYPE_OUT.equals(type))) {
+            return true;
+        }
+        return false;
+    }
+
+    private BigDecimal calculateRowsTotalPrice(String rows) {
+        BigDecimal total = BigDecimal.ZERO;
+        if (StringUtil.isEmpty(rows)) {
+            return total;
+        }
+        JSONArray rowArr = JSONArray.parseArray(rows);
+        if (rowArr == null) {
+            return total;
+        }
+        for (int i = 0; i < rowArr.size(); i++) {
+            JSONObject rowObj = rowArr.getJSONObject(i);
+            if (rowObj == null) {
+                continue;
+            }
+            BigDecimal operNumber = rowObj.getBigDecimal("operNumber");
+            BigDecimal unitPrice = rowObj.getBigDecimal("unitPrice");
+            if (operNumber == null || unitPrice == null) {
+                continue;
+            }
+            total = total.add(unitPrice.multiply(operNumber).setScale(2, RoundingMode.HALF_UP));
+        }
+        return total;
+    }
+
+    private BigDecimal applySignedTotal(String type, BigDecimal total) {
+        BigDecimal safe = total == null ? BigDecimal.ZERO : total.setScale(2, RoundingMode.HALF_UP);
+        if (BusinessConstants.DEPOTHEAD_TYPE_IN.equals(type)) {
+            return safe.negate();
+        }
+        return safe;
     }
 
     public String getBillCategory(String subType) {

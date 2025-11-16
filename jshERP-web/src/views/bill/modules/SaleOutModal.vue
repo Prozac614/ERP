@@ -330,8 +330,8 @@
             { title: '数量', key: 'operNumber', width: '4%', type: FormTypes.inputNumber, statistics: true,
               validateRules: [{ required: true, message: '${title}不能为空' }]
             },
-            { title: '单价', key: 'unitPrice', width: '4%', type: FormTypes.normal},
-            { title: '金额', key: 'allPrice', width: '5%', type: FormTypes.normal, statistics: true },
+            { title: '单价', key: 'unitPrice', width: '4%', type: FormTypes.hidden},
+            { title: '金额', key: 'allPrice', width: '5%', type: FormTypes.hidden, statistics: false },
             { title: '税率', key: 'taxRate', width: '4%', type: FormTypes.normal },
             { title: '税额', key: 'taxMoney', width: '5%', type: FormTypes.normal, statistics: true },
             { title: '价税合计', key: 'taxLastMoney', width: '7%', type: FormTypes.normal, statistics: true },
@@ -472,6 +472,7 @@
         let totalPrice = 0
         let billMain = Object.assign(this.model, allValues.formValue)
         let detailArr = allValues.tablesValue[0].values
+        const amountDisabled = this.amountCalculationDisabled ? this.amountCalculationDisabled() : false
         
         // 过滤掉唱头为空的行（数量现在是必填的）
         detailArr = detailArr.filter(item => {
@@ -483,9 +484,22 @@
         // 销售店铺
         billMain.shopName = this.form.getFieldValue('shopName')
         for(let item of detailArr){
+          if (amountDisabled) {
+            item.allPrice = 0
+            item.taxMoney = 0
+            item.taxLastMoney = 0
+          }
           totalPrice += item.allPrice-0
         }
         billMain.totalPrice = totalPrice
+        if (amountDisabled) {
+          billMain.discount = 0
+          billMain.discountMoney = 0
+          billMain.discountLastMoney = 0
+          billMain.otherMoney = 0
+          billMain.changeAmount = 0
+          billMain.debt = 0
+        }
         if(billMain.accountId === 0) {
           billMain.accountId = ''
         }
@@ -556,6 +570,7 @@
             }
           }
           this.materialTable.dataSource = listEx
+          this.normalizeAmountsForDisabled()
           ///给优惠后金额重新赋值
           allTaxLastMoney = allTaxLastMoney?allTaxLastMoney:0
           let discount = 0
@@ -569,27 +584,39 @@
             changeAmount = (discountLastMoney - deposit).toFixed(2)-0
           }
           this.$nextTick(() => {
-            this.form.setFieldsValue({
+            const baseFields = {
               'organId': organId,
               'linkNumber': linkNumber,
-              'discount': discount,
-              'discountMoney': discountMoney,
-              'discountLastMoney': discountLastMoney,
               'deposit': deposit,
-              'changeAmount': changeAmount,
               'accountId': accountId,
               'remark': remark
-            })
-            getCurrentSystemConfig().then((res) => {
-              if (res.code === 200 && res.data) {
-                let flag = res.data.zeroChangeAmountFlag==='1'?true:false
-                if(flag) {
-                  //切换收付款的金额为0
-                  let oldChangeAmount = this.form.getFieldValue('changeAmount')-0
-                  this.form.setFieldsValue({'changeAmount':0, 'debt':oldChangeAmount})
+            }
+            if (this.amountCalculationDisabled && this.amountCalculationDisabled()) {
+              this.form.setFieldsValue(Object.assign({}, baseFields, {
+                'discount': 0,
+                'discountMoney': 0,
+                'discountLastMoney': 0,
+                'changeAmount': 0,
+                'debt': 0
+              }))
+            } else {
+              this.form.setFieldsValue(Object.assign({}, baseFields, {
+                'discount': discount,
+                'discountMoney': discountMoney,
+                'discountLastMoney': discountLastMoney,
+                'changeAmount': changeAmount
+              }))
+              getCurrentSystemConfig().then((res) => {
+                if (res.code === 200 && res.data) {
+                  let flag = res.data.zeroChangeAmountFlag==='1'?true:false
+                  if(flag) {
+                    //切换收付款的金额为0
+                    let oldChangeAmount = this.form.getFieldValue('changeAmount')-0
+                    this.form.setFieldsValue({'changeAmount':0, 'debt':oldChangeAmount})
+                  }
                 }
-              }
-            })
+              })
+            }
             this.personList.value = salesMan
           })
           //判断后进行仓库的切换

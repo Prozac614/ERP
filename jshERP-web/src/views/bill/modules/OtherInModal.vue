@@ -216,8 +216,8 @@
             { title: '数量', key: 'operNumber', width: '5%', type: FormTypes.inputNumber, statistics: true,
               validateRules: [{ required: true, message: '${title}不能为空' }]
             },
-            { title: '单价', key: 'unitPrice', width: '5%', type: FormTypes.normal},
-            { title: '金额', key: 'allPrice', width: '5%', type: FormTypes.normal, statistics: true },
+            { title: '单价', key: 'unitPrice', width: '5%', type: FormTypes.hidden},
+            { title: '金额', key: 'allPrice', width: '5%', type: FormTypes.hidden, statistics: false },
             { title: '备注', key: 'remark', width: '5%', type: FormTypes.input },
             { title: '关联id', key: 'linkId', width: '5%', type: FormTypes.hidden },
           ]
@@ -424,6 +424,7 @@
         let totalPrice = 0
         let billMain = Object.assign(this.model, allValues.formValue)
         let detailArr = allValues.tablesValue[0].values
+        const amountDisabled = this.amountCalculationDisabled ? this.amountCalculationDisabled() : false
         
         // 过滤掉唄头为空的行（数量现在是必填的）
         detailArr = detailArr.filter(item => {
@@ -433,9 +434,21 @@
         billMain.type = '入库'
         billMain.subType = '其它'
         for(let item of detailArr){
+          if (amountDisabled) {
+            item.allPrice = 0
+            item.taxMoney = 0
+            item.taxLastMoney = 0
+          }
           totalPrice += item.allPrice-0
         }
         billMain.totalPrice = 0-totalPrice
+        if (amountDisabled) {
+          billMain.discount = 0
+          billMain.discountMoney = 0
+          billMain.discountLastMoney = 0
+          billMain.otherMoney = 0
+          billMain.changeAmount = 0
+        }
         if(this.fileList && this.fileList.length > 0) {
           billMain.fileName = this.fileList
         } else {
@@ -476,11 +489,17 @@
             this.changeColumnShow(info)
           }
           this.materialTable.dataSource = listEx
+          this.normalizeAmountsForDisabled()
           this.$nextTick(() => {
-            this.form.setFieldsValue({
+            const baseFields = {
               'linkNumber': linkNumber,
               'remark': remark
-            })
+            }
+            if (this.amountCalculationDisabled && this.amountCalculationDisabled()) {
+              this.form.setFieldsValue(baseFields)
+            } else {
+              this.form.setFieldsValue(baseFields)
+            }
           })
         }
       },
