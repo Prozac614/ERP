@@ -73,7 +73,7 @@
                 </a-form-item>
               </div>
 
-              <div class="filter-item">
+              <div class="filter-item" v-if="hasStockAlertPermission">
                 <a-form-item label="库存状态">
                   <a-select
                     placeholder="请选择库存状态"
@@ -619,6 +619,7 @@ import { getAction, postAction, downFile } from '@/api/manage'
           }
         } else if (hasColumn) {
           this.defColumns = this.defColumns.filter(col => col.dataIndex !== columnKey)
+          this.queryParam.stockAlertStatus = ""
         }
 
         const allowedKeys = this.defColumns.map(col => col.dataIndex)
