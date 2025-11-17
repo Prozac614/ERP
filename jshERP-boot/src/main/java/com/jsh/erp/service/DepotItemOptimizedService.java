@@ -12,7 +12,11 @@ import org.springframework.stereotype.Service;
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
 import java.math.BigDecimal;
+import java.text.SimpleDateFormat;
+import java.text.ParseException;
 import java.util.*;
+import com.jsh.erp.constants.ExceptionConstants;
+import com.jsh.erp.exception.BusinessRunTimeException;
 
 /**
  * 商品库存服务类 - 实时数据版本
@@ -118,6 +122,343 @@ public class DepotItemOptimizedService {
         } catch (Exception e) {
             logger.error("获取库存总金额失败", e);
             return BigDecimal.ZERO.setScale(2, BigDecimal.ROUND_HALF_UP);
+        }
+    }
+
+    /**
+     * 计算排除指定店铺销售出库后的库存总金额
+     * 
+     * @param targetDate      目标日期（格式：YYYY-MM-DD）
+     * @param excludeShopName 要排除的店铺名称
+     * @return 排除后的库存总金额
+     */
+    public BigDecimal getTotalStockValueExcludeShop(String targetDate, String excludeShopName) {
+        logger.info("========== 开始计算排除店铺后的库存总金额 ==========");
+        logger.info("输入参数 - targetDate: {}, excludeShopName: {}", targetDate, excludeShopName);
+
+        try {
+            User user = userService.getCurrentUser();
+            Long tenantId = user != null ? user.getTenantId() : null;
+            logger.info("当前用户租户ID: {}", tenantId);
+
+            if (tenantId == null) {
+                logger.warn("获取库存总金额时tenantId为空，返回0");
+                return BigDecimal.ZERO.setScale(2, BigDecimal.ROUND_HALF_UP);
+            }
+
+            // 参数校验
+            if (StringUtil.isEmpty(targetDate)) {
+                logger.error("参数校验失败: 日期不能为空");
+                throw new BusinessRunTimeException(ExceptionConstants.SERVICE_SYSTEM_ERROR_CODE, "日期不能为空");
+            }
+            if (StringUtil.isEmpty(excludeShopName)) {
+                logger.error("参数校验失败: 店铺名称不能为空");
+                throw new BusinessRunTimeException(ExceptionConstants.SERVICE_SYSTEM_ERROR_CODE, "店铺名称不能为空");
+            }
+
+            // 验证日期格式和范围（最近30天）
+            try {
+                SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+                Date target = sdf.parse(targetDate);
+                Date today = new Date();
+                long daysDiff = (today.getTime() - target.getTime()) / (1000 * 60 * 60 * 24);
+                logger.info("日期验证 - 目标日期: {}, 今天: {}, 相差天数: {}", targetDate, sdf.format(today), daysDiff);
+
+                if (daysDiff < 0 || daysDiff > 30) {
+                    logger.error("日期范围验证失败: 日期必须在最近30天内，当前相差{}天", daysDiff);
+                    throw new BusinessRunTimeException(ExceptionConstants.SERVICE_SYSTEM_ERROR_CODE,
+                            "日期必须在最近30天内");
+                }
+            } catch (ParseException e) {
+                logger.error("日期格式验证失败: {}", e.getMessage());
+                throw new BusinessRunTimeException(ExceptionConstants.SERVICE_SYSTEM_ERROR_CODE, "日期格式错误");
+            }
+
+            logger.info("准备执行分步查询 - targetDate: {}, excludeShopName: {}, tenantId: {}",
+                    targetDate, excludeShopName, tenantId);
+
+            // 调试：查询当前库存总金额（用于对比）
+            BigDecimal currentTotalStockValue = depotItemMapperEx.getTotalStockValueByTenant(tenantId);
+            logger.info("【调试】当前库存总金额（未排除店铺）: {}", currentTotalStockValue);
+
+            // 步骤1：查询商品当前库存和默认零售价（复用getTotalStockValueByTenant的逻辑）
+            logger.info("【步骤1】查询商品当前库存和默认零售价...");
+            List<Map<String, Object>> materialStockPriceList = depotItemMapperEx.getMaterialStockAndPrice(tenantId);
+            Map<Long, BigDecimal> currentStockMap = new HashMap<>();
+            Map<Long, BigDecimal> priceMap = new HashMap<>();
+            BigDecimal totalCurrentStock = BigDecimal.ZERO;
+            int priceCount = 0;
+            int noPriceCount = 0;
+            for (Map<String, Object> item : materialStockPriceList) {
+                Long materialId = ((Number) item.get("materialId")).longValue();
+                BigDecimal stock = item.get("currentStock") != null ? (BigDecimal) item.get("currentStock")
+                        : BigDecimal.ZERO;
+                BigDecimal price = item.get("commodityDecimal") != null ? (BigDecimal) item.get("commodityDecimal")
+                        : null;
+
+                currentStockMap.put(materialId, stock);
+                totalCurrentStock = totalCurrentStock.add(stock);
+
+                if (price != null) {
+                    priceMap.put(materialId, price);
+                    priceCount++;
+                } else {
+                    noPriceCount++;
+                }
+            }
+            logger.info("【步骤1】商品库存和价格查询完成 - 商品数量: {}, 总库存: {}, 有价格商品: {}, 无价格商品: {}",
+                    materialStockPriceList.size(), totalCurrentStock, priceCount, noPriceCount);
+
+            // 步骤2：查询单据影响（指定日期及之后，按店铺、商品汇总）
+            logger.info("【步骤2】查询单据影响（日期 >= {}）...", targetDate);
+            List<Map<String, Object>> billImpactList = depotItemMapperEx.getBillImpactByDateRange(targetDate, tenantId);
+
+            // 存储详细数据：按店铺、商品、日期分组的数据
+            List<Map<String, Object>> billImpactDetailList = new ArrayList<>();
+
+            // 汇总按商品ID的总影响量（用于后续计算）
+            // 区分：选择日期之后（不包括当天）的所有单据影响 + 选择日期当天的所有单据影响（但排除指定店铺的销售出库）
+            Map<Long, BigDecimal> billImpactMap = new HashMap<>();
+            BigDecimal totalBillImpact = BigDecimal.ZERO;
+            int billCount = 0;
+            int afterTargetDateCount = 0; // 选择日期之后的单据数
+            int targetDateCount = 0; // 选择日期当天的单据数
+            int excludedCount = 0; // 被排除的单据数
+
+            for (Map<String, Object> item : billImpactList) {
+                Long materialId = ((Number) item.get("materialId")).longValue();
+                String shopName = item.get("shopName") != null ? (String) item.get("shopName") : "";
+                String billDate = item.get("billDate") != null ? item.get("billDate").toString() : "";
+                String billType = item.get("billType") != null ? (String) item.get("billType") : "";
+                String subType = item.get("subType") != null ? (String) item.get("subType") : "";
+                BigDecimal inQuantity = item.get("inQuantity") != null ? (BigDecimal) item.get("inQuantity")
+                        : BigDecimal.ZERO;
+                BigDecimal outQuantity = item.get("outQuantity") != null ? (BigDecimal) item.get("outQuantity")
+                        : BigDecimal.ZERO;
+                BigDecimal impact = item.get("totalImpact") != null ? (BigDecimal) item.get("totalImpact")
+                        : BigDecimal.ZERO;
+
+                // 保存详细数据
+                Map<String, Object> detail = new HashMap<>();
+                detail.put("materialId", materialId);
+                detail.put("shopName", shopName);
+                detail.put("billDate", billDate);
+                detail.put("billType", billType);
+                detail.put("subType", subType);
+                detail.put("inQuantity", inQuantity);
+                detail.put("outQuantity", outQuantity);
+                detail.put("totalImpact", impact);
+                billImpactDetailList.add(detail);
+
+                // 判断是否需要回退此单据的影响
+                boolean shouldRollback = false;
+
+                if (billDate.compareTo(targetDate) > 0) {
+                    // 选择日期之后（不包括当天）的所有单据，全部回退
+                    shouldRollback = true;
+                    afterTargetDateCount++;
+                } else if (billDate.equals(targetDate)) {
+                    // 选择日期当天的单据：只回退指定店铺的销售出库，其他单据不回退
+                    if (shopName.equals(excludeShopName) && "出库".equals(billType) && "销售".equals(subType)) {
+                        // 只回退指定店铺的销售出库
+                        shouldRollback = true;
+                        targetDateCount++;
+                    } else {
+                        // 当天的其他单据不回退
+                        excludedCount++;
+                        logger.debug("当天单据不回退 - 商品ID: {}, 店铺: {}, 日期: {}, 类型: {}/{}, 影响: {}",
+                                materialId, shopName, billDate, billType, subType, impact);
+                    }
+                }
+
+                // 如果需要回退，则累加到影响量中
+                if (shouldRollback) {
+                    BigDecimal currentImpact = billImpactMap.getOrDefault(materialId, BigDecimal.ZERO);
+                    billImpactMap.put(materialId, currentImpact.add(impact));
+                    totalBillImpact = totalBillImpact.add(impact);
+                    billCount++;
+                }
+            }
+
+            logger.info("【步骤2】单据影响查询完成 - 总单据明细数: {}, 需要回退的单据数: {}, 不回退的单据数: {}",
+                    billImpactDetailList.size(), billCount, excludedCount);
+            logger.info("【步骤2-分类】选择日期之后（不包括当天）的单据数: {}, 选择日期当天需要回退的单据数: {} (当天其他单据不回退: {})",
+                    afterTargetDateCount, targetDateCount, excludedCount);
+            logger.info("【步骤2-汇总】涉及商品数量: {}, 总影响量: {}", billImpactMap.size(), totalBillImpact);
+            logger.info("【步骤2-详细】前5条明细数据示例:");
+            for (int i = 0; i < Math.min(5, billImpactDetailList.size()); i++) {
+                Map<String, Object> detail = billImpactDetailList.get(i);
+                logger.info("  商品ID: {}, 店铺: {}, 日期: {}, 类型: {}, 入库: {}, 出库: {}, 影响: {}",
+                        detail.get("materialId"), detail.get("shopName"), detail.get("billDate"),
+                        detail.get("billType"), detail.get("inQuantity"), detail.get("outQuantity"),
+                        detail.get("totalImpact"));
+            }
+
+            // 步骤4：计算最终库存和总金额
+            logger.info("【步骤4】开始计算最终库存和总金额...");
+            BigDecimal totalStockValue = BigDecimal.ZERO;
+            int processedCount = 0;
+            int skippedCount = 0;
+            BigDecimal maxValue = BigDecimal.ZERO;
+            Long maxValueMaterialId = null;
+
+            // 获取所有商品ID（从价格Map，因为需要价格才能计算金额）
+            Set<Long> allMaterialIds = new HashSet<>(priceMap.keySet());
+
+            // 收集涉及单据的商品ID（有单据影响的商品）
+            Set<Long> involvedMaterialIds = new HashSet<>(billImpactMap.keySet());
+
+            logger.info("【步骤4-调试】涉及单据的商品数量: {} (有单据影响: {})",
+                    involvedMaterialIds.size(), billImpactMap.size());
+
+            for (Long materialId : allMaterialIds) {
+                BigDecimal currentStock = currentStockMap.getOrDefault(materialId, BigDecimal.ZERO);
+                BigDecimal billImpact = billImpactMap.getOrDefault(materialId, BigDecimal.ZERO);
+                BigDecimal price = priceMap.get(materialId);
+
+                // 计算最终库存：当前库存 - 单据影响（已排除指定店铺的销售出库）
+                // billImpactMap 中已经排除了选择日期当天指定店铺的销售出库
+                BigDecimal finalStock = currentStock.subtract(billImpact);
+
+                // 如果是涉及单据的商品，打印详细库存变化过程
+                if (involvedMaterialIds.contains(materialId)) {
+                    logger.info("【步骤4-商品明细】商品ID: {}", materialId);
+                    logger.info("  当前库存: {}", currentStock);
+                    logger.info("  单据影响: {} (入库-出库)", billImpact);
+
+                    // 打印该商品的所有单据明细
+                    logger.info("  单据明细列表:");
+                    int detailCount = 0;
+                    for (Map<String, Object> detail : billImpactDetailList) {
+                        Long detailMaterialId = ((Number) detail.get("materialId")).longValue();
+                        if (detailMaterialId.equals(materialId)) {
+                            logger.info("    - 日期: {}, 店铺: {}, 类型: {}/{}, 入库: {}, 出库: {}, 影响: {}",
+                                    detail.get("billDate"), detail.get("shopName"),
+                                    detail.get("billType"), detail.get("subType"),
+                                    detail.get("inQuantity"), detail.get("outQuantity"),
+                                    detail.get("totalImpact"));
+                            detailCount++;
+                            if (detailCount >= 10) { // 限制最多打印10条
+                                logger.info("    ... (还有更多明细，已省略)");
+                                break;
+                            }
+                        }
+                    }
+
+                    // 打印选择日期当天需要回退的单据明细（指定店铺的销售出库）
+                    logger.info("  选择日期当天需要回退的单据明细（日期={}, 店铺={}, 类型=出库/销售）:", targetDate, excludeShopName);
+                    int rollbackDetailCount = 0;
+                    BigDecimal rollbackOutTotal = BigDecimal.ZERO;
+                    for (Map<String, Object> detail : billImpactDetailList) {
+                        Long detailMaterialId = ((Number) detail.get("materialId")).longValue();
+                        String detailBillDate = detail.get("billDate") != null ? detail.get("billDate").toString()
+                                : "";
+                        String detailShopName = detail.get("shopName") != null ? (String) detail.get("shopName")
+                                : "";
+                        String detailBillType = detail.get("billType") != null ? (String) detail.get("billType")
+                                : "";
+                        String detailSubType = detail.get("subType") != null ? (String) detail.get("subType") : "";
+                        BigDecimal detailOutQuantity = detail.get("outQuantity") != null
+                                ? (BigDecimal) detail.get("outQuantity")
+                                : BigDecimal.ZERO;
+
+                        if (detailMaterialId.equals(materialId) &&
+                                detailBillDate.equals(targetDate) &&
+                                detailShopName.equals(excludeShopName) &&
+                                "出库".equals(detailBillType) &&
+                                "销售".equals(detailSubType) &&
+                                detailOutQuantity.compareTo(BigDecimal.ZERO) > 0) {
+                            logger.info("    - 日期: {}, 店铺: {}, 出库量: {} (需要回退)",
+                                    detailBillDate, detailShopName, detailOutQuantity);
+                            rollbackOutTotal = rollbackOutTotal.add(detailOutQuantity);
+                            rollbackDetailCount++;
+                        }
+                    }
+                    if (rollbackDetailCount == 0) {
+                        logger.info("    (无)");
+                    } else {
+                        logger.info("  需要回退的出库总量: {}", rollbackOutTotal);
+                    }
+
+                    // 打印选择日期当天不回退的其他单据明细
+                    logger.info("  选择日期当天不回退的其他单据明细:");
+                    int noRollbackDetailCount = 0;
+                    for (Map<String, Object> detail : billImpactDetailList) {
+                        Long detailMaterialId = ((Number) detail.get("materialId")).longValue();
+                        String detailBillDate = detail.get("billDate") != null ? detail.get("billDate").toString()
+                                : "";
+                        String detailShopName = detail.get("shopName") != null ? (String) detail.get("shopName")
+                                : "";
+                        String detailBillType = detail.get("billType") != null ? (String) detail.get("billType")
+                                : "";
+                        String detailSubType = detail.get("subType") != null ? (String) detail.get("subType") : "";
+
+                        if (detailMaterialId.equals(materialId) &&
+                                detailBillDate.equals(targetDate) &&
+                                !(detailShopName.equals(excludeShopName) && "出库".equals(detailBillType)
+                                        && "销售".equals(detailSubType))) {
+                            logger.info("    - 日期: {}, 店铺: {}, 类型: {}/{}, 影响: {} (不回退)",
+                                    detailBillDate, detailShopName, detailBillType, detailSubType,
+                                    detail.get("totalImpact"));
+                            noRollbackDetailCount++;
+                            if (noRollbackDetailCount >= 5) {
+                                logger.info("    ... (还有更多明细，已省略)");
+                                break;
+                            }
+                        }
+                    }
+                    if (noRollbackDetailCount == 0) {
+                        logger.info("    (无)");
+                    }
+
+                    logger.info("  最终库存: {} (当前库存 {} - 单据影响 {})", finalStock, currentStock, billImpact);
+                    logger.info("  默认零售价: {}", price);
+                    if (price != null && finalStock.compareTo(BigDecimal.ZERO) != 0) {
+                        BigDecimal value = finalStock.multiply(price);
+                        logger.info("  商品金额: {} (最终库存 {} × 价格 {})", value, finalStock, price);
+                    }
+                    logger.info("  ---");
+                }
+
+                // 计算金额：最终库存 × 默认零售价
+                if (price != null && finalStock.compareTo(BigDecimal.ZERO) != 0) {
+                    BigDecimal value = finalStock.multiply(price);
+                    totalStockValue = totalStockValue.add(value);
+                    processedCount++;
+
+                    // 记录最大值用于调试
+                    if (value.compareTo(maxValue) > 0) {
+                        maxValue = value;
+                        maxValueMaterialId = materialId;
+                    }
+                } else {
+                    skippedCount++;
+                }
+            }
+
+            logger.info("【步骤5】计算完成 - 处理商品数: {}, 跳过商品数: {}, 最大单商品金额: {} (商品ID: {})",
+                    processedCount, skippedCount, maxValue, maxValueMaterialId);
+            logger.info("【调试】中间结果汇总:");
+            logger.info("  当前库存总量: {}", totalCurrentStock);
+            logger.info("  单据影响总量: {} (回退选择日期之后的单据 + 回退选择日期当天指定店铺的销售出库)", totalBillImpact);
+            logger.info("  计算出的库存总金额: {}", totalStockValue);
+
+            // 统一保留两位
+            BigDecimal result = totalStockValue.setScale(2, BigDecimal.ROUND_HALF_UP);
+            logger.info("【调试】最终计算结果: {} (原始值: {}, 保留2位小数)", result, totalStockValue);
+            logger.info("【调试】与当前库存总金额对比: 当前={}, 排除后={}, 差值={}",
+                    currentTotalStockValue, result,
+                    currentTotalStockValue != null ? currentTotalStockValue.subtract(result) : "N/A");
+            logger.info("========== 计算完成 ==========");
+
+            return result;
+        } catch (BusinessRunTimeException e) {
+            logger.error("获取排除店铺后的库存总金额失败", e);
+            throw e;
+        } catch (Exception e) {
+            logger.error("获取排除店铺后的库存总金额失败", e);
+            throw new BusinessRunTimeException(ExceptionConstants.SERVICE_SYSTEM_ERROR_CODE,
+                    "获取排除店铺后的库存总金额失败: " + e.getMessage());
         }
     }
 

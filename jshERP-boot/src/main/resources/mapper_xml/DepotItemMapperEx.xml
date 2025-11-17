@@ -1423,6 +1423,122 @@
           and m.tenant_id = #{tenantId}
     </select>
 
+    <!-- 计算排除指定店铺销售出库后的库存总金额 -->
+    <select id="getTotalStockValueExcludeShop" resultType="java.math.BigDecimal">
+        SELECT 
+            COALESCE(ROUND(SUM(
+                (COALESCE(current_stock.stock, 0) - COALESCE(future_impact.total_impact, 0) + COALESCE(exclude_shop.exclude_shop_out, 0)) 
+                * COALESCE(me.commodity_decimal, 0)
+            ), 2), 0) as totalStockValue
+        FROM jsh_material m
+        -- 当前库存（按商品汇总）
+        LEFT JOIN (
+            SELECT material_id, SUM(ifnull(current_number, 0)) as stock
+            FROM jsh_material_current_stock
+            WHERE ifnull(delete_flag, '0') != '1'
+              AND tenant_id = #{tenantId}
+            GROUP BY material_id
+        ) current_stock ON m.id = current_stock.material_id
+        -- 指定日期及之后的所有单据影响（入库-出库），按商品汇总
+        LEFT JOIN (
+            SELECT 
+                di.material_id,
+                SUM(CASE 
+                    WHEN dh.type = '入库' THEN ifnull(di.basic_number, 0)
+                    WHEN dh.type = '出库' THEN -ifnull(di.basic_number, 0)
+                    ELSE 0
+                END) as total_impact
+            FROM jsh_depot_head dh
+            INNER JOIN jsh_depot_item di ON dh.id = di.header_id
+            WHERE dh.status = '1'
+              AND ifnull(dh.delete_flag, '0') != '1'
+              AND ifnull(di.delete_flag, '0') != '1'
+              AND DATE(dh.oper_time) >= DATE(#{targetDate})
+              AND dh.tenant_id = #{tenantId}
+            GROUP BY di.material_id
+        ) future_impact ON m.id = future_impact.material_id
+        -- 指定日期当天指定店铺的销售出库数量（需要加回）
+        LEFT JOIN (
+            SELECT 
+                di.material_id,
+                SUM(ifnull(di.basic_number, 0)) as exclude_shop_out
+            FROM jsh_depot_head dh
+            INNER JOIN jsh_depot_item di ON dh.id = di.header_id
+            WHERE dh.status = '1'
+              AND ifnull(dh.delete_flag, '0') != '1'
+              AND ifnull(di.delete_flag, '0') != '1'
+              AND DATE(dh.oper_time) = DATE(#{targetDate})
+              AND dh.type = '出库'
+              AND dh.sub_type = '销售'
+              AND dh.shop_name = #{excludeShopName}
+              AND dh.tenant_id = #{tenantId}
+            GROUP BY di.material_id
+        ) exclude_shop ON m.id = exclude_shop.material_id
+        -- 默认零售价
+        LEFT JOIN jsh_material_extend me ON m.id = me.material_id
+            AND ifnull(me.delete_flag, '0') != '1'
+            AND me.default_flag = '1'
+            AND me.tenant_id = #{tenantId}
+        WHERE ifnull(m.delete_flag, '0') != '1'
+          AND m.tenant_id = #{tenantId}
+    </select>
+
+    <!-- 查询商品当前库存和默认零售价（复用getTotalStockValueByTenant的逻辑） -->
+    <select id="getMaterialStockAndPrice" resultType="java.util.HashMap">
+        SELECT 
+            m.id as materialId,
+            COALESCE(mcs_sum.current_stock, 0) as currentStock,
+            me.commodity_decimal as commodityDecimal
+        FROM jsh_material m
+        -- 实时库存聚合（按物料）- 复用getTotalStockValueByTenant的逻辑
+        LEFT JOIN (
+            SELECT material_id, SUM(ifnull(current_number, 0)) as current_stock
+            FROM jsh_material_current_stock
+            WHERE ifnull(delete_flag, '0') != '1'
+              AND tenant_id = #{tenantId}
+            GROUP BY material_id
+        ) mcs_sum ON mcs_sum.material_id = m.id
+        -- 默认零售价 - 复用getTotalStockValueByTenant的逻辑
+        LEFT JOIN jsh_material_extend me ON m.id = me.material_id
+            AND ifnull(me.delete_flag, '0') != '1'
+            AND me.default_flag = '1'
+            AND me.tenant_id = #{tenantId}
+        WHERE ifnull(m.delete_flag, '0') != '1'
+          AND m.tenant_id = #{tenantId}
+    </select>
+
+    <!-- 查询指定日期及之后的单据影响（按店铺、商品、日期汇总，便于后续计算） -->
+    <select id="getBillImpactByDateRange" resultType="java.util.HashMap">
+        SELECT 
+            di.material_id as materialId,
+            IFNULL(dh.shop_name, '') as shopName,
+            DATE(dh.oper_time) as billDate,
+            dh.type as billType,
+            dh.sub_type as subType,
+            SUM(CASE 
+                WHEN dh.type = '入库' THEN ifnull(di.basic_number, 0)
+                ELSE 0
+            END) as inQuantity,
+            SUM(CASE 
+                WHEN dh.type = '出库' THEN ifnull(di.basic_number, 0)
+                ELSE 0
+            END) as outQuantity,
+            SUM(CASE 
+                WHEN dh.type = '入库' THEN ifnull(di.basic_number, 0)
+                WHEN dh.type = '出库' THEN -ifnull(di.basic_number, 0)
+                ELSE 0
+            END) as totalImpact
+        FROM jsh_depot_head dh
+        INNER JOIN jsh_depot_item di ON dh.id = di.header_id
+        WHERE dh.status = '1'
+          AND ifnull(dh.delete_flag, '0') != '1'
+          AND ifnull(di.delete_flag, '0') != '1'
+          AND DATE(dh.oper_time) >= DATE(#{targetDate})
+          AND dh.tenant_id = #{tenantId}
+        GROUP BY di.material_id, IFNULL(dh.shop_name, ''), DATE(dh.oper_time), dh.type, dh.sub_type
+        ORDER BY di.material_id, IFNULL(dh.shop_name, ''), DATE(dh.oper_time)
+    </select>
+
     <!-- 缺失默认零售价统计（按租户） -->
     <select id="countMaterialsMissingDefaultPrice" resultType="java.lang.Long">
         select count(distinct m.id)

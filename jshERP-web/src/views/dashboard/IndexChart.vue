@@ -182,11 +182,17 @@
           >
             库存总金额：{{ formatCurrency(totalStockValue) }}
           </span>
-          <a-tooltip placement="left" title="商品库存期间统计表显示各商品的期间库存变动情况。
+          <a-icon 
+            type="calculator" 
+            style="margin-left: 8px; font-size: 18px; color: #1890ff; cursor: pointer;"
+            @click="showStockValueExcludeShopModal"
+            title="查看排除店铺后的库存总金额"
+          />
+          <!-- <a-tooltip placement="left" title="商品库存期间统计表显示各商品的期间库存变动情况。
           支持按商品信息、分类、供应商等条件进行筛选。
           可以导出数据进行进一步分析。" slot="action">
             <a-icon type="question-circle" style="font-size:20px;float:right;" />
-          </a-tooltip>
+          </a-tooltip> -->
         </div>
         <!-- table区域-begin -->
         <div>
@@ -259,6 +265,12 @@
             @cancel="handleChartModalCancel"
           />
           
+          <!-- 排除店铺后的库存总金额弹窗 -->
+          <stock-value-exclude-shop-modal
+            :visible="stockValueExcludeShopModalVisible"
+            :shopList="shopList"
+            @cancel="handleStockValueExcludeShopModalCancel"
+          />
 
 
 
@@ -274,13 +286,15 @@
 import { getAction, postAction, downFile } from '@/api/manage'
   import JEllipsis from '@/components/jeecg/JEllipsis'
   import StockChartModal from '@/components/charts/StockChartModal'
+  import StockValueExcludeShopModal from './modules/StockValueExcludeShopModal'
   // import space removed
 
   export default {
     name: "IndexChart",
     components: {
       JEllipsis,
-      StockChartModal
+      StockChartModal,
+      StockValueExcludeShopModal
     },
     data () {
       const defaultColumnKeys = ['action', 'barCode', 'materialName', 'currentPeriodStock', 'lastSixMonthsSales', 'stockAlertStatus']
@@ -307,6 +321,8 @@ import { getAction, postAction, downFile } from '@/api/manage'
         hasStockAlertPermission: false, // 库存预警权限标识
         // 库存总金额（两位小数）
         totalStockValue: null,
+        // 排除店铺后的库存总金额弹窗可见性
+        stockValueExcludeShopModalVisible: false,
         
         // 库存状态选项
         stockAlertStatusOptions: [
@@ -694,6 +710,14 @@ import { getAction, postAction, downFile } from '@/api/manage'
           console.error('获取库存总金额失败:', e)
           this.totalStockValue = 0
         }
+      },
+      // 显示排除店铺后的库存总金额弹窗
+      showStockValueExcludeShopModal() {
+        this.stockValueExcludeShopModalVisible = true
+      },
+      // 关闭排除店铺后的库存总金额弹窗
+      handleStockValueExcludeShopModalCancel() {
+        this.stockValueExcludeShopModalVisible = false
       },
       // 金额格式化（两位小数）
       formatCurrency(val) {
@@ -1839,6 +1863,9 @@ import { getAction, postAction, downFile } from '@/api/manage'
 
   .table-operator {
     margin-bottom: 18px;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
     .ant-btn {
       margin-right: 8px;
     }

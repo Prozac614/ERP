@@ -1193,6 +1193,35 @@ public class DepotItemController {
     }
 
     /**
+     * 计算排除指定店铺销售出库后的库存总金额
+     * 
+     * @param targetDate 目标日期（格式：YYYY-MM-DD）
+     * @param excludeShopName 要排除的店铺名称
+     * @param request HTTP请求
+     * @return 排除后的库存总金额
+     */
+    @GetMapping(value = "/getTotalStockValueExcludeShop")
+    @ApiOperation(value = "计算排除指定店铺销售出库后的库存总金额")
+    public BaseResponseInfo getTotalStockValueExcludeShop(
+            @RequestParam("targetDate") String targetDate,
+            @RequestParam("excludeShopName") String excludeShopName,
+            HttpServletRequest request) throws Exception {
+        BaseResponseInfo res = new BaseResponseInfo();
+        try {
+            BigDecimal value = depotItemOptimizedService.getTotalStockValueExcludeShop(targetDate, excludeShopName);
+            Map<String, Object> map = new HashMap<>();
+            map.put("totalStockValue", value);
+            res.code = 200;
+            res.data = map;
+        } catch (Exception e) {
+            logger.error("获取排除店铺后的库存总金额失败", e);
+            res.code = 500;
+            res.data = e.getMessage() != null ? e.getMessage() : "获取数据失败";
+        }
+        return res;
+    }
+
+    /**
      * 测试图表数据接口
      * 用于验证图表功能是否正常工作
      * 

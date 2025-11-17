@@ -322,6 +322,40 @@ public interface DepotItemMapperEx {
         BigDecimal getTotalStockValueByTenant(@Param("tenantId") Long tenantId);
 
         /**
+         * 计算排除指定店铺销售出库后的库存总金额
+         * 
+         * @param targetDate      目标日期（格式：YYYY-MM-DD）
+         * @param excludeShopName 要排除的店铺名称
+         * @param tenantId        租户ID
+         * @return 排除后的库存总金额
+         */
+        BigDecimal getTotalStockValueExcludeShop(
+                        @Param("targetDate") String targetDate,
+                        @Param("excludeShopName") String excludeShopName,
+                        @Param("tenantId") Long tenantId);
+
+        /**
+         * 查询商品当前库存和默认零售价（复用getTotalStockValueByTenant的逻辑）
+         * 
+         * @param tenantId 租户ID
+         * @return List<Map<String, Object>> 包含 materialId, currentStock,
+         *         commodityDecimal
+         */
+        List<Map<String, Object>> getMaterialStockAndPrice(@Param("tenantId") Long tenantId);
+
+        /**
+         * 查询指定日期及之后的单据影响（按店铺、商品汇总，便于后续计算）
+         * 
+         * @param targetDate 目标日期
+         * @param tenantId   租户ID
+         * @return List<Map<String, Object>> 包含 materialId, shopName, billDate,
+         *         inQuantity, outQuantity, totalImpact
+         */
+        List<Map<String, Object>> getBillImpactByDateRange(
+                        @Param("targetDate") String targetDate,
+                        @Param("tenantId") Long tenantId);
+
+        /**
          * 统计：按当前租户统计缺失默认零售价（或默认价为null）的商品数量
          */
         Long countMaterialsMissingDefaultPrice(@Param("tenantId") Long tenantId);
