@@ -987,4 +987,202 @@ public class DepotItemOptimizedService {
         }
     }
 
+    /**
+     * 批量计算日期范围内排除指定店铺销售出库后的库存总金额
+     * 使用前缀和算法从后往前计算，降低计算复杂度
+     * 
+     * @param beginDate       开始日期（格式：YYYY-MM-DD）
+     * @param endDate         结束日期（格式：YYYY-MM-DD）
+     * @param excludeShopName 要排除的店铺名称
+     * @return 日期范围内每一天的数据列表，每个Map包含：date, excludeAfterValue, excludeBeforeValue
+     */
+    public List<Map<String, Object>> getTotalStockValueExcludeShopByDateRange(
+            String beginDate, String endDate, String excludeShopName) {
+        logger.info("========== 开始批量计算排除店铺后的库存总金额 ==========");
+        logger.info("输入参数 - beginDate: {}, endDate: {}, excludeShopName: {}", beginDate, endDate, excludeShopName);
+
+        try {
+            User user = userService.getCurrentUser();
+            Long tenantId = user != null ? user.getTenantId() : null;
+            logger.info("当前用户租户ID: {}", tenantId);
+
+            if (tenantId == null) {
+                logger.warn("获取库存总金额时tenantId为空，返回空列表");
+                return new ArrayList<>();
+            }
+
+            // 参数校验
+            if (StringUtil.isEmpty(beginDate)) {
+                logger.error("参数校验失败: 开始日期不能为空");
+                throw new BusinessRunTimeException(ExceptionConstants.SERVICE_SYSTEM_ERROR_CODE, "开始日期不能为空");
+            }
+            if (StringUtil.isEmpty(endDate)) {
+                logger.error("参数校验失败: 结束日期不能为空");
+                throw new BusinessRunTimeException(ExceptionConstants.SERVICE_SYSTEM_ERROR_CODE, "结束日期不能为空");
+            }
+            if (StringUtil.isEmpty(excludeShopName)) {
+                logger.error("参数校验失败: 店铺名称不能为空");
+                throw new BusinessRunTimeException(ExceptionConstants.SERVICE_SYSTEM_ERROR_CODE, "店铺名称不能为空");
+            }
+
+            // 验证日期格式和范围（最大7天）
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+            Date begin = null;
+            Date end = null;
+            Date today = new Date();
+            try {
+                begin = sdf.parse(beginDate);
+                end = sdf.parse(endDate);
+
+                if (begin.after(end)) {
+                    logger.error("日期范围验证失败: 开始日期不能大于结束日期");
+                    throw new BusinessRunTimeException(ExceptionConstants.SERVICE_SYSTEM_ERROR_CODE,
+                            "开始日期不能大于结束日期");
+                }
+
+                long daysDiff = (end.getTime() - begin.getTime()) / (1000 * 60 * 60 * 24);
+
+                if (end.after(today)) {
+                    logger.error("日期范围验证失败: 结束日期不能是未来日期");
+                    throw new BusinessRunTimeException(ExceptionConstants.SERVICE_SYSTEM_ERROR_CODE,
+                            "结束日期不能是未来日期");
+                }
+
+                logger.info("日期验证通过 - 开始日期: {}, 结束日期: {}, 天数: {}", beginDate, endDate, daysDiff + 1);
+            } catch (ParseException e) {
+                logger.error("日期格式验证失败: {}", e.getMessage());
+                throw new BusinessRunTimeException(ExceptionConstants.SERVICE_SYSTEM_ERROR_CODE, "日期格式错误");
+            }
+
+            // 步骤1：查询商品当前库存和默认零售价
+            logger.info("【步骤1】查询商品当前库存和默认零售价...");
+            List<Map<String, Object>> materialStockPriceList = depotItemMapperEx.getMaterialStockAndPrice(tenantId);
+            Map<Long, BigDecimal> currentStockMap = new HashMap<>();
+            Map<Long, BigDecimal> priceMap = new HashMap<>();
+            for (Map<String, Object> item : materialStockPriceList) {
+                Long materialId = ((Number) item.get("materialId")).longValue();
+                BigDecimal stock = item.get("currentStock") != null ? (BigDecimal) item.get("currentStock")
+                        : BigDecimal.ZERO;
+                BigDecimal price = item.get("commodityDecimal") != null ? (BigDecimal) item.get("commodityDecimal")
+                        : null;
+                currentStockMap.put(materialId, stock);
+                if (price != null) {
+                    priceMap.put(materialId, price);
+                }
+            }
+            logger.info("【步骤1】商品库存和价格查询完成 - 商品数量: {}, 有价格商品: {}",
+                    materialStockPriceList.size(), priceMap.size());
+
+            // 步骤2：查询从beginDate开始的所有单据影响
+            logger.info("【步骤2】查询单据影响（日期 >= {}）...", beginDate);
+            List<Map<String, Object>> billImpactList = depotItemMapperEx.getBillImpactByDateRange(beginDate, tenantId);
+            logger.info("【步骤2】单据影响查询完成 - 单据明细数: {}", billImpactList.size());
+
+            // 步骤3：按日期分组构建数据结构
+            // dateMaterialImpactMap: 每天每个商品的单据影响
+            // dateMaterialExcludeShopOutMap: 每天每个商品指定店铺的销售出库
+            Map<String, Map<Long, BigDecimal>> dateMaterialImpactMap = new HashMap<>();
+            Map<String, Map<Long, BigDecimal>> dateMaterialExcludeShopOutMap = new HashMap<>();
+
+            for (Map<String, Object> item : billImpactList) {
+                Long materialId = ((Number) item.get("materialId")).longValue();
+                String shopName = item.get("shopName") != null ? (String) item.get("shopName") : "";
+                String billDate = item.get("billDate") != null ? item.get("billDate").toString() : "";
+                String billType = item.get("billType") != null ? (String) item.get("billType") : "";
+                String subType = item.get("subType") != null ? (String) item.get("subType") : "";
+                BigDecimal impact = item.get("totalImpact") != null ? (BigDecimal) item.get("totalImpact")
+                        : BigDecimal.ZERO;
+                BigDecimal outQuantity = item.get("outQuantity") != null ? (BigDecimal) item.get("outQuantity")
+                        : BigDecimal.ZERO;
+
+                // 累加每天每个商品的单据影响
+                dateMaterialImpactMap.computeIfAbsent(billDate, k -> new HashMap<>())
+                        .merge(materialId, impact, BigDecimal::add);
+
+                // 如果是指定店铺的销售出库，累加到排除店铺出库Map中
+                if (shopName.equals(excludeShopName) && "出库".equals(billType) && "销售".equals(subType)
+                        && outQuantity.compareTo(BigDecimal.ZERO) > 0) {
+                    dateMaterialExcludeShopOutMap.computeIfAbsent(billDate, k -> new HashMap<>())
+                            .merge(materialId, outQuantity, BigDecimal::add);
+                }
+            }
+
+            // 步骤4：生成日期范围内的所有日期列表
+            List<String> dateList = new ArrayList<>();
+            Calendar cal = Calendar.getInstance();
+            cal.setTime(begin);
+            while (!cal.getTime().after(end)) {
+                dateList.add(sdf.format(cal.getTime()));
+                cal.add(Calendar.DAY_OF_MONTH, 1);
+            }
+            logger.info("【步骤4】生成日期列表完成 - 日期数量: {}", dateList.size());
+
+            // 步骤5：使用前缀和算法从后往前计算每一天的库存总金额
+            logger.info("【步骤5】开始使用前缀和算法计算每一天的库存总金额...");
+            List<Map<String, Object>> resultList = new ArrayList<>();
+
+            // 累计影响Map：表示"当前日期之后的所有单据影响"
+            Map<Long, BigDecimal> cumulativeImpactMap = new HashMap<>();
+
+            // 从后往前遍历日期
+            for (int i = dateList.size() - 1; i >= 0; i--) {
+                String date = dateList.get(i);
+
+                // 计算排除前和排除后的库存总金额
+                BigDecimal excludeBeforeValue = BigDecimal.ZERO;
+                BigDecimal excludeAfterValue = BigDecimal.ZERO;
+
+                // 遍历所有有价格的商品
+                for (Map.Entry<Long, BigDecimal> entry : priceMap.entrySet()) {
+                    Long materialId = entry.getKey();
+                    BigDecimal price = entry.getValue();
+                    BigDecimal currentStock = currentStockMap.getOrDefault(materialId, BigDecimal.ZERO);
+
+                    // 排除前：当前库存 - 累计影响（date之后的所有单据影响）
+                    BigDecimal excludeBeforeStock = currentStock.subtract(
+                            cumulativeImpactMap.getOrDefault(materialId, BigDecimal.ZERO));
+
+                    // 排除后：排除前库存 + 该日期当天指定店铺的销售出库
+                    BigDecimal excludeShopOut = dateMaterialExcludeShopOutMap
+                            .getOrDefault(date, new HashMap<>())
+                            .getOrDefault(materialId, BigDecimal.ZERO);
+                    BigDecimal excludeAfterStock = excludeBeforeStock.add(excludeShopOut);
+
+                    // 计算金额
+                    if (price != null) {
+                        excludeBeforeValue = excludeBeforeValue.add(excludeBeforeStock.multiply(price));
+                        excludeAfterValue = excludeAfterValue.add(excludeAfterStock.multiply(price));
+                    }
+                }
+
+                // 添加到结果列表
+                Map<String, Object> resultItem = new HashMap<>();
+                resultItem.put("date", date);
+                resultItem.put("excludeBeforeValue", excludeBeforeValue.setScale(2, BigDecimal.ROUND_HALF_UP));
+                resultItem.put("excludeAfterValue", excludeAfterValue.setScale(2, BigDecimal.ROUND_HALF_UP));
+                resultList.add(0, resultItem); // 插入到列表开头，保持日期顺序
+
+                // 更新累计影响：加上该日期当天的所有单据影响
+                Map<Long, BigDecimal> dateImpactMap = dateMaterialImpactMap.getOrDefault(date, new HashMap<>());
+                for (Map.Entry<Long, BigDecimal> entry : dateImpactMap.entrySet()) {
+                    Long materialId = entry.getKey();
+                    BigDecimal impact = entry.getValue();
+                    cumulativeImpactMap.merge(materialId, impact, BigDecimal::add);
+                }
+            }
+
+            logger.info("【步骤5】计算完成 - 结果数量: {}", resultList.size());
+            logger.info("========== 批量计算完成 ==========");
+
+            return resultList;
+        } catch (BusinessRunTimeException e) {
+            logger.error("批量获取排除店铺后的库存总金额失败", e);
+            throw e;
+        } catch (Exception e) {
+            logger.error("批量获取排除店铺后的库存总金额失败", e);
+            throw new BusinessRunTimeException(ExceptionConstants.SERVICE_SYSTEM_ERROR_CODE,
+                    "批量获取排除店铺后的库存总金额失败: " + e.getMessage());
+        }
+    }
+
 }

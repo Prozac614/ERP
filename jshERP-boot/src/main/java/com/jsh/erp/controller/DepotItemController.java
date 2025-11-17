@@ -1222,6 +1222,36 @@ public class DepotItemController {
     }
 
     /**
+     * 批量计算日期范围内排除指定店铺销售出库后的库存总金额
+     * 
+     * @param beginDate 开始日期（格式：YYYY-MM-DD）
+     * @param endDate 结束日期（格式：YYYY-MM-DD）
+     * @param excludeShopName 要排除的店铺名称
+     * @param request HTTP请求
+     * @return 日期范围内每一天的数据数组
+     */
+    @GetMapping(value = "/getTotalStockValueExcludeShopByDateRange")
+    @ApiOperation(value = "批量计算日期范围内排除指定店铺销售出库后的库存总金额")
+    public BaseResponseInfo getTotalStockValueExcludeShopByDateRange(
+            @RequestParam("beginDate") String beginDate,
+            @RequestParam("endDate") String endDate,
+            @RequestParam("excludeShopName") String excludeShopName,
+            HttpServletRequest request) throws Exception {
+        BaseResponseInfo res = new BaseResponseInfo();
+        try {
+            List<Map<String, Object>> resultList = depotItemOptimizedService.getTotalStockValueExcludeShopByDateRange(
+                    beginDate, endDate, excludeShopName);
+            res.code = 200;
+            res.data = resultList;
+        } catch (Exception e) {
+            logger.error("批量获取排除店铺后的库存总金额失败", e);
+            res.code = 500;
+            res.data = e.getMessage() != null ? e.getMessage() : "获取数据失败";
+        }
+        return res;
+    }
+
+    /**
      * 测试图表数据接口
      * 用于验证图表功能是否正常工作
      * 
