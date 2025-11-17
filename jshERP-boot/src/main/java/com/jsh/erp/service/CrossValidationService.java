@@ -261,7 +261,7 @@ public class CrossValidationService {
             }
 
             List<ValidationDifference> differences = buildDifferencesFromDetails(billDetails, allUserIds,
-                    userIdToName);
+                    userIdToName, request.getType(), request.getSubType());
 
             Set<String> uniqueBarCodes = billDetails.stream()
                     .map(ValidationBillDetail::getMaterialBarCode)
@@ -368,11 +368,14 @@ public class CrossValidationService {
     }
 
     private List<ValidationDifference> buildDifferencesFromDetails(List<ValidationBillDetail> billDetails,
-            List<Long> allUserIds, Map<Long, String> userIdToName) {
+            List<Long> allUserIds, Map<Long, String> userIdToName, String type, String subType) {
         List<ValidationDifference> differences = new ArrayList<>();
 
         try {
             logger.info("开始基于明细数据构建差异，输入数据条数: {}", billDetails == null ? 0 : billDetails.size());
+
+            // 判断是否为采购入库（只有采购入库才需要校验单价）
+            boolean isPurchaseIn = "入库".equals(type) && BusinessConstants.SUB_TYPE_PURCHASE.equals(subType);
 
             if (billDetails == null || billDetails.isEmpty()) {
                 return differences;
@@ -407,6 +410,7 @@ public class CrossValidationService {
                 BigDecimal baselineQuantity = null;
                 boolean quantityConsistent = true;
                 BigDecimal baselinePrice = null;
+                // 非采购入库单据，不校验单价，默认单价一致；采购入库会在循环中根据实际情况设置
                 boolean priceConsistent = true;
 
                 for (Long userId : allUserIds) {
@@ -427,15 +431,18 @@ public class CrossValidationService {
                         quantityConsistent = false;
                     }
 
-                    if (priceSet.size() > 1) {
-                        priceConsistent = false;
-                    }
-                    if (!priceSet.isEmpty()) {
-                        BigDecimal candidate = priceSet.iterator().next();
-                        if (baselinePrice == null) {
-                            baselinePrice = candidate;
-                        } else if (baselinePrice.compareTo(candidate) != 0) {
+                    // 只有采购入库才校验单价
+                    if (isPurchaseIn) {
+                        if (priceSet.size() > 1) {
                             priceConsistent = false;
+                        }
+                        if (!priceSet.isEmpty()) {
+                            BigDecimal candidate = priceSet.iterator().next();
+                            if (baselinePrice == null) {
+                                baselinePrice = candidate;
+                            } else if (baselinePrice.compareTo(candidate) != 0) {
+                                priceConsistent = false;
+                            }
                         }
                     }
 
@@ -447,7 +454,8 @@ public class CrossValidationService {
                     detailByUserName.put(userName, new ArrayList<>(detailsForUser));
                 }
 
-                if (quantityConsistent && priceConsistent) {
+                // 采购入库需要数量和单价都一致，其他单据类型只需要数量一致
+                if (quantityConsistent && (isPurchaseIn ? priceConsistent : true)) {
                     continue;
                 }
 
@@ -468,7 +476,7 @@ public class CrossValidationService {
                         .append(", 名称: ").append(difference.getMaterialName())
                         .append(", 商店: ").append(shopDisplayName);
 
-                if (!quantityConsistent && !priceConsistent) {
+                if (!quantityConsistent && isPurchaseIn && !priceConsistent) {
                     difference.setDiffType("QUANTITY_PRICE_INCONSISTENT");
                     difference.setDiffTypeName("数量单价不一致");
                     description.append(", 各用户数量和单价均不一致: ");
@@ -476,10 +484,15 @@ public class CrossValidationService {
                     difference.setDiffType("QUANTITY_INCONSISTENT");
                     difference.setDiffTypeName("数量不一致");
                     description.append(", 各用户数量不一致: ");
-                } else {
+                } else if (isPurchaseIn && !priceConsistent) {
+                    // 只有采购入库才会报告单价不一致
                     difference.setDiffType("PRICE_INCONSISTENT");
                     difference.setDiffTypeName("单价不一致");
                     description.append(", 各用户单价不一致: ");
+                } else {
+                    // 非采购入库单据，如果数量一致但单价不一致，不应该到达这里
+                    // 因为非采购入库时 priceConsistent 始终为 true
+                    continue;
                 }
 
                 StringBuilder usersInfo = new StringBuilder();
@@ -490,9 +503,12 @@ public class CrossValidationService {
                     BigDecimal displayPrice = priceSet.isEmpty() ? null : priceSet.iterator().next();
 
                     description.append(userName).append("(ID:").append(userId).append(")")
-                            .append(": 数量=").append(totalQuantity)
-                            .append(", 单价=").append(displayPrice == null ? "无" : displayPrice)
-                            .append("; ");
+                            .append(": 数量=").append(totalQuantity);
+                    // 只有采购入库才显示单价信息
+                    if (isPurchaseIn) {
+                        description.append(", 单价=").append(displayPrice == null ? "无" : displayPrice);
+                    }
+                    description.append("; ");
 
                     if (usersInfo.length() > 0) {
                         usersInfo.append(", ");

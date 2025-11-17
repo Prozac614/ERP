@@ -332,7 +332,7 @@
           offset: 1
         },
         // 默认索引
-        defDataIndex:['action','operTimeStr','totalPrice','status','shopName','userName','materialsList','materialCount'],
+        defDataIndex:['action','operTimeStr','status','shopName','userName','materialsList','materialCount'],
         // 默认列
         defColumns: [
           {
