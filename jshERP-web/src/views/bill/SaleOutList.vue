@@ -260,6 +260,9 @@
               style="width: 100%"
               allow-clear
               :maxTagCount="3"
+              :open="validationShopSelectOpen"
+              @select="handleValidationShopSelect"
+              @dropdownVisibleChange="handleValidationShopDropdownVisibleChange"
             >
               <a-select-option v-for="(name, idx) in shopList" :key="idx" :value="name">
                 {{ name }}
@@ -324,6 +327,7 @@
         validationDateVisible: false,
         selectedValidationDate: null,
         selectedValidationShops: [],
+        validationShopSelectOpen: false,
         labelCol: {
           span: 5
         },
@@ -477,9 +481,18 @@
         console.log('showDateSelector 被调用');
         this.selectedValidationDate = moment().format('YYYY-MM-DD'); // 默认选择今天
         this.selectedValidationShops = [];
+        this.validationShopSelectOpen = false;
         this.validationDateVisible = true;
         console.log('validationDateVisible 设置为:', this.validationDateVisible);
         console.log('selectedValidationDate 设置为:', this.selectedValidationDate);
+      },
+      // 处理校验店铺下拉框显示状态变化
+      handleValidationShopDropdownVisibleChange(open) {
+        this.validationShopSelectOpen = open
+      },
+      // 处理校验店铺选择，选择后自动收起
+      handleValidationShopSelect(value) {
+        this.validationShopSelectOpen = false
       },
       
       handleDateConfirm() {

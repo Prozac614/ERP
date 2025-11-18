@@ -26,7 +26,10 @@
             placeholder="请选择要排除的店铺"
             style="width: 100%"
             allowClear
+            :open="shopSelectOpen"
             @change="handleShopSelectChange"
+            @select="handleShopSelect"
+            @dropdownVisibleChange="handleDropdownVisibleChange"
           >
             <a-select-option value="__ALL__" :disabled="selectedShops.length > 0">
               排除所有店铺
@@ -89,6 +92,7 @@ export default {
       loading: false,
       queryDateRange: [moment(), moment()],
       selectedShops: [],
+      shopSelectOpen: false,
       tableData: [],
       columns: [
         {
@@ -140,6 +144,7 @@ export default {
         // 弹窗打开时重置数据
         this.queryDateRange = [moment(), moment()]
         this.selectedShops = []
+        this.shopSelectOpen = false
         this.tableData = []
         this.pagination.current = 1
         this.pagination.total = 0
@@ -224,10 +229,20 @@ export default {
       this.pagination.current = pagination.current
       this.pagination.pageSize = pagination.pageSize
     },
+    handleDropdownVisibleChange(open) {
+      // 同步下拉框的显示状态
+      this.shopSelectOpen = open
+    },
+    handleShopSelect(value) {
+      // 选择选项后自动收起下拉框
+      this.shopSelectOpen = false
+    },
     handleShopSelectChange(value) {
       if (value && value.includes('__ALL__')) {
         // 选择"排除所有店铺"时，自动选择所有店铺
         this.selectedShops = this.allShopNames.filter(name => name !== '__ALL__')
+        // 收起下拉框
+        this.shopSelectOpen = false
       }
     }
   }

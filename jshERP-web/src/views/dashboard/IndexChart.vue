@@ -97,6 +97,9 @@
                     v-model="queryParam.shopNames"
                     allowClear
                     :maxTagCount="3"
+                    :open="shopSelectOpen"
+                    @select="handleShopSelect"
+                    @dropdownVisibleChange="handleShopDropdownVisibleChange"
                     style="width:100%"
                   >
                     <a-select-option v-for="shop in shopList" :key="shop.id" :value="shop.name">{{ shop.name }}</a-select-option>
@@ -310,6 +313,7 @@ import { getAction, postAction, downFile } from '@/api/manage'
           shopNames: []
         },
         shopList: [],
+        shopSelectOpen: false,
         loadingRequest: null,
         debouncedLoadDataTimer: null,
         domCheckTimer: null,
@@ -1231,6 +1235,14 @@ import { getAction, postAction, downFile } from '@/api/manage'
         }).catch(error => {
           console.error('店铺列表请求失败:', error)
         })
+      },
+      // 处理店铺下拉框显示状态变化
+      handleShopDropdownVisibleChange(open) {
+        this.shopSelectOpen = open
+      },
+      // 处理店铺选择，选择后自动收起
+      handleShopSelect(value) {
+        this.shopSelectOpen = false
       },
 
       // 处理API响应数据
