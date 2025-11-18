@@ -1196,7 +1196,7 @@ public class DepotItemController {
      * 计算排除指定店铺销售出库后的库存总金额
      * 
      * @param targetDate 目标日期（格式：YYYY-MM-DD）
-     * @param excludeShopName 要排除的店铺名称
+     * @param excludeShopNames 要排除的店铺名称（逗号分隔，如：店1,店2,店3）
      * @param request HTTP请求
      * @return 排除后的库存总金额
      */
@@ -1204,11 +1204,11 @@ public class DepotItemController {
     @ApiOperation(value = "计算排除指定店铺销售出库后的库存总金额")
     public BaseResponseInfo getTotalStockValueExcludeShop(
             @RequestParam("targetDate") String targetDate,
-            @RequestParam("excludeShopName") String excludeShopName,
+            @RequestParam(value = "excludeShopNames", required = false, defaultValue = "") String excludeShopNames,
             HttpServletRequest request) throws Exception {
         BaseResponseInfo res = new BaseResponseInfo();
         try {
-            BigDecimal value = depotItemOptimizedService.getTotalStockValueExcludeShop(targetDate, excludeShopName);
+            BigDecimal value = depotItemOptimizedService.getTotalStockValueExcludeShop(targetDate, excludeShopNames);
             Map<String, Object> map = new HashMap<>();
             map.put("totalStockValue", value);
             res.code = 200;
@@ -1226,7 +1226,7 @@ public class DepotItemController {
      * 
      * @param beginDate 开始日期（格式：YYYY-MM-DD）
      * @param endDate 结束日期（格式：YYYY-MM-DD）
-     * @param excludeShopName 要排除的店铺名称
+     * @param excludeShopNames 要排除的店铺名称（逗号分隔，如：店1,店2,店3）
      * @param request HTTP请求
      * @return 日期范围内每一天的数据数组
      */
@@ -1235,12 +1235,12 @@ public class DepotItemController {
     public BaseResponseInfo getTotalStockValueExcludeShopByDateRange(
             @RequestParam("beginDate") String beginDate,
             @RequestParam("endDate") String endDate,
-            @RequestParam("excludeShopName") String excludeShopName,
+            @RequestParam(value = "excludeShopNames", required = false, defaultValue = "") String excludeShopNames,
             HttpServletRequest request) throws Exception {
         BaseResponseInfo res = new BaseResponseInfo();
         try {
             List<Map<String, Object>> resultList = depotItemOptimizedService.getTotalStockValueExcludeShopByDateRange(
-                    beginDate, endDate, excludeShopName);
+                    beginDate, endDate, excludeShopNames);
             res.code = 200;
             res.data = resultList;
         } catch (Exception e) {

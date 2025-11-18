@@ -21,11 +21,16 @@
         </a-form-item>
         <a-form-item label="排除店铺" :required="true">
           <a-select
-            v-model="selectedShop"
+            v-model="selectedShops"
+            mode="multiple"
             placeholder="请选择要排除的店铺"
             style="width: 100%"
             allowClear
+            @change="handleShopSelectChange"
           >
+            <a-select-option value="__ALL__" :disabled="selectedShops.length > 0">
+              排除所有店铺
+            </a-select-option>
             <a-select-option v-for="shop in shopList" :key="shop.id" :value="shop.name">
               {{ shop.name }}
             </a-select-option>
@@ -83,7 +88,7 @@ export default {
     return {
       loading: false,
       queryDateRange: [moment(), moment()],
-      selectedShop: null,
+      selectedShops: [],
       tableData: [],
       columns: [
         {
@@ -124,6 +129,9 @@ export default {
       const start = (current - 1) * pageSize
       const end = start + pageSize
       return this.tableData.slice(start, end)
+    },
+    allShopNames() {
+      return this.shopList.map(shop => shop.name)
     }
   },
   watch: {
@@ -131,7 +139,7 @@ export default {
       if (newVal) {
         // 弹窗打开时重置数据
         this.queryDateRange = [moment(), moment()]
-        this.selectedShop = null
+        this.selectedShops = []
         this.tableData = []
         this.pagination.current = 1
         this.pagination.total = 0
@@ -167,7 +175,7 @@ export default {
       if (!this.validateDateRange()) {
         return
       }
-      if (!this.selectedShop) {
+      if (!this.selectedShops || this.selectedShops.length === 0) {
         this.$message.warning('请选择要排除的店铺')
         return
       }
@@ -178,10 +186,11 @@ export default {
       try {
         const beginDate = this.queryDateRange[0].format('YYYY-MM-DD')
         const endDate = this.queryDateRange[1].format('YYYY-MM-DD')
+        const excludeShopNames = this.selectedShops.length > 0 ? this.selectedShops.join(',') : ''
         const res = await getAction('/depotItem/getTotalStockValueExcludeShopByDateRange', {
           beginDate: beginDate,
           endDate: endDate,
-          excludeShopName: this.selectedShop
+          excludeShopNames: excludeShopNames
         })
         
         if (res && res.code === 200 && res.data) {
@@ -214,6 +223,12 @@ export default {
     handleTableChange(pagination) {
       this.pagination.current = pagination.current
       this.pagination.pageSize = pagination.pageSize
+    },
+    handleShopSelectChange(value) {
+      if (value && value.includes('__ALL__')) {
+        // 选择"排除所有店铺"时，自动选择所有店铺
+        this.selectedShops = this.allShopNames.filter(name => name !== '__ALL__')
+      }
     }
   }
 }

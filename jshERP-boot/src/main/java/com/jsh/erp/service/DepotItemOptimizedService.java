@@ -128,13 +128,13 @@ public class DepotItemOptimizedService {
     /**
      * 计算排除指定店铺销售出库后的库存总金额
      * 
-     * @param targetDate      目标日期（格式：YYYY-MM-DD）
-     * @param excludeShopName 要排除的店铺名称
+     * @param targetDate       目标日期（格式：YYYY-MM-DD）
+     * @param excludeShopNames 要排除的店铺名称（逗号分隔，如：店1,店2,店3）
      * @return 排除后的库存总金额
      */
-    public BigDecimal getTotalStockValueExcludeShop(String targetDate, String excludeShopName) {
+    public BigDecimal getTotalStockValueExcludeShop(String targetDate, String excludeShopNames) {
         logger.info("========== 开始计算排除店铺后的库存总金额 ==========");
-        logger.info("输入参数 - targetDate: {}, excludeShopName: {}", targetDate, excludeShopName);
+        logger.info("输入参数 - targetDate: {}, excludeShopNames: {}", targetDate, excludeShopNames);
 
         try {
             User user = userService.getCurrentUser();
@@ -151,9 +151,23 @@ public class DepotItemOptimizedService {
                 logger.error("参数校验失败: 日期不能为空");
                 throw new BusinessRunTimeException(ExceptionConstants.SERVICE_SYSTEM_ERROR_CODE, "日期不能为空");
             }
-            if (StringUtil.isEmpty(excludeShopName)) {
+            if (StringUtil.isEmpty(excludeShopNames)) {
                 logger.error("参数校验失败: 店铺名称不能为空");
                 throw new BusinessRunTimeException(ExceptionConstants.SERVICE_SYSTEM_ERROR_CODE, "店铺名称不能为空");
+            }
+
+            // 将逗号分隔的字符串转换为 List
+            List<String> excludeShopNameList = new ArrayList<>();
+            if (StringUtil.isNotEmpty(excludeShopNames)) {
+                excludeShopNameList = Arrays.stream(excludeShopNames.split(","))
+                        .map(String::trim)
+                        .filter(StringUtil::isNotEmpty)
+                        .distinct()
+                        .collect(java.util.stream.Collectors.toList());
+            }
+            if (excludeShopNameList.isEmpty()) {
+                logger.error("参数校验失败: 店铺名称列表不能为空");
+                throw new BusinessRunTimeException(ExceptionConstants.SERVICE_SYSTEM_ERROR_CODE, "店铺名称列表不能为空");
             }
 
             // 验证日期格式和范围（最近30天）
@@ -174,8 +188,8 @@ public class DepotItemOptimizedService {
                 throw new BusinessRunTimeException(ExceptionConstants.SERVICE_SYSTEM_ERROR_CODE, "日期格式错误");
             }
 
-            logger.info("准备执行分步查询 - targetDate: {}, excludeShopName: {}, tenantId: {}",
-                    targetDate, excludeShopName, tenantId);
+            logger.info("准备执行分步查询 - targetDate: {}, excludeShopNames: {}, tenantId: {}",
+                    targetDate, excludeShopNames, tenantId);
 
             // 调试：查询当前库存总金额（用于对比）
             BigDecimal currentTotalStockValue = depotItemMapperEx.getTotalStockValueByTenant(tenantId);
@@ -259,7 +273,7 @@ public class DepotItemOptimizedService {
                     afterTargetDateCount++;
                 } else if (billDate.equals(targetDate)) {
                     // 选择日期当天的单据：只回退指定店铺的销售出库，其他单据不回退
-                    if (shopName.equals(excludeShopName) && "出库".equals(billType) && "销售".equals(subType)) {
+                    if (excludeShopNameList.contains(shopName) && "出库".equals(billType) && "销售".equals(subType)) {
                         // 只回退指定店铺的销售出库
                         shouldRollback = true;
                         targetDateCount++;
@@ -346,7 +360,7 @@ public class DepotItemOptimizedService {
                     }
 
                     // 打印选择日期当天需要回退的单据明细（指定店铺的销售出库）
-                    logger.info("  选择日期当天需要回退的单据明细（日期={}, 店铺={}, 类型=出库/销售）:", targetDate, excludeShopName);
+                    logger.info("  选择日期当天需要回退的单据明细（日期={}, 店铺={}, 类型=出库/销售）:", targetDate, excludeShopNameList);
                     int rollbackDetailCount = 0;
                     BigDecimal rollbackOutTotal = BigDecimal.ZERO;
                     for (Map<String, Object> detail : billImpactDetailList) {
@@ -364,7 +378,7 @@ public class DepotItemOptimizedService {
 
                         if (detailMaterialId.equals(materialId) &&
                                 detailBillDate.equals(targetDate) &&
-                                detailShopName.equals(excludeShopName) &&
+                                excludeShopNameList.contains(detailShopName) &&
                                 "出库".equals(detailBillType) &&
                                 "销售".equals(detailSubType) &&
                                 detailOutQuantity.compareTo(BigDecimal.ZERO) > 0) {
@@ -395,7 +409,7 @@ public class DepotItemOptimizedService {
 
                         if (detailMaterialId.equals(materialId) &&
                                 detailBillDate.equals(targetDate) &&
-                                !(detailShopName.equals(excludeShopName) && "出库".equals(detailBillType)
+                                !(excludeShopNameList.contains(detailShopName) && "出库".equals(detailBillType)
                                         && "销售".equals(detailSubType))) {
                             logger.info("    - 日期: {}, 店铺: {}, 类型: {}/{}, 影响: {} (不回退)",
                                     detailBillDate, detailShopName, detailBillType, detailSubType,
@@ -991,15 +1005,15 @@ public class DepotItemOptimizedService {
      * 批量计算日期范围内排除指定店铺销售出库后的库存总金额
      * 使用前缀和算法从后往前计算，降低计算复杂度
      * 
-     * @param beginDate       开始日期（格式：YYYY-MM-DD）
-     * @param endDate         结束日期（格式：YYYY-MM-DD）
-     * @param excludeShopName 要排除的店铺名称
+     * @param beginDate        开始日期（格式：YYYY-MM-DD）
+     * @param endDate          结束日期（格式：YYYY-MM-DD）
+     * @param excludeShopNames 要排除的店铺名称（逗号分隔，如：店1,店2,店3）
      * @return 日期范围内每一天的数据列表，每个Map包含：date, excludeAfterValue, excludeBeforeValue
      */
     public List<Map<String, Object>> getTotalStockValueExcludeShopByDateRange(
-            String beginDate, String endDate, String excludeShopName) {
+            String beginDate, String endDate, String excludeShopNames) {
         logger.info("========== 开始批量计算排除店铺后的库存总金额 ==========");
-        logger.info("输入参数 - beginDate: {}, endDate: {}, excludeShopName: {}", beginDate, endDate, excludeShopName);
+        logger.info("输入参数 - beginDate: {}, endDate: {}, excludeShopNames: {}", beginDate, endDate, excludeShopNames);
 
         try {
             User user = userService.getCurrentUser();
@@ -1020,9 +1034,23 @@ public class DepotItemOptimizedService {
                 logger.error("参数校验失败: 结束日期不能为空");
                 throw new BusinessRunTimeException(ExceptionConstants.SERVICE_SYSTEM_ERROR_CODE, "结束日期不能为空");
             }
-            if (StringUtil.isEmpty(excludeShopName)) {
+            if (StringUtil.isEmpty(excludeShopNames)) {
                 logger.error("参数校验失败: 店铺名称不能为空");
                 throw new BusinessRunTimeException(ExceptionConstants.SERVICE_SYSTEM_ERROR_CODE, "店铺名称不能为空");
+            }
+
+            // 将逗号分隔的字符串转换为 List
+            List<String> excludeShopNameList = new ArrayList<>();
+            if (StringUtil.isNotEmpty(excludeShopNames)) {
+                excludeShopNameList = Arrays.stream(excludeShopNames.split(","))
+                        .map(String::trim)
+                        .filter(StringUtil::isNotEmpty)
+                        .distinct()
+                        .collect(java.util.stream.Collectors.toList());
+            }
+            if (excludeShopNameList.isEmpty()) {
+                logger.error("参数校验失败: 店铺名称列表不能为空");
+                throw new BusinessRunTimeException(ExceptionConstants.SERVICE_SYSTEM_ERROR_CODE, "店铺名称列表不能为空");
             }
 
             // 验证日期格式和范围（最大7天）
@@ -1100,7 +1128,7 @@ public class DepotItemOptimizedService {
                         .merge(materialId, impact, BigDecimal::add);
 
                 // 如果是指定店铺的销售出库，累加到排除店铺出库Map中
-                if (shopName.equals(excludeShopName) && "出库".equals(billType) && "销售".equals(subType)
+                if (excludeShopNameList.contains(shopName) && "出库".equals(billType) && "销售".equals(subType)
                         && outQuantity.compareTo(BigDecimal.ZERO) > 0) {
                     dateMaterialExcludeShopOutMap.computeIfAbsent(billDate, k -> new HashMap<>())
                             .merge(materialId, outQuantity, BigDecimal::add);
