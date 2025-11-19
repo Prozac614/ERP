@@ -225,7 +225,9 @@ public class DepotItemOptimizedService {
 
             // 步骤2：查询单据影响（指定日期及之后，按店铺、商品汇总）
             logger.info("【步骤2】查询单据影响（日期 >= {}）...", targetDate);
-            List<Map<String, Object>> billImpactList = depotItemMapperEx.getBillImpactByDateRange(targetDate, tenantId);
+            String impactQueryEndDate = new SimpleDateFormat("yyyy-MM-dd").format(new Date());
+            List<Map<String, Object>> billImpactList = depotItemMapperEx.getBillImpactByDateRange(targetDate,
+                    impactQueryEndDate, tenantId);
 
             // 存储详细数据：按店铺、商品、日期分组的数据
             List<Map<String, Object>> billImpactDetailList = new ArrayList<>();
@@ -985,23 +987,6 @@ public class DepotItemOptimizedService {
     }
 
     /**
-     * 异步更新商品的库存告急状态
-     * 
-     * @param materialId     商品ID
-     * @param alertStatus    告急状态
-     * @param sixMonthsSales 六个月销量
-     */
-    private void updateMaterialStockAlertStatusAsync(Long materialId, String alertStatus, BigDecimal sixMonthsSales) {
-        // 使用异步方式更新，避免影响查询性能
-        // 这里可以使用线程池或者消息队列来处理
-        try {
-            materialService.updateStockAlertStatus(materialId, alertStatus, sixMonthsSales);
-        } catch (Exception e) {
-            logger.error("异步更新库存告急状态失败，materialId: {}", materialId, e);
-        }
-    }
-
-    /**
      * 批量计算日期范围内排除指定店铺销售出库后的库存总金额
      * 使用前缀和算法从后往前计算，降低计算复杂度
      * 
@@ -1103,7 +1088,9 @@ public class DepotItemOptimizedService {
 
             // 步骤2：查询从beginDate开始的所有单据影响
             logger.info("【步骤2】查询单据影响（日期 >= {}）...", beginDate);
-            List<Map<String, Object>> billImpactList = depotItemMapperEx.getBillImpactByDateRange(beginDate, tenantId);
+            String impactQueryEndDate = sdf.format(today);
+            List<Map<String, Object>> billImpactList = depotItemMapperEx.getBillImpactByDateRange(beginDate,
+                    impactQueryEndDate, tenantId);
             logger.info("【步骤2】单据影响查询完成 - 单据明细数: {}", billImpactList.size());
 
             // 步骤3：按日期分组构建数据结构
@@ -1111,6 +1098,8 @@ public class DepotItemOptimizedService {
             // dateMaterialExcludeShopOutMap: 每天每个商品指定店铺的销售出库
             Map<String, Map<Long, BigDecimal>> dateMaterialImpactMap = new HashMap<>();
             Map<String, Map<Long, BigDecimal>> dateMaterialExcludeShopOutMap = new HashMap<>();
+            Map<String, Map<Long, BigDecimal>> dateMaterialAmountImpactMap = new HashMap<>();
+            Map<String, Map<Long, BigDecimal>> dateMaterialExcludeShopAmountMap = new HashMap<>();
 
             for (Map<String, Object> item : billImpactList) {
                 Long materialId = ((Number) item.get("materialId")).longValue();
@@ -1135,6 +1124,50 @@ public class DepotItemOptimizedService {
                 }
             }
 
+            List<Map<String, Object>> billImpactDetailList = depotItemMapperEx.getBillImpactDetailByDateRange(beginDate,
+                    impactQueryEndDate, tenantId);
+            Map<String, List<Map<String, Object>>> dateBillDetailMap = new HashMap<>();
+            for (Map<String, Object> detail : billImpactDetailList) {
+                String billDate = detail.get("billDate") != null ? detail.get("billDate").toString() : "";
+                dateBillDetailMap.computeIfAbsent(billDate, k -> new ArrayList<>()).add(detail);
+            }
+
+            for (Map.Entry<String, List<Map<String, Object>>> entry : dateBillDetailMap.entrySet()) {
+                String billDate = entry.getKey();
+                for (Map<String, Object> detail : entry.getValue()) {
+                    Number materialIdNum = (Number) detail.get("materialId");
+                    if (materialIdNum == null) {
+                        continue;
+                    }
+                    Long materialId = materialIdNum.longValue();
+                    BigDecimal quantity = detail.get("quantity") != null ? (BigDecimal) detail.get("quantity")
+                            : BigDecimal.ZERO;
+                    BigDecimal defaultPrice = priceMap.get(materialId);
+                    BigDecimal unitPrice = detail.get("unitPrice") != null ? (BigDecimal) detail.get("unitPrice")
+                            : null;
+                    BigDecimal effectivePrice;
+                    if (unitPrice == null || unitPrice.compareTo(BigDecimal.ZERO) == 0) {
+                        effectivePrice = defaultPrice != null ? defaultPrice : BigDecimal.ZERO;
+                    } else {
+                        effectivePrice = unitPrice;
+                    }
+                    BigDecimal amount = quantity.multiply(effectivePrice);
+                    dateMaterialAmountImpactMap.computeIfAbsent(billDate, k -> new HashMap<>())
+                            .merge(materialId, amount, BigDecimal::add);
+
+                    String shopName = detail.get("shopName") != null ? detail.get("shopName").toString() : "";
+                    String billType = detail.get("billType") != null ? detail.get("billType").toString() : "";
+                    String subType = detail.get("subType") != null ? detail.get("subType").toString() : "";
+                    if (excludeShopNameList.contains(shopName) && "出库".equals(billType) && "销售".equals(subType)
+                            && quantity.compareTo(BigDecimal.ZERO) < 0) {
+                        BigDecimal restoreQuantity = quantity.abs();
+                        BigDecimal restoreAmount = effectivePrice.multiply(restoreQuantity);
+                        dateMaterialExcludeShopAmountMap.computeIfAbsent(billDate, k -> new HashMap<>())
+                                .merge(materialId, restoreAmount, BigDecimal::add);
+                    }
+                }
+            }
+
             // 步骤4：生成日期范围内的所有日期列表
             List<String> dateList = new ArrayList<>();
             Calendar cal = Calendar.getInstance();
@@ -1151,6 +1184,27 @@ public class DepotItemOptimizedService {
 
             // 累计影响Map：表示"当前日期之后的所有单据影响"
             Map<Long, BigDecimal> cumulativeImpactMap = new HashMap<>();
+            Map<Long, BigDecimal> cumulativeAmountImpactMap = new HashMap<>();
+
+            // 先累加结束日期之后的单据影响，确保最后一天能够正确扣除
+            for (Map.Entry<String, Map<Long, BigDecimal>> entry : dateMaterialImpactMap.entrySet()) {
+                String billDate = entry.getKey();
+                if (billDate.compareTo(endDate) > 0) {
+                    Map<Long, BigDecimal> futureImpactMap = entry.getValue();
+                    for (Map.Entry<Long, BigDecimal> impactEntry : futureImpactMap.entrySet()) {
+                        cumulativeImpactMap.merge(impactEntry.getKey(), impactEntry.getValue(), BigDecimal::add);
+                    }
+                }
+            }
+            for (Map.Entry<String, Map<Long, BigDecimal>> entry : dateMaterialAmountImpactMap.entrySet()) {
+                String billDate = entry.getKey();
+                if (billDate.compareTo(endDate) > 0) {
+                    Map<Long, BigDecimal> futureAmountMap = entry.getValue();
+                    for (Map.Entry<Long, BigDecimal> amountEntry : futureAmountMap.entrySet()) {
+                        cumulativeAmountImpactMap.merge(amountEntry.getKey(), amountEntry.getValue(), BigDecimal::add);
+                    }
+                }
+            }
 
             // 从后往前遍历日期
             for (int i = dateList.size() - 1; i >= 0; i--) {
@@ -1159,28 +1213,33 @@ public class DepotItemOptimizedService {
                 // 计算排除前和排除后的库存总金额
                 BigDecimal excludeBeforeValue = BigDecimal.ZERO;
                 BigDecimal excludeAfterValue = BigDecimal.ZERO;
+                BigDecimal beforeStockSum = BigDecimal.ZERO;
+                BigDecimal afterStockSum = BigDecimal.ZERO;
+                BigDecimal excludeShopOutSum = BigDecimal.ZERO;
 
-                // 遍历所有有价格的商品
                 for (Map.Entry<Long, BigDecimal> entry : priceMap.entrySet()) {
                     Long materialId = entry.getKey();
                     BigDecimal price = entry.getValue();
                     BigDecimal currentStock = currentStockMap.getOrDefault(materialId, BigDecimal.ZERO);
+                    BigDecimal cumulativeImpact = cumulativeImpactMap.getOrDefault(materialId, BigDecimal.ZERO);
 
-                    // 排除前：当前库存 - 累计影响（date之后的所有单据影响）
-                    BigDecimal excludeBeforeStock = currentStock.subtract(
-                            cumulativeImpactMap.getOrDefault(materialId, BigDecimal.ZERO));
+                    BigDecimal excludeBeforeStock = currentStock.subtract(cumulativeImpact);
 
-                    // 排除后：排除前库存 + 该日期当天指定店铺的销售出库
                     BigDecimal excludeShopOut = dateMaterialExcludeShopOutMap
-                            .getOrDefault(date, new HashMap<>())
+                            .getOrDefault(date, Collections.emptyMap())
                             .getOrDefault(materialId, BigDecimal.ZERO);
                     BigDecimal excludeAfterStock = excludeBeforeStock.add(excludeShopOut);
 
-                    // 计算金额
-                    if (price != null) {
-                        excludeBeforeValue = excludeBeforeValue.add(excludeBeforeStock.multiply(price));
-                        excludeAfterValue = excludeAfterValue.add(excludeAfterStock.multiply(price));
-                    }
+                    beforeStockSum = beforeStockSum.add(excludeBeforeStock);
+                    afterStockSum = afterStockSum.add(excludeAfterStock);
+                    excludeShopOutSum = excludeShopOutSum.add(excludeShopOut);
+
+                    BigDecimal baseBeforeValue = price != null ? excludeBeforeStock.multiply(price) : BigDecimal.ZERO;
+                    excludeBeforeValue = excludeBeforeValue.add(baseBeforeValue);
+
+                    BigDecimal afterValueForMaterial = price != null ? excludeAfterStock.multiply(price)
+                            : BigDecimal.ZERO;
+                    excludeAfterValue = excludeAfterValue.add(afterValueForMaterial);
                 }
 
                 // 添加到结果列表
@@ -1188,19 +1247,53 @@ public class DepotItemOptimizedService {
                 resultItem.put("date", date);
                 resultItem.put("excludeBeforeValue", excludeBeforeValue.setScale(2, BigDecimal.ROUND_HALF_UP));
                 resultItem.put("excludeAfterValue", excludeAfterValue.setScale(2, BigDecimal.ROUND_HALF_UP));
+
+                Map<Long, BigDecimal> dateImpactMap = dateMaterialImpactMap.getOrDefault(date, Collections.emptyMap());
+                List<Map<String, Object>> billDetailsForDate = dateBillDetailMap.getOrDefault(date,
+                        Collections.emptyList());
+
+                BigDecimal todayImpactTotal = BigDecimal.ZERO;
+                BigDecimal todayImpactValue = BigDecimal.ZERO;
+                if (!billDetailsForDate.isEmpty()) {
+                    for (Map<String, Object> detail : billDetailsForDate) {
+                        BigDecimal quantity = detail.get("quantity") != null ? (BigDecimal) detail.get("quantity")
+                                : BigDecimal.ZERO;
+                        todayImpactTotal = todayImpactTotal.add(quantity);
+                        Long materialId = detail.get("materialId") != null
+                                ? ((Number) detail.get("materialId")).longValue()
+                                : null;
+                        BigDecimal defaultPrice = materialId != null ? priceMap.get(materialId) : null;
+                        BigDecimal rawUnitPrice = detail.get("unitPrice") != null ? (BigDecimal) detail.get("unitPrice")
+                                : null;
+                        BigDecimal effectivePrice;
+                        if (rawUnitPrice == null || rawUnitPrice.compareTo(BigDecimal.ZERO) == 0) {
+                            effectivePrice = defaultPrice != null ? defaultPrice : BigDecimal.ZERO;
+                        } else {
+                            effectivePrice = rawUnitPrice;
+                        }
+                        BigDecimal amount = quantity.multiply(effectivePrice);
+                        todayImpactValue = todayImpactValue.add(amount);
+                    }
+                } else {
+                    for (Map.Entry<Long, BigDecimal> impactEntry : dateImpactMap.entrySet()) {
+                        BigDecimal impact = impactEntry.getValue();
+                        todayImpactTotal = todayImpactTotal.add(impact);
+                        BigDecimal price = priceMap.get(impactEntry.getKey());
+                        if (price != null) {
+                            todayImpactValue = todayImpactValue.add(impact.multiply(price));
+                        }
+                    }
+                }
+
                 resultList.add(0, resultItem); // 插入到列表开头，保持日期顺序
 
                 // 更新累计影响：加上该日期当天的所有单据影响
-                Map<Long, BigDecimal> dateImpactMap = dateMaterialImpactMap.getOrDefault(date, new HashMap<>());
                 for (Map.Entry<Long, BigDecimal> entry : dateImpactMap.entrySet()) {
                     Long materialId = entry.getKey();
                     BigDecimal impact = entry.getValue();
                     cumulativeImpactMap.merge(materialId, impact, BigDecimal::add);
                 }
             }
-
-            logger.info("【步骤5】计算完成 - 结果数量: {}", resultList.size());
-            logger.info("========== 批量计算完成 ==========");
 
             return resultList;
         } catch (BusinessRunTimeException e) {

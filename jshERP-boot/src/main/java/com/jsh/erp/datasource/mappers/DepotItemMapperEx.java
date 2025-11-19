@@ -352,7 +352,13 @@ public interface DepotItemMapperEx {
          *         inQuantity, outQuantity, totalImpact
          */
         List<Map<String, Object>> getBillImpactByDateRange(
-                        @Param("targetDate") String targetDate,
+                        @Param("beginDate") String beginDate,
+                        @Param("endDate") String endDate,
+                        @Param("tenantId") Long tenantId);
+
+        List<Map<String, Object>> getBillImpactDetailByDateRange(
+                        @Param("beginDate") String beginDate,
+                        @Param("endDate") String endDate,
                         @Param("tenantId") Long tenantId);
 
         /**

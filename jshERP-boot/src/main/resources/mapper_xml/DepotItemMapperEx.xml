@@ -1488,7 +1488,8 @@
         SELECT 
             m.id as materialId,
             COALESCE(mcs_sum.current_stock, 0) as currentStock,
-            me.commodity_decimal as commodityDecimal
+            me.commodity_decimal as commodityDecimal,
+            me.bar_code as barCode
         FROM jsh_material m
         -- 实时库存聚合（按物料）- 复用getTotalStockValueByTenant的逻辑
         LEFT JOIN (
@@ -1533,10 +1534,38 @@
         WHERE dh.status = '1'
           AND ifnull(dh.delete_flag, '0') != '1'
           AND ifnull(di.delete_flag, '0') != '1'
-          AND DATE(dh.oper_time) >= DATE(#{targetDate})
+          AND DATE(dh.oper_time) >= DATE(#{beginDate})
+          AND DATE(dh.oper_time) &lt;= DATE(#{endDate})
           AND dh.tenant_id = #{tenantId}
         GROUP BY di.material_id, IFNULL(dh.shop_name, ''), DATE(dh.oper_time), dh.type, dh.sub_type
         ORDER BY di.material_id, IFNULL(dh.shop_name, ''), DATE(dh.oper_time)
+    </select>
+
+    <!-- 查询指定日期范围内的单据明细（逐单据） -->
+    <select id="getBillImpactDetailByDateRange" resultType="java.util.HashMap">
+        SELECT
+            dh.id as billId,
+            dh.number as billNumber,
+            DATE(dh.oper_time) as billDate,
+            dh.type as billType,
+            dh.sub_type as subType,
+            IFNULL(dh.shop_name, '') as shopName,
+            di.material_id as materialId,
+            CASE
+                WHEN dh.type = '入库' THEN IFNULL(di.basic_number, 0)
+                WHEN dh.type = '出库' THEN -IFNULL(di.basic_number, 0)
+                ELSE 0
+            END as quantity,
+            di.unit_price as unitPrice
+        FROM jsh_depot_head dh
+        INNER JOIN jsh_depot_item di ON dh.id = di.header_id
+        WHERE dh.status = '1'
+          AND IFNULL(dh.delete_flag, '0') != '1'
+          AND IFNULL(di.delete_flag, '0') != '1'
+          AND DATE(dh.oper_time) >= DATE(#{beginDate})
+          AND DATE(dh.oper_time) &lt;= DATE(#{endDate})
+          AND dh.tenant_id = #{tenantId}
+        ORDER BY DATE(dh.oper_time) ASC, dh.number ASC, di.id ASC
     </select>
 
     <!-- 缺失默认零售价统计（按租户） -->
