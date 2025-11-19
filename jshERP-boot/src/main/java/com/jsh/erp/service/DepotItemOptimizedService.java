@@ -1098,8 +1098,8 @@ public class DepotItemOptimizedService {
             // dateMaterialExcludeShopOutMap: 每天每个商品指定店铺的销售出库
             Map<String, Map<Long, BigDecimal>> dateMaterialImpactMap = new HashMap<>();
             Map<String, Map<Long, BigDecimal>> dateMaterialExcludeShopOutMap = new HashMap<>();
-            Map<String, Map<Long, BigDecimal>> dateMaterialAmountImpactMap = new HashMap<>();
-            Map<String, Map<Long, BigDecimal>> dateMaterialExcludeShopAmountMap = new HashMap<>();
+            Map<String, Map<Long, DailyPriceInfo>> dateMaterialPriceMap = new HashMap<>();
+            Map<Long, BillAmountSummary> billAmountSummaryMap = new HashMap<>();
 
             for (Map<String, Object> item : billImpactList) {
                 Long materialId = ((Number) item.get("materialId")).longValue();
@@ -1140,32 +1140,43 @@ public class DepotItemOptimizedService {
                         continue;
                     }
                     Long materialId = materialIdNum.longValue();
+                    Long billId = detail.get("billId") != null ? ((Number) detail.get("billId")).longValue() : null;
+                    String billNumber = detail.get("billNumber") != null ? detail.get("billNumber").toString() : "";
                     BigDecimal quantity = detail.get("quantity") != null ? (BigDecimal) detail.get("quantity")
                             : BigDecimal.ZERO;
-                    BigDecimal defaultPrice = priceMap.get(materialId);
                     BigDecimal unitPrice = detail.get("unitPrice") != null ? (BigDecimal) detail.get("unitPrice")
                             : null;
+                    String billType = detail.get("billType") != null ? detail.get("billType").toString() : "";
+
+                    Map<Long, DailyPriceInfo> materialPriceMap = dateMaterialPriceMap.computeIfAbsent(billDate,
+                            k -> new HashMap<>());
+                    DailyPriceInfo dailyPriceInfo = materialPriceMap.computeIfAbsent(materialId,
+                            k -> new DailyPriceInfo());
+                    if ("入库".equals(billType) && unitPrice != null && unitPrice.compareTo(BigDecimal.ZERO) > 0) {
+                        dailyPriceInfo.updateLatestInPrice(unitPrice);
+                    } else if ("出库".equals(billType)) {
+                        dailyPriceInfo.updateLatestOutPrice(unitPrice);
+                    }
+
                     BigDecimal effectivePrice;
-                    if (unitPrice == null || unitPrice.compareTo(BigDecimal.ZERO) == 0) {
-                        effectivePrice = defaultPrice != null ? defaultPrice : BigDecimal.ZERO;
-                    } else {
+                    if (unitPrice != null && unitPrice.compareTo(BigDecimal.ZERO) > 0) {
                         effectivePrice = unitPrice;
+                    } else {
+                        effectivePrice = resolveDailyPrice(billDate, materialId, dateMaterialPriceMap, priceMap);
                     }
                     BigDecimal amount = quantity.multiply(effectivePrice);
-                    dateMaterialAmountImpactMap.computeIfAbsent(billDate, k -> new HashMap<>())
-                            .merge(materialId, amount, BigDecimal::add);
-
-                    String shopName = detail.get("shopName") != null ? detail.get("shopName").toString() : "";
-                    String billType = detail.get("billType") != null ? detail.get("billType").toString() : "";
-                    String subType = detail.get("subType") != null ? detail.get("subType").toString() : "";
-                    if (excludeShopNameList.contains(shopName) && "出库".equals(billType) && "销售".equals(subType)
-                            && quantity.compareTo(BigDecimal.ZERO) < 0) {
-                        BigDecimal restoreQuantity = quantity.abs();
-                        BigDecimal restoreAmount = effectivePrice.multiply(restoreQuantity);
-                        dateMaterialExcludeShopAmountMap.computeIfAbsent(billDate, k -> new HashMap<>())
-                                .merge(materialId, restoreAmount, BigDecimal::add);
+                    if (billId != null) {
+                        BillAmountSummary summary = billAmountSummaryMap.computeIfAbsent(billId,
+                                k -> new BillAmountSummary(billId, billNumber, billDate));
+                        summary.addAmount(amount);
                     }
                 }
+            }
+
+            for (BillAmountSummary summary : billAmountSummaryMap.values()) {
+                logger.info("单据金额汇总 | 日期={}, 单号={}, 单据ID={}, 总金额={}", summary.getBillDate(),
+                        summary.getBillNumber(), summary.getBillId(),
+                        summary.getTotalAmount().setScale(2, BigDecimal.ROUND_HALF_UP));
             }
 
             // 步骤4：生成日期范围内的所有日期列表
@@ -1182,30 +1193,18 @@ public class DepotItemOptimizedService {
             logger.info("【步骤5】开始使用前缀和算法计算每一天的库存总金额...");
             List<Map<String, Object>> resultList = new ArrayList<>();
 
-            // 累计影响Map：表示"当前日期之后的所有单据影响"
-            Map<Long, BigDecimal> cumulativeImpactMap = new HashMap<>();
-            Map<Long, BigDecimal> cumulativeAmountImpactMap = new HashMap<>();
+            Map<Long, BigDecimal> runningStockMap = new HashMap<>(currentStockMap);
 
-            // 先累加结束日期之后的单据影响，确保最后一天能够正确扣除
+            // 先扣除结束日期之后的单据影响
             for (Map.Entry<String, Map<Long, BigDecimal>> entry : dateMaterialImpactMap.entrySet()) {
                 String billDate = entry.getKey();
                 if (billDate.compareTo(endDate) > 0) {
                     Map<Long, BigDecimal> futureImpactMap = entry.getValue();
                     for (Map.Entry<Long, BigDecimal> impactEntry : futureImpactMap.entrySet()) {
-                        cumulativeImpactMap.merge(impactEntry.getKey(), impactEntry.getValue(), BigDecimal::add);
+                        runningStockMap.merge(impactEntry.getKey(), impactEntry.getValue().negate(), BigDecimal::add);
                     }
                 }
             }
-            for (Map.Entry<String, Map<Long, BigDecimal>> entry : dateMaterialAmountImpactMap.entrySet()) {
-                String billDate = entry.getKey();
-                if (billDate.compareTo(endDate) > 0) {
-                    Map<Long, BigDecimal> futureAmountMap = entry.getValue();
-                    for (Map.Entry<Long, BigDecimal> amountEntry : futureAmountMap.entrySet()) {
-                        cumulativeAmountImpactMap.merge(amountEntry.getKey(), amountEntry.getValue(), BigDecimal::add);
-                    }
-                }
-            }
-
             // 从后往前遍历日期
             for (int i = dateList.size() - 1; i >= 0; i--) {
                 String date = dateList.get(i);
@@ -1219,11 +1218,7 @@ public class DepotItemOptimizedService {
 
                 for (Map.Entry<Long, BigDecimal> entry : priceMap.entrySet()) {
                     Long materialId = entry.getKey();
-                    BigDecimal price = entry.getValue();
-                    BigDecimal currentStock = currentStockMap.getOrDefault(materialId, BigDecimal.ZERO);
-                    BigDecimal cumulativeImpact = cumulativeImpactMap.getOrDefault(materialId, BigDecimal.ZERO);
-
-                    BigDecimal excludeBeforeStock = currentStock.subtract(cumulativeImpact);
+                    BigDecimal excludeBeforeStock = runningStockMap.getOrDefault(materialId, BigDecimal.ZERO);
 
                     BigDecimal excludeShopOut = dateMaterialExcludeShopOutMap
                             .getOrDefault(date, Collections.emptyMap())
@@ -1234,13 +1229,24 @@ public class DepotItemOptimizedService {
                     afterStockSum = afterStockSum.add(excludeAfterStock);
                     excludeShopOutSum = excludeShopOutSum.add(excludeShopOut);
 
-                    BigDecimal baseBeforeValue = price != null ? excludeBeforeStock.multiply(price) : BigDecimal.ZERO;
+                    BigDecimal effectivePrice = resolveDailyPrice(date, materialId, dateMaterialPriceMap, priceMap);
+
+                    BigDecimal baseBeforeValue = excludeBeforeStock.multiply(effectivePrice);
                     excludeBeforeValue = excludeBeforeValue.add(baseBeforeValue);
 
-                    BigDecimal afterValueForMaterial = price != null ? excludeAfterStock.multiply(price)
-                            : BigDecimal.ZERO;
+                    BigDecimal afterValueForMaterial = excludeAfterStock.multiply(effectivePrice);
                     excludeAfterValue = excludeAfterValue.add(afterValueForMaterial);
                 }
+
+                // 记录当日关联单据金额
+                String relatedBillSummary = billAmountSummaryMap.values().stream()
+                        .filter(summary -> date.equals(summary.getBillDate()))
+                        .map(summary -> String.format("%s:%s", summary.getBillNumber(),
+                                summary.getTotalAmount().setScale(2, BigDecimal.ROUND_HALF_UP).toPlainString()))
+                        .collect(java.util.stream.Collectors.joining(", "));
+                logger.info("库存金额汇总 | 日期={}, 排除前={}, 排除后={}, 关联单据={}", date,
+                        excludeBeforeValue.setScale(2, BigDecimal.ROUND_HALF_UP),
+                        excludeAfterValue.setScale(2, BigDecimal.ROUND_HALF_UP), relatedBillSummary);
 
                 // 添加到结果列表
                 Map<String, Object> resultItem = new HashMap<>();
@@ -1262,36 +1268,30 @@ public class DepotItemOptimizedService {
                         Long materialId = detail.get("materialId") != null
                                 ? ((Number) detail.get("materialId")).longValue()
                                 : null;
-                        BigDecimal defaultPrice = materialId != null ? priceMap.get(materialId) : null;
-                        BigDecimal rawUnitPrice = detail.get("unitPrice") != null ? (BigDecimal) detail.get("unitPrice")
-                                : null;
-                        BigDecimal effectivePrice;
-                        if (rawUnitPrice == null || rawUnitPrice.compareTo(BigDecimal.ZERO) == 0) {
-                            effectivePrice = defaultPrice != null ? defaultPrice : BigDecimal.ZERO;
-                        } else {
-                            effectivePrice = rawUnitPrice;
+                        if (materialId != null) {
+                            BigDecimal effectivePrice = resolveDailyPrice(date, materialId, dateMaterialPriceMap,
+                                    priceMap);
+                            BigDecimal amount = quantity.multiply(effectivePrice);
+                            todayImpactValue = todayImpactValue.add(amount);
                         }
-                        BigDecimal amount = quantity.multiply(effectivePrice);
-                        todayImpactValue = todayImpactValue.add(amount);
                     }
                 } else {
                     for (Map.Entry<Long, BigDecimal> impactEntry : dateImpactMap.entrySet()) {
                         BigDecimal impact = impactEntry.getValue();
                         todayImpactTotal = todayImpactTotal.add(impact);
-                        BigDecimal price = priceMap.get(impactEntry.getKey());
-                        if (price != null) {
-                            todayImpactValue = todayImpactValue.add(impact.multiply(price));
-                        }
+                        BigDecimal effectivePrice = resolveDailyPrice(date, impactEntry.getKey(), dateMaterialPriceMap,
+                                priceMap);
+                        todayImpactValue = todayImpactValue.add(impact.multiply(effectivePrice));
                     }
                 }
 
                 resultList.add(0, resultItem); // 插入到列表开头，保持日期顺序
 
-                // 更新累计影响：加上该日期当天的所有单据影响
+                // 更新运行库存：扣除该日期的单据影响，为前一天做准备
                 for (Map.Entry<Long, BigDecimal> entry : dateImpactMap.entrySet()) {
                     Long materialId = entry.getKey();
                     BigDecimal impact = entry.getValue();
-                    cumulativeImpactMap.merge(materialId, impact, BigDecimal::add);
+                    runningStockMap.merge(materialId, impact.negate(), BigDecimal::add);
                 }
             }
 
@@ -1303,6 +1303,95 @@ public class DepotItemOptimizedService {
             logger.error("批量获取排除店铺后的库存总金额失败", e);
             throw new BusinessRunTimeException(ExceptionConstants.SERVICE_SYSTEM_ERROR_CODE,
                     "批量获取排除店铺后的库存总金额失败: " + e.getMessage());
+        }
+    }
+
+    private BigDecimal resolveDailyPrice(String date, Long materialId,
+            Map<String, Map<Long, DailyPriceInfo>> dateMaterialPriceMap, Map<Long, BigDecimal> defaultPriceMap) {
+        if (materialId == null) {
+            return BigDecimal.ZERO;
+        }
+        Map<Long, DailyPriceInfo> materialPriceMap = dateMaterialPriceMap.get(date);
+        DailyPriceInfo dailyPriceInfo = materialPriceMap != null ? materialPriceMap.get(materialId) : null;
+        if (dailyPriceInfo != null) {
+            BigDecimal latestInPrice = dailyPriceInfo.getLatestInPrice();
+            if (latestInPrice != null && latestInPrice.compareTo(BigDecimal.ZERO) > 0) {
+                return latestInPrice;
+            }
+            BigDecimal latestOutPrice = dailyPriceInfo.getLatestOutPrice();
+            if (latestOutPrice != null && latestOutPrice.compareTo(BigDecimal.ZERO) > 0) {
+                return latestOutPrice;
+            }
+        }
+        BigDecimal defaultPrice = defaultPriceMap.get(materialId);
+        if (defaultPrice != null) {
+            return defaultPrice;
+        }
+        if (dailyPriceInfo != null && dailyPriceInfo.isLatestOutPriceZero()) {
+            return BigDecimal.ZERO;
+        }
+        return BigDecimal.ZERO;
+    }
+
+    private static class DailyPriceInfo {
+        private BigDecimal latestInPrice;
+        private BigDecimal latestOutPrice;
+        private boolean latestOutPriceZero;
+
+        public BigDecimal getLatestInPrice() {
+            return latestInPrice;
+        }
+
+        public BigDecimal getLatestOutPrice() {
+            return latestOutPrice;
+        }
+
+        public boolean isLatestOutPriceZero() {
+            return latestOutPriceZero;
+        }
+
+        public void updateLatestInPrice(BigDecimal price) {
+            this.latestInPrice = price;
+        }
+
+        public void updateLatestOutPrice(BigDecimal price) {
+            this.latestOutPrice = price;
+            this.latestOutPriceZero = price == null || price.compareTo(BigDecimal.ZERO) == 0;
+        }
+    }
+
+    private static class BillAmountSummary {
+        private final Long billId;
+        private final String billNumber;
+        private final String billDate;
+        private BigDecimal totalAmount = BigDecimal.ZERO;
+
+        public BillAmountSummary(Long billId, String billNumber, String billDate) {
+            this.billId = billId;
+            this.billNumber = billNumber;
+            this.billDate = billDate;
+        }
+
+        public void addAmount(BigDecimal amount) {
+            if (amount != null) {
+                this.totalAmount = this.totalAmount.add(amount);
+            }
+        }
+
+        public Long getBillId() {
+            return billId;
+        }
+
+        public String getBillNumber() {
+            return billNumber;
+        }
+
+        public String getBillDate() {
+            return billDate;
+        }
+
+        public BigDecimal getTotalAmount() {
+            return totalAmount;
         }
     }
 
