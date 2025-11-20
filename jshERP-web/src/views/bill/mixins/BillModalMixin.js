@@ -95,6 +95,12 @@ export const BillModalMixin = {
         labelCol6: { span: 12 },
         wrapperCol6: { span: 12 }
       },
+      // 自动保存相关
+      autoSaveTimer: null,           // 2分钟自动保存计时器
+      autoSaveThrottleTimer: null,   // 节流计时器
+      lastActivityTime: 0,           // 最后活动时间戳
+      AUTO_SAVE_DELAY: 120000,       // 2分钟 = 120000毫秒
+      THROTTLE_DELAY: 500,           // 节流延迟 500毫秒
     };
   },
   created() {
@@ -107,10 +113,28 @@ export const BillModalMixin = {
   },
   beforeDestroy() {
     document.getElementById(this.prefixNo).removeEventListener('keydown', this.handleOkKey)
+    // 清理自动保存相关资源
+    this.unbindAutoSaveListeners()
+    this.clearAutoSaveTimer()
   },
   computed: {
     readOnly: function () {
       return this.action !== "add" && this.action !== "edit";
+    }
+  },
+  watch: {
+    visible(newVal, oldVal) {
+      if (newVal && !oldVal) {
+        // 弹窗打开
+        this.$nextTick(() => {
+          this.bindAutoSaveListeners()
+          this.startAutoSaveTimer()
+        })
+      } else if (!newVal && oldVal) {
+        // 弹窗关闭
+        this.unbindAutoSaveListeners()
+        this.clearAutoSaveTimer()
+      }
     }
   },
   methods: {
@@ -122,6 +146,109 @@ export const BillModalMixin = {
         this.handleOk()
         e.preventDefault()
       }
+    },
+    // 启动自动保存计时器
+    startAutoSaveTimer() {
+      // 清除已存在的计时器
+      this.clearAutoSaveTimer()
+
+      // 检查是否应该启动计时器
+      if (this.readOnly || this.confirmLoading) {
+        return
+      }
+
+      // 启动新的计时器
+      this.autoSaveTimer = setTimeout(() => {
+        this.triggerAutoSave()
+      }, this.AUTO_SAVE_DELAY)
+
+      this.lastActivityTime = Date.now()
+    },
+    // 清除自动保存计时器
+    clearAutoSaveTimer() {
+      if (this.autoSaveTimer) {
+        clearTimeout(this.autoSaveTimer)
+        this.autoSaveTimer = null
+      }
+      if (this.autoSaveThrottleTimer) {
+        clearTimeout(this.autoSaveThrottleTimer)
+        this.autoSaveThrottleTimer = null
+      }
+    },
+    // 重置自动保存计时器（带节流）
+    resetAutoSaveTimer() {
+      // 检查禁用条件
+      if (this.readOnly || this.confirmLoading || !this.visible) {
+        return
+      }
+
+      // 使用节流避免过于频繁的重置
+      const now = Date.now()
+      if (now - this.lastActivityTime < this.THROTTLE_DELAY) {
+        // 在节流期内，延迟重置
+        if (this.autoSaveThrottleTimer) {
+          clearTimeout(this.autoSaveThrottleTimer)
+        }
+        this.autoSaveThrottleTimer = setTimeout(() => {
+          this.startAutoSaveTimer()
+        }, this.THROTTLE_DELAY)
+      } else {
+        // 超过节流期，立即重置
+        this.startAutoSaveTimer()
+      }
+    },
+    // 触发自动保存
+    triggerAutoSave() {
+      // 再次检查条件（因为定时器触发时状态可能已改变）
+      if (this.readOnly || this.confirmLoading || !this.visible) {
+        return
+      }
+
+      // 调用现有的保存方法
+      this.handleOk()
+    },
+    // 处理用户活动（节流版）
+    handleUserActivity() {
+      this.resetAutoSaveTimer()
+    },
+    // 绑定事件监听器
+    bindAutoSaveListeners() {
+      const modalEl = document.getElementById(this.prefixNo)
+      if (!modalEl) {
+        return
+      }
+
+      // 鼠标移动（节流）
+      modalEl.addEventListener('mousemove', this.handleUserActivity, { passive: true })
+
+      // 鼠标点击
+      modalEl.addEventListener('click', this.handleUserActivity, { passive: true })
+
+      // 键盘输入
+      modalEl.addEventListener('keydown', this.handleUserActivity, { passive: true })
+
+      // 表单变化
+      modalEl.addEventListener('change', this.handleUserActivity, { passive: true })
+
+      // 输入事件（捕获实时输入）
+      modalEl.addEventListener('input', this.handleUserActivity, { passive: true })
+
+      // 滚动（节流）
+      modalEl.addEventListener('scroll', this.handleUserActivity, { passive: true, capture: true })
+    },
+    // 解绑事件监听器
+    unbindAutoSaveListeners() {
+      const modalEl = document.getElementById(this.prefixNo)
+      if (!modalEl) {
+        return
+      }
+
+      modalEl.removeEventListener('mousemove', this.handleUserActivity)
+      modalEl.removeEventListener('click', this.handleUserActivity)
+      modalEl.removeEventListener('keydown', this.handleUserActivity)
+      modalEl.removeEventListener('change', this.handleUserActivity)
+      modalEl.removeEventListener('input', this.handleUserActivity)
+      modalEl.removeEventListener('scroll', this.handleUserActivity)
     },
     addInit(amountNum) {
       getAction('/sequence/buildNumber').then((res) => {
@@ -443,10 +570,14 @@ export const BillModalMixin = {
           this.$refs.materialDataTable.resetScrollTop((target.rows.length + 1) * this.$refs.materialDataTable.rowHeight)
         }
       }, 300)
+      // 重置自动保存计时器
+      this.resetAutoSaveTimer()
     },
     //单元值改变一个字符就触发一次
     onValueChange(event) {
       let that = this
+      // 重置自动保存计时器
+      this.resetAutoSaveTimer()
       const { type, row, column, value, target } = event
       let param, snList, batchNumber, operNumber, unitPrice, allPrice, taxRate, taxMoney, taxLastMoney
       const amountDisabled = this.amountCalculationDisabled()
@@ -850,6 +981,8 @@ export const BillModalMixin = {
     onDeleted(ids, target) {
       target.recalcAllStatisticsColumns()
       this.autoChangePrice(target)
+      // 重置自动保存计时器
+      this.resetAutoSaveTimer()
     },
     //根据仓库和唛头查询库存
     getStockByDepotBarCode(row, target) {
