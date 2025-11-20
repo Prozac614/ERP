@@ -236,7 +236,22 @@ export const JeecgListMixin = {
               if (res.code === 200) {
                 that.loadData()
               } else {
-                that.$message.warning(res.data.message);
+                // 修复：正确读取错误消息，增加空值安全检查
+                let errorMsg = '删除失败';
+                if (res.msg) {
+                  if (typeof res.msg === 'object' && res.msg.message) {
+                    errorMsg = res.msg.message;
+                  } else if (typeof res.msg === 'string') {
+                    errorMsg = res.msg;
+                  }
+                } else if (res.data) {
+                  if (typeof res.data === 'object' && res.data.message) {
+                    errorMsg = res.data.message;
+                  } else if (typeof res.data === 'string') {
+                    errorMsg = res.data;
+                  }
+                }
+                that.$message.warning(errorMsg);
               }
             }).finally(() => {
               that.loading = false;
@@ -255,7 +270,22 @@ export const JeecgListMixin = {
         if (res.code === 200) {
           that.loadData();
         } else {
-          that.$message.warning(res.data.message);
+          // 修复：正确读取错误消息，增加空值安全检查
+          let errorMsg = '删除失败';
+          if (res.msg) {
+            if (typeof res.msg === 'object' && res.msg.message) {
+              errorMsg = res.msg.message;
+            } else if (typeof res.msg === 'string') {
+              errorMsg = res.msg;
+            }
+          } else if (res.data) {
+            if (typeof res.data === 'object' && res.data.message) {
+              errorMsg = res.data.message;
+            } else if (typeof res.data === 'string') {
+              errorMsg = res.data;
+            }
+          }
+          that.$message.warning(errorMsg);
         }
       });
     },

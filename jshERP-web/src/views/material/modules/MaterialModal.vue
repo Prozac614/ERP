@@ -442,7 +442,7 @@
           singlePrice:{
             rules: [
               { required: true, message: '请输入单价!' },
-              { pattern: /^(0|[1-9]\d*)(\.\d{1,2})?$/, message: '请输入合法的单价', trigger: 'blur' }
+              { pattern: /^(0|[1-9]\d*)(\.\d+)?$/, message: '请输入合法的单价（必须为数字）', trigger: 'blur' }
             ]
           },
           name:{
@@ -677,9 +677,14 @@
           if (err) {
             return
           }
+          // 修复：使用商品扩展表（meTable）的ID进行唛头校验，而不是商品主表ID
+          // 商品主表ID(this.model.id)与商品扩展表ID(meTable.dataSource[0].id)不同
+          // 后端checkIsBarCodeExist需要的是商品扩展表ID来排除当前记录
+          const meId = (this.meTable && this.meTable.dataSource && this.meTable.dataSource.length > 0 && this.meTable.dataSource[0].id)
+            ? this.meTable.dataSource[0].id : 0;
           const params = {
             barCode: values.singleBarCode,
-            id: this.model && this.model.id ? this.model.id : 0
+            id: meId
           }
           checkMaterialBarCode(params).then(res => {
             if (res && res.code === 200) {
