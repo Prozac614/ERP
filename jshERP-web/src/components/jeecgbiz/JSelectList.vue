@@ -124,7 +124,7 @@
               that.materialData = res.data
             }
           })
-        },500)
+        },250)
       },
       handleChange(value) {
         this.$emit("change", value)
