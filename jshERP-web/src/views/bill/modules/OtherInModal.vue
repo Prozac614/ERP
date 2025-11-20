@@ -163,6 +163,10 @@
         title:"操作",
         width: '1600px',
         moreStatus: false,
+        // 程序性滚动加锁与用户滚动指示
+        userScrolling: false,
+        programmaticScrollLock: false,
+        userScrollDebounceTimer: null,
         // 新增时子表默认添加几行空数据
         addDefaultRowNum: 20,
         visible: false,
@@ -192,7 +196,7 @@
           dataSource: [],
           columns: [
             { title: '仓库名称', key: 'depotId', width: '8%', type: FormTypes.select, placeholder: '请选择${title}', options: [],
-              allowSearch:true, validateRules: [{ required: true, message: '${title}不能为空' }]
+              allowSearch:true
             },
             { title: '唛头', key: 'barCode', width: '12%', type: FormTypes.popupJsh, kind: 'material', multi: true
             },
@@ -254,6 +258,8 @@
     methods: {
       //调用完edit()方法之后会自动调用此方法
       editAfter() {
+        // 初始化阶段抑制 onAdded 自动滚动
+        this.initialAddInProgress = true
         this.billStatus = '0'
         this.currentSelectDepotId = ''
         this.rowCanEdit = true
@@ -271,8 +277,8 @@
           this.$nextTick(() => {
             // 初始化后滚动到顶部
             this.scrollToTop();
-            // 模拟为每一行触发onAdded事件
-            this.triggerOnAddedForAllRows();
+            // 释放初始化阶段的滚动抑制（略晚于 mixin.onAdded 的默认延迟）
+            setTimeout(() => { this.initialAddInProgress = false }, 1500)
           })
         } else {
           if(this.model.linkNumber) {
@@ -307,16 +313,6 @@
         this.initQuickBtn()
         this.handleChangeOtherField()
         
-        // 新增时初始化操作
-        if (this.action === 'add') {
-          this.$nextTick(() => {
-            // 初始化后滚动到顶部
-            this.scrollToTop();
-            // 为初始20行设置默认仓库值
-            this.setInitialDepotForRows();
-          });
-        }
-        
         // 绑定滚动事件监听器
         this.$nextTick(() => {
           const tableRef = this.$refs[this.refKeys[0]];
@@ -347,6 +343,8 @@
       // 添加更多行
       addMoreRows() {
         this.isScrollLoading = true;
+        // 懒加载阶段抑制 onAdded 自动滚动
+        this.lazyLoadingInProgress = true
         const tableRef = this.$refs[this.refKeys[0]];
         if (tableRef && tableRef.add) {
           tableRef.add(this.scrollLoadRowCount);
@@ -354,65 +352,25 @@
         // 使用setTimeout防止过于频繁的触发
         setTimeout(() => {
           this.isScrollLoading = false;
+          this.lazyLoadingInProgress = false
         }, 200);
-      },
-      
-      // 为初始行设置默认仓库（修复版本）
-      setInitialDepotForRows() {
-        this.$nextTick(() => {
-          const tableRef = this.$refs[this.refKeys[0]];
-          if (!tableRef || !tableRef.rows || tableRef.rows.length === 0) {
-            // 如果表格还没初始化，等待一下再试
-            setTimeout(() => this.setInitialDepotForRows(), 500);
-            return;
-          }
-          
-          if (this.currentSelectDepotId) {
-            // 如果已经有选中的仓库，直接为所有行设置
-            const values = tableRef.rows.map(row => ({
-              rowKey: row.id,
-              values: { depotId: this.currentSelectDepotId }
-            }));
-            tableRef.setValues(values);
-          } else {
-            // 只调用一次API，然后为所有行设置
-            getAction('/depot/findDepotByCurrentUser').then((res) => {
-              if (res.code === 200) {
-                let arr = res.data;
-                let defaultDepotId = '';
-                
-                if (arr.length === 1) {
-                  defaultDepotId = arr[0].id + '';
-                } else {
-                  for (let i = 0; i < arr.length; i++) {
-                    if (arr[i].isDefault) {
-                      defaultDepotId = arr[i].id + '';
-                      break;
-                    }
-                  }
-                }
-                
-                if (defaultDepotId) {
-                  // 为所有行一次性设置默认仓库
-                  const values = tableRef.rows.map(row => ({
-                    rowKey: row.id,
-                    values: { depotId: defaultDepotId }
-                  }));
-                  tableRef.setValues(values);
-                }
-              }
-            });
-          }
-        });
       },
       
       // 滚动到顶部
       scrollToTop() {
-        this.$nextTick(() => {
+        // 多次尝试确保滚动到顶部（程序性滚动加锁）
+        const attemptScroll = () => {
           const tableRef = this.$refs[this.refKeys[0]];
           if (tableRef && tableRef.$refs.scrollView) {
+            this.programmaticScrollLock = true
             tableRef.$refs.scrollView.scrollTop = 0;
+            setTimeout(() => { this.programmaticScrollLock = false }, 0)
           }
+        };
+        this.$nextTick(() => {
+          attemptScroll();
+          setTimeout(attemptScroll, 100);
+          setTimeout(attemptScroll, 300);
         });
       },
       
@@ -504,50 +462,9 @@
         }
       },
       
-      // 重写onAdded方法，防止自动滚动但保留仓库设置逻辑
-      onAdded(event) {
-        console.log('重写的onAdded被调用，行数:', event.target.rows.length);
-        const { row, target } = event
-        // 保留原来的仓库设置逻辑
-        if (this.currentSelectDepotId) {
-          target.setValues([{ rowKey: row.id, values: { depotId: this.currentSelectDepotId } }])
-        } else {
-          getAction('/depot/findDepotByCurrentUser').then((res) => {
-            if (res.code === 200) {
-              let arr = res.data
-              if (arr.length === 1) {
-                target.setValues([{ rowKey: row.id, values: { depotId: arr[0].id + '' } }])
-              } else {
-                for (let i = 0; i < arr.length; i++) {
-                  if (arr[i].isDefault) {
-                    target.setValues([{ rowKey: row.id, values: { depotId: arr[i].id + '' } }])
-                    break
-                  }
-                }
-              }
-            }
-          })
-        }
-      },
+      // 移除行新增时的仓库自动填充（保持不设值）
       
-      // 为所有初始行触发onAdded逻辑
-      triggerOnAddedForAllRows() {
-        setTimeout(() => {
-          const tableRef = this.$refs[this.refKeys[0]];
-          if (!tableRef || !tableRef.rows || tableRef.rows.length === 0) {
-            setTimeout(() => this.triggerOnAddedForAllRows(), 500);
-            return;
-          }
-          
-          tableRef.rows.forEach(row => {
-            const mockEvent = {
-              row: row,
-              target: tableRef
-            };
-            this.onAdded(mockEvent);
-          });
-        }, 1000);
-      },
+      // 移除初始行逐行触发 onAdded 的逻辑
       
       // 滚动到顶部
       scrollToTop() {
@@ -568,7 +485,12 @@
           setTimeout(attemptScroll, 500);
           setTimeout(attemptScroll, 1000);
         });
-      }
+      },
+      mounted() {},
+      updated() {},
+      // 在新增/编辑初始化后，释放初始化滚动抑制
+      created() {},
+      // 调用完edit()方法之后会自动调用此方法已设置 initialAddInProgress = true
     }
   }
 </script>

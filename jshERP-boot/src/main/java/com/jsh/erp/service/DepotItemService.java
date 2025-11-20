@@ -716,14 +716,47 @@ public class DepotItemService {
                 if (StringUtil.isExist(rowObj.get("allPrice"))) {
                     depotItem.setAllPrice(rowObj.getBigDecimal("allPrice"));
                 }
+                // 保存时补齐单价：XSCK/QTRK/QTCK 行内未传单价则统一使用零售价（commodityDecimal），缺失则写0
+                if (!StringUtil.isExist(rowObj.get("unitPrice"))) {
+                    boolean isXsck = BusinessConstants.DEPOTHEAD_TYPE_OUT.equals(depotHead.getType())
+                            && BusinessConstants.SUB_TYPE_SALES.equals(depotHead.getSubType());
+                    boolean isQtck = BusinessConstants.DEPOTHEAD_TYPE_OUT.equals(depotHead.getType())
+                            && BusinessConstants.SUB_TYPE_OTHER.equals(depotHead.getSubType());
+                    boolean isQtrk = BusinessConstants.DEPOTHEAD_TYPE_IN.equals(depotHead.getType())
+                            && BusinessConstants.SUB_TYPE_OTHER.equals(depotHead.getSubType());
+                    if (isXsck || isQtck || isQtrk) {
+                        BigDecimal fillPrice = materialExtend.getCommodityDecimal();
+                        depotItem.setUnitPrice(fillPrice == null ? BigDecimal.ZERO : fillPrice);
+                    }
+                }
                 if (StringUtil.isExist(rowObj.get("depotId"))) {
                     depotItem.setDepotId(rowObj.getLong("depotId"));
                 } else {
+                    // 保存时兜底仓库：若为常规入/出库单据且未传仓库，尝试填充当前用户默认仓库
                     if (!BusinessConstants.SUB_TYPE_PURCHASE_APPLY.equals(depotHead.getSubType())
                             && !BusinessConstants.SUB_TYPE_PURCHASE_ORDER.equals(depotHead.getSubType())
                             && !BusinessConstants.SUB_TYPE_SALES_ORDER.equals(depotHead.getSubType())) {
-                        throw new BusinessRunTimeException(ExceptionConstants.DEPOT_HEAD_DEPOT_FAILED_CODE,
-                                String.format(ExceptionConstants.DEPOT_HEAD_DEPOT_FAILED_MSG));
+                        Long defaultDepotId = null;
+                        try {
+                            com.alibaba.fastjson.JSONArray depotArr = depotService.findDepotByCurrentUser();
+                            if (depotArr != null) {
+                                for (Object obj : depotArr) {
+                                    com.alibaba.fastjson.JSONObject depotObj = com.alibaba.fastjson.JSONObject
+                                            .parseObject(obj.toString());
+                                    if (depotObj.get("isDefault") != null && depotObj.getBoolean("isDefault")) {
+                                        defaultDepotId = depotObj.getLong("id");
+                                        break;
+                                    }
+                                }
+                            }
+                        } catch (Exception ignore) {
+                        }
+                        if (defaultDepotId != null) {
+                            depotItem.setDepotId(defaultDepotId);
+                        } else {
+                            throw new BusinessRunTimeException(ExceptionConstants.DEPOT_HEAD_DEPOT_FAILED_CODE,
+                                    String.format(ExceptionConstants.DEPOT_HEAD_DEPOT_FAILED_MSG));
+                        }
                     }
                 }
                 if (BusinessConstants.SUB_TYPE_TRANSFER.equals(depotHead.getSubType())) {

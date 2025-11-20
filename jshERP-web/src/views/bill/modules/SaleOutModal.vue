@@ -282,6 +282,9 @@
         isScrollLoading: false,   // 防止重复加载
         lastScrollTop: 0,         // 记录上次滚动位置
         hasReachedBottom: false,  // 是否已经到达底部
+        userScrolling: false,     // 是否用户主动滚动
+        programmaticScrollLock: false, // 程序性滚动加锁
+        userScrollDebounceTimer: null, // 用户滚动去抖
         visible: false,
         operTimeStr: '',
         prefixNo: 'XSCK',
@@ -306,7 +309,7 @@
           dataSource: [],
           columns: [
             { title: '仓库名称', key: 'depotId', width: '8%', type: FormTypes.select, placeholder: '请选择${title}', options: [],
-              allowSearch:true, validateRules: [{ required: true, message: '${title}不能为空' }]
+              allowSearch:true
             },
             { title: '唛头', key: 'barCode', width: '12%', type: FormTypes.popupJsh, kind: 'material', multi: true
             },
@@ -380,6 +383,8 @@
     methods: {
       //调用完edit()方法之后会自动调用此方法
       editAfter() {
+        // 初始化阶段抑制 onAdded 自动滚动
+        this.initialAddInProgress = true
         this.billStatus = '0'
         this.currentSelectDepotId = ''
         this.rowCanEdit = true
@@ -404,8 +409,9 @@
             }
             // 初始化后滚动到顶部
             this.scrollToTop();
-            // 模拟为每一行触发onAdded事件
-            this.triggerOnAddedForAllRows();
+            // 不再逐行触发默认仓库请求
+            // 释放初始化阶段的滚动抑制（略晚于 mixin.onAdded 的默认延迟）
+            setTimeout(() => { this.initialAddInProgress = false }, 1500)
           })
         } else {
           if(this.model.linkNumber) {
@@ -463,9 +469,35 @@
         this.$nextTick(() => {
           const tableRef = this.$refs[this.refKeys[0]];
           if (tableRef && tableRef.$refs.scrollView) {
-            tableRef.$refs.scrollView.addEventListener('scroll', this.handleTableScroll);
+            const sv = tableRef.$refs.scrollView
+            sv.addEventListener('scroll', this.handleTableScroll)
+            // 标记用户滚动
+            sv.addEventListener('wheel', this.markUserScroll, { passive: true })
+            sv.addEventListener('touchmove', this.markUserScroll, { passive: true })
+            // 键盘滚动
+            const modalEl = document.getElementById(this.prefixNo)
+            if (modalEl) {
+              modalEl.addEventListener('keydown', this.markUserScrollByKey)
+            }
           }
         });
+      },
+      // 标记用户滚动（鼠标/触屏）
+      markUserScroll() {
+        this.userScrolling = true
+        if (this.userScrollDebounceTimer) {
+          clearTimeout(this.userScrollDebounceTimer)
+        }
+        this.userScrollDebounceTimer = setTimeout(() => {
+          this.userScrolling = false
+        }, 300)
+      },
+      // 标记用户滚动（键盘）
+      markUserScrollByKey(e) {
+        const keys = ['ArrowDown','ArrowUp','PageDown','PageUp',' ']
+        if (keys.indexOf(e.key) !== -1) {
+          this.markUserScroll()
+        }
       },
       //提交单据时整理成formData
       classifyIntoFormData(allValues) {
@@ -628,52 +660,7 @@
         }
       },
       
-      // 重写onAdded方法，防止自动滚动但保留仓库设置逻辑
-      onAdded(event) {
-        const { row, target } = event
-        
-        // 保留原来的仓库设置逻辑
-        if (this.currentSelectDepotId) {
-          //如果单据选择过仓库，则直接从当前选择的仓库加载
-          target.setValues([{ rowKey: row.id, values: { depotId: this.currentSelectDepotId } }])
-        } else {
-          getAction('/depot/findDepotByCurrentUser').then((res) => {
-            if (res.code === 200) {
-              let arr = res.data
-              if (arr.length === 1) {
-                target.setValues([{ rowKey: row.id, values: { depotId: arr[0].id + '' } }])
-              } else {
-                for (let i = 0; i < arr.length; i++) {
-                  if (arr[i].isDefault) {
-                    target.setValues([{ rowKey: row.id, values: { depotId: arr[i].id + '' } }])
-                    break
-                  }
-                }
-              }
-            }
-          })
-        }
-      },
-      
-      // 为所有初始行触发onAdded逻辑
-      triggerOnAddedForAllRows() {
-        setTimeout(() => {
-          const tableRef = this.$refs[this.refKeys[0]];
-          if (!tableRef || !tableRef.rows || tableRef.rows.length === 0) {
-            setTimeout(() => this.triggerOnAddedForAllRows(), 500);
-            return;
-          }
-          
-          // 为每个初始行模拟触发onAdded事件
-          tableRef.rows.forEach(row => {
-            const mockEvent = {
-              row: row,
-              target: tableRef
-            };
-            this.onAdded(mockEvent);
-          });
-        }, 1000);
-      },
+      // 使用 mixin 默认 onAdded 行为（不逐行请求仓库）
       
       // 滚动事件处理
       handleTableScroll() {
@@ -686,13 +673,31 @@
         const scrollTop = scrollView.scrollTop;
         const scrollHeight = scrollView.scrollHeight;
         const clientHeight = scrollView.clientHeight;
+
+        // 程序性滚动或非用户滚动时，绝不触发懒加载
+        if (this.programmaticScrollLock || !this.userScrolling) {
+          this.lastScrollTop = scrollTop
+          return
+        }
         
         // 检查是否滚动到底部
-        const isAtBottom = scrollTop + clientHeight >= scrollHeight - this.scrollLoadThreshold;
+        const distanceToBottom = scrollHeight - scrollTop - clientHeight;
+        const isAtBottom = distanceToBottom <= this.scrollLoadThreshold;
+        const isScrollingDown = scrollTop > this.lastScrollTop;
         
-        // 只有在向下滚动且到达底部时才添加行
-        if (isAtBottom && scrollTop > this.lastScrollTop) {
-          this.addMoreRows();
+        // 二次确认：首次到底部只记录状态，再次向下滚时新增
+        if (isAtBottom) {
+          if (!this.hasReachedBottom) {
+            this.hasReachedBottom = true
+          } else if (isScrollingDown) {
+            this.addMoreRows();
+            this.hasReachedBottom = false
+            // 完成一次新增后，复位用户滚动标记，防止连发
+            this.userScrolling = false
+            setTimeout(() => { this.userScrolling = false }, 0)
+          }
+        } else {
+          this.hasReachedBottom = false
         }
         
         this.lastScrollTop = scrollTop;
@@ -703,6 +708,8 @@
         if (this.isScrollLoading) return;
         
         this.isScrollLoading = true;
+        // 懒加载阶段抑制 onAdded 自动滚动
+        this.lazyLoadingInProgress = true
         const tableRef = this.$refs[this.refKeys[0]];
         if (tableRef) {
           tableRef.add(this.scrollLoadRowCount);
@@ -710,6 +717,7 @@
           // 防抖，稍后重置状态
           setTimeout(() => {
             this.isScrollLoading = false;
+            this.lazyLoadingInProgress = false
           }, 300);
         }
       },
@@ -720,7 +728,9 @@
         const attemptScroll = () => {
           const tableRef = this.$refs[this.refKeys[0]];
           if (tableRef && tableRef.$refs.scrollView) {
+            this.programmaticScrollLock = true
             tableRef.$refs.scrollView.scrollTop = 0;
+            setTimeout(() => { this.programmaticScrollLock = false }, 0)
             // 再次检查是否成功
             setTimeout(() => {
               if (tableRef.$refs.scrollView.scrollTop > 0) {
@@ -742,7 +752,14 @@
       // 移除滚动监听器
       const tableRef = this.$refs[this.refKeys[0]];
       if (tableRef && tableRef.$refs.scrollView) {
-        tableRef.$refs.scrollView.removeEventListener('scroll', this.handleTableScroll);
+        const sv = tableRef.$refs.scrollView
+        sv.removeEventListener('scroll', this.handleTableScroll);
+        sv.removeEventListener('wheel', this.markUserScroll);
+        sv.removeEventListener('touchmove', this.markUserScroll);
+        const modalEl = document.getElementById(this.prefixNo)
+        if (modalEl) {
+          modalEl.removeEventListener('keydown', this.markUserScrollByKey)
+        }
       }
     }
   }

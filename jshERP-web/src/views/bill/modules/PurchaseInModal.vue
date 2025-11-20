@@ -266,6 +266,9 @@
          isScrollLoading: false,   // 防止重复加载
          lastScrollTop: 0,         // 上次滚动位置
          hasReachedBottom: false,  // 是否已经到达过底部
+        userScrolling: false,     // 是否用户主动滚动
+        programmaticScrollLock: false, // 程序性滚动加锁
+        userScrollDebounceTimer: null, // 用户滚动去抖
         labelCol: {
           xs: { span: 24 },
           sm: { span: 8 },
@@ -281,7 +284,7 @@
           dataSource: [],
           columns: [
             { title: '仓库名称', key: 'depotId', width: '8%', type: FormTypes.select, placeholder: '请选择${title}', options: [],
-              allowSearch:true, validateRules: [{ required: true, message: '${title}不能为空' }]
+              allowSearch:true
             },
             { title: '唛头', key: 'barCode', width: '12%', type: FormTypes.popupJsh, kind: 'material', multi: true
             },
@@ -351,12 +354,21 @@
        // 清理滚动事件监听器
        const tableRef = this.$refs[this.refKeys[0]];
        if (tableRef && tableRef.$refs.scrollView) {
-         tableRef.$refs.scrollView.removeEventListener('scroll', this.handleTableScroll);
+        const sv = tableRef.$refs.scrollView
+        sv.removeEventListener('scroll', this.handleTableScroll);
+        sv.removeEventListener('wheel', this.markUserScroll);
+        sv.removeEventListener('touchmove', this.markUserScroll);
+        const modalEl = document.getElementById(this.prefixNo)
+        if (modalEl) {
+          modalEl.removeEventListener('keydown', this.markUserScrollByKey)
+        }
        }
      },
     methods: {
       //调用完edit()方法之后会自动调用此方法
       editAfter() {
+        // 初始化阶段抑制 onAdded 自动滚动
+        this.initialAddInProgress = true
         this.billStatus = '0'
         this.currentSelectDepotId = ''
         this.rowCanEdit = true
@@ -380,8 +392,9 @@
              }
              // 初始化后滚动到顶部
              this.scrollToTop();
-             // 模拟为每一行触发onAdded事件
-             this.triggerOnAddedForAllRows();
+            // 不再逐行触发 onAdded
+            // 释放初始化阶段的滚动抑制（略晚于 mixin.onAdded 的默认延迟）
+            setTimeout(() => { this.initialAddInProgress = false }, 1500)
           })
         } else {
           if(this.model.linkNumber) {
@@ -436,7 +449,14 @@
          this.$nextTick(() => {
            const tableRef = this.$refs[this.refKeys[0]];
            if (tableRef && tableRef.$refs.scrollView) {
-             tableRef.$refs.scrollView.addEventListener('scroll', this.handleTableScroll);
+            const sv = tableRef.$refs.scrollView
+            sv.addEventListener('scroll', this.handleTableScroll);
+            sv.addEventListener('wheel', this.markUserScroll, { passive: true })
+            sv.addEventListener('touchmove', this.markUserScroll, { passive: true })
+            const modalEl = document.getElementById(this.prefixNo)
+            if (modalEl) {
+              modalEl.addEventListener('keydown', this.markUserScrollByKey)
+            }
            }
          });
              },
@@ -452,6 +472,10 @@
          if (!scrollView) return;
          
          const { scrollTop, scrollHeight, clientHeight } = scrollView;
+       if (this.programmaticScrollLock || !this.userScrolling) {
+         this.lastScrollTop = scrollTop
+         return
+       }
          const distanceToBottom = scrollHeight - scrollTop - clientHeight;
          const isScrollingDown = scrollTop > this.lastScrollTop;
          
@@ -464,6 +488,7 @@
              // 已经在底部且继续向下滚动，添加新行
              this.addMoreRows();
              this.hasReachedBottom = false; // 重置状态，防止连续触发
+            this.userScrolling = false
            }
          } else {
            // 不在底部时重置状态
@@ -476,6 +501,8 @@
        // 添加更多行
        addMoreRows() {
          this.isScrollLoading = true;
+         // 懒加载阶段抑制 onAdded 自动滚动
+         this.lazyLoadingInProgress = true
          const tableRef = this.$refs[this.refKeys[0]];
          if (tableRef && tableRef.add) {
            tableRef.add(this.scrollLoadRowCount);
@@ -483,55 +510,14 @@
          // 使用setTimeout防止过于频繁的触发
          setTimeout(() => {
            this.isScrollLoading = false;
+           this.lazyLoadingInProgress = false
          }, 200);
        },
        
              // 重写onAdded方法，防止自动滚动但保留仓库设置逻辑
-      onAdded(event) {
-        const { row, target } = event
-        
-        // 保留原来的仓库设置逻辑
-        if (this.currentSelectDepotId) {
-          //如果单据选择过仓库，则直接从当前选择的仓库加载
-          target.setValues([{ rowKey: row.id, values: { depotId: this.currentSelectDepotId } }])
-        } else {
-          getAction('/depot/findDepotByCurrentUser').then((res) => {
-            if (res.code === 200) {
-              let arr = res.data
-              if (arr.length === 1) {
-                target.setValues([{ rowKey: row.id, values: { depotId: arr[0].id + '' } }])
-              } else {
-                for (let i = 0; i < arr.length; i++) {
-                  if (arr[i].isDefault) {
-                    target.setValues([{ rowKey: row.id, values: { depotId: arr[i].id + '' } }])
-                    break
-                  }
-                }
-              }
-            }
-          })
-        }
-      },
+      // 移除行新增时的仓库自动填充（保持不设值）
        
-       // 为所有初始行触发onAdded逻辑
-       triggerOnAddedForAllRows() {
-         setTimeout(() => {
-           const tableRef = this.$refs[this.refKeys[0]];
-           if (!tableRef || !tableRef.rows || tableRef.rows.length === 0) {
-             setTimeout(() => this.triggerOnAddedForAllRows(), 500);
-             return;
-           }
-           
-           // 为每个初始行模拟触发onAdded事件
-           tableRef.rows.forEach(row => {
-             const mockEvent = {
-               row: row,
-               target: tableRef
-             };
-             this.onAdded(mockEvent);
-           });
-         }, 1000);
-       },
+       // 移除初始行逐行触发 onAdded 的逻辑
        
        // 滚动到顶部
        scrollToTop() {
@@ -551,13 +537,13 @@
          
          this.$nextTick(() => {
            attemptScroll();
-           // 再等待一段时间后再次尝试
+                      // 再等待一段时间后再次尝试
            setTimeout(attemptScroll, 500);
            setTimeout(attemptScroll, 1000);
          });
        },
        
-       //提交单据时整理成formData
+      //提交单据时整理成formData
       classifyIntoFormData(allValues) {
         let totalPrice = 0
         let billMain = Object.assign(this.model, allValues.formValue)

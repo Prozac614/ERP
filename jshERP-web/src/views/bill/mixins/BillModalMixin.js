@@ -19,10 +19,12 @@ const ALLOWED_VISIBLE_COLUMN_KEYS = new Set([
 ])
 
 const FORCE_HIDE_COLUMNS_BY_PREFIX = {
-  CGRK: new Set(['allPrice']),
-  XSCK: new Set(['unitPrice', 'allPrice']),
-  QTRK: new Set(['unitPrice', 'allPrice']),
-  QTCK: new Set(['unitPrice', 'allPrice'])
+  // 采购入库：隐藏仓库列；金额列保持隐藏
+  CGRK: new Set(['allPrice', 'depotId']),
+  // 销售出库/其它入库/其它出库：隐藏单价金额列，同时隐藏名称与仓库列
+  XSCK: new Set(['unitPrice', 'allPrice', 'name', 'depotId']),
+  QTRK: new Set(['unitPrice', 'allPrice', 'name', 'depotId']),
+  QTCK: new Set(['unitPrice', 'allPrice', 'name', 'depotId'])
 }
 
 const FORCE_SHOW_COLUMNS_BY_PREFIX = {
@@ -36,6 +38,9 @@ export const BillModalMixin = {
     return {
       action: '',
       manyAccountBtnStatus: false,
+      // 程序性新增/懒加载新增阶段的滚动抑制
+      initialAddInProgress: false,
+      lazyLoadingInProgress: false,
       supList: [],
       cusList: [],
       retailList: [],
@@ -427,31 +432,17 @@ export const BillModalMixin = {
       this.close()
     },
     onAdded(event) {
-      let that = this
       const { row, target } = event
-      //自动下滑到最后一行
-      setTimeout(function () {
-        that.$refs.materialDataTable.resetScrollTop((target.rows.length + 1) * that.$refs.materialDataTable.rowHeight)
-      }, 1000)
-      if (this.currentSelectDepotId) {
-        //如果单据选择过仓库，则直接从当前选择的仓库加载
-        target.setValues([{ rowKey: row.id, values: { depotId: this.currentSelectDepotId } }])
-      } else {
-        getAction('/depot/findDepotByCurrentUser').then((res) => {
-          if (res.code === 200) {
-            let arr = res.data
-            if (arr.length === 1) {
-              target.setValues([{ rowKey: row.id, values: { depotId: arr[0].id + '' } }])
-            } else {
-              for (let i = 0; i < arr.length; i++) {
-                if (arr[i].isDefault) {
-                  target.setValues([{ rowKey: row.id, values: { depotId: arr[i].id + '' } }])
-                }
-              }
-            }
-          }
-        })
+      // 初始化批量新增或懒加载新增时，不进行自动滚动，避免闪烁
+      if (this.initialAddInProgress || this.lazyLoadingInProgress) {
+        return
       }
+      // 仅在用户触发的新增行时，滚动到底部以聚焦新增行
+      setTimeout(() => {
+        if (this.$refs.materialDataTable) {
+          this.$refs.materialDataTable.resetScrollTop((target.rows.length + 1) * this.$refs.materialDataTable.rowHeight)
+        }
+      }, 300)
     },
     //单元值改变一个字符就触发一次
     onValueChange(event) {
@@ -467,6 +458,18 @@ export const BillModalMixin = {
           }
           break;
         case "barCode":
+          // XSCK/QTRK/QTCK：单唛头时仅查询库存，不请求商品详情，不回填金额/单价/名称等
+          if (typeof value === 'string' && value.indexOf(',') === -1
+            && (this.prefixNo === 'XSCK' || this.prefixNo === 'QTRK' || this.prefixNo === 'QTCK')) {
+            const depotIdSelected = this.prefixNo !== 'CGDD' && this.prefixNo !== 'XSDD' ? row.depotId : ''
+            findStockByDepotAndBarCode({ depotId: depotIdSelected, barCode: value }).then((res) => {
+              if (res && res.code === 200) {
+                target.setValues([{ rowKey: row.id, values: { stock: res.data.stock } }])
+                target.$forceUpdate()
+              }
+            })
+            break;
+          }
           const prevOperNumber = row.operNumber
           param = {
             barCode: value,
