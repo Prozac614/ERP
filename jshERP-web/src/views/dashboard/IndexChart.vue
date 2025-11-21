@@ -300,7 +300,7 @@ import { getAction, postAction, downFile } from '@/api/manage'
       StockValueExcludeShopModal
     },
     data () {
-      const defaultColumnKeys = ['action', 'barCode', 'materialName', 'currentPeriodStock', 'lastSixMonthsSales', 'stockAlertStatus']
+      const defaultColumnKeys = ['action', 'barCode', 'materialName', 'currentPeriodStock', 'lastSixMonthsSales', 'retailPrice', 'stockAlertStatus']
       const stockAlertStatusColumn = { title: '库存状态', dataIndex: 'stockAlertStatus', width: 130, align: 'center', scopedSlots: { customRender: 'stockAlertStatusRender' } }
 
       return {
@@ -405,6 +405,22 @@ import { getAction, postAction, downFile } from '@/api/manage'
           { title: '商品名称', dataIndex: 'materialName', width: 180, ellipsis: true }, // 🔧 150 → 180px，增加名称显示空间
           { title: '当前库存', dataIndex: 'currentPeriodStock', width: 110, scopedSlots: { customRender: 'customRenderStock' } }, // 🔧 90 → 110px，增加库存数据显示空间
           { title: '近六月出库', dataIndex: 'lastSixMonthsSales', width: 120, align: 'center' },
+          { 
+            title: '单价', 
+            dataIndex: 'retailPrice', 
+            width: 70, 
+            align: 'center',
+            customRender: (text, record) => {
+              if (text === null || text === undefined || text === '') {
+                return '-'
+              }
+              const price = Number(text)
+              if (isNaN(price)) {
+                return '-'
+              }
+              return price
+            }
+          },
           stockAlertStatusColumn // 🔧 110 → 130px，增加状态显示空间
         ],
         stockAlertStatusColumnDef: stockAlertStatusColumn,

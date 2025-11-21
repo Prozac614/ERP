@@ -1363,7 +1363,8 @@
             -- 直接从商品表获取库存告急状态
             m.stock_alert_status as stockAlertStatus,
             m.last_six_months_sales as lastSixMonthsSales,
-            m.stock_alert_ignored_at as stockAlertIgnoredAt
+            m.stock_alert_ignored_at as stockAlertIgnoredAt,
+            me.commodity_decimal as retailPrice
         from jsh_material m
         -- 默认条码/价格等扩展信息
         left join jsh_material_extend me on me.material_id = m.id

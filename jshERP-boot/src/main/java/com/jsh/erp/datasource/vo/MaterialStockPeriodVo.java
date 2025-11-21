@@ -15,6 +15,7 @@ public class MaterialStockPeriodVo {
     private String stockAlertStatus; // 库存告急状态
     private BigDecimal lastSixMonthsSales; // 过去六个月销量
     private Date stockAlertIgnoredAt; // 忽略风险时间
+    private BigDecimal retailPrice; // 零售价格
 
     // getter和setter方法
     public Long getMaterialId() {
@@ -103,5 +104,13 @@ public class MaterialStockPeriodVo {
 
     public void setStockAlertIgnoredAt(Date stockAlertIgnoredAt) {
         this.stockAlertIgnoredAt = stockAlertIgnoredAt;
+    }
+
+    public BigDecimal getRetailPrice() {
+        return retailPrice;
+    }
+
+    public void setRetailPrice(BigDecimal retailPrice) {
+        this.retailPrice = retailPrice;
     }
 }
