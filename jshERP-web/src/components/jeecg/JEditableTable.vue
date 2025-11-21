@@ -20,10 +20,6 @@
               <a-button type="primary" icon="minus" :disabled="disabled">移除行</a-button>
               <span class="gap"></span>
             </a-popconfirm>
-            <template v-if="showClearSelectButton">
-              <a-button icon="delete" @click="handleClickClearSelection">清空选择</a-button>
-              <span class="gap"></span>
-            </template>
           </template>
         </div>
         <div v-if="actionDeleteButton" class="action-button">
