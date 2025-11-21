@@ -33,6 +33,9 @@ const FORCE_SHOW_COLUMNS_BY_PREFIX = {
 
 const AMOUNT_DISABLED_PREFIXES = new Set(['CGRK', 'XSCK', 'QTRK', 'QTCK'])
 
+// 启用自动保存和关闭确认的单据类型
+const AUTO_SAVE_ENABLED_PREFIXES = new Set(['CGRK', 'XSCK', 'QTRK', 'QTCK'])
+
 export const BillModalMixin = {
   data() {
     return {
@@ -101,6 +104,7 @@ export const BillModalMixin = {
       lastActivityTime: 0,           // 最后活动时间戳
       AUTO_SAVE_DELAY: 120000,       // 2分钟 = 120000毫秒
       THROTTLE_DELAY: 500,           // 节流延迟 500毫秒
+      lastAutoSaveRowCount: 0,       // 上次自动保存时的行数（用于100行检测）
     };
   },
   created() {
@@ -129,6 +133,8 @@ export const BillModalMixin = {
         this.$nextTick(() => {
           this.bindAutoSaveListeners()
           this.startAutoSaveTimer()
+          // 重置上次自动保存行数
+          this.lastAutoSaveRowCount = 0
         })
       } else if (!newVal && oldVal) {
         // 弹窗关闭
@@ -147,8 +153,22 @@ export const BillModalMixin = {
         e.preventDefault()
       }
     },
+    // 判断当前单据类型是否启用自动保存
+    isAutoSaveEnabled() {
+      return AUTO_SAVE_ENABLED_PREFIXES.has(this.prefixNo)
+    },
+    // 判断是否需要显示关闭确认对话框
+    shouldShowSaveConfirmation() {
+      // 只有在新增或编辑模式下，且是启用自动保存的单据类型
+      return this.isAutoSaveEnabled() && (this.action === 'add' || this.action === 'edit')
+    },
     // 启动自动保存计时器
     startAutoSaveTimer() {
+      // 只对启用的单据类型执行自动保存
+      if (!this.isAutoSaveEnabled()) {
+        return
+      }
+
       // 清除已存在的计时器
       this.clearAutoSaveTimer()
 
@@ -204,8 +224,37 @@ export const BillModalMixin = {
         return
       }
 
-      // 调用现有的保存方法
+      // 只对启用的单据类型执行自动保存
+      if (!this.isAutoSaveEnabled()) {
+        return
+      }
+
+      // 调用现有的保存方法（会关闭弹窗）
       this.handleOk()
+    },
+    // 显示100行保存确认对话框
+    show100RowSaveConfirmation(currentCount) {
+      const that = this
+      this.$confirm({
+        title: '提示',
+        content: `已添加${currentCount}行数据，是否要先保存一下？`,
+        okText: '是',
+        cancelText: '否',
+        onOk() {
+          // 用户选择保存
+          console.log(`用户选择保存${currentCount}行数据`)
+          // 更新上次保存行数（防止重复提示）
+          that.lastAutoSaveRowCount = currentCount
+          // 触发保存
+          that.triggerAutoSave()
+        },
+        onCancel() {
+          // 用户选择不保存，继续编辑
+          console.log(`用户选择不保存，继续编辑（当前${currentCount}行）`)
+          // 更新 lastAutoSaveRowCount，避免在同一个100倍数反复提示
+          that.lastAutoSaveRowCount = currentCount
+        }
+      })
     },
     // 处理用户活动（节流版）
     handleUserActivity() {
@@ -560,6 +609,18 @@ export const BillModalMixin = {
     },
     onAdded(event) {
       const { row, target } = event
+
+      // 【100行检测】在所有return之前执行，确保即使在初始化阶段也能检测
+      if (this.isAutoSaveEnabled() && target && target.inputValues) {
+        const currentCount = target.inputValues.length
+        // 当前行数是100的倍数，且与上次提示/保存的行数不同
+        if (currentCount > 0 && currentCount % 100 === 0 && currentCount !== this.lastAutoSaveRowCount) {
+          console.log(`检测到行数达到${currentCount}，弹出保存确认对话框`)
+          // 弹出确认对话框
+          this.show100RowSaveConfirmation(currentCount)
+        }
+      }
+
       // 初始化批量新增或懒加载新增时，不进行自动滚动，避免闪烁
       if (this.initialAddInProgress || this.lazyLoadingInProgress) {
         return
@@ -983,6 +1044,17 @@ export const BillModalMixin = {
       this.autoChangePrice(target)
       // 重置自动保存计时器
       this.resetAutoSaveTimer()
+
+      // 检测是否需要触发100行保存确认
+      if (this.isAutoSaveEnabled() && target && target.inputValues) {
+        const currentCount = target.inputValues.length
+        // 当前行数是100的倍数，且与上次提示/保存的行数不同
+        if (currentCount > 0 && currentCount % 100 === 0 && currentCount !== this.lastAutoSaveRowCount) {
+          console.log(`删除后行数达到${currentCount}，弹出保存确认对话框`)
+          // 弹出确认对话框
+          this.show100RowSaveConfirmation(currentCount)
+        }
+      }
     },
     //根据仓库和唛头查询库存
     getStockByDepotBarCode(row, target) {

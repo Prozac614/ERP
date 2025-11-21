@@ -185,7 +185,30 @@ export const JEditableTableMixin = {
     },
     /** 关闭按钮点击事件 */
     handleCancel() {
-      this.close()
+      // 检查是否需要显示保存确认对话框
+      const needConfirm = this.shouldShowSaveConfirmation && this.shouldShowSaveConfirmation()
+      
+      if (needConfirm) {
+        const that = this
+        this.$confirm({
+          title: '提示',
+          content: '是否需要保存？',
+          okText: '是',
+          cancelText: '否',
+          onOk() {
+            // 用户选择保存，调用保存方法
+            // handleOk会在保存成功后自动关闭弹窗
+            that.handleOk()
+          },
+          onCancel() {
+            // 用户选择不保存，直接关闭
+            that.close()
+          }
+        })
+      } else {
+        // 不需要确认，直接关闭
+        this.close()
+      }
     },
     /** 确定按钮点击事件 */
     handleOk() {
