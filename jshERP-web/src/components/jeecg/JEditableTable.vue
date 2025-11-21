@@ -1981,7 +1981,17 @@
           message += '行'
         }
         message += '，请补录后再保存。'
-        if (this.$message && typeof this.$message.error === 'function') {
+        
+        // 使用信息对话框替代消息提示
+        if (this.$info && typeof this.$info === 'function') {
+          this.$info({
+            title: '验证失败',
+            content: message,
+            okText: '知道了',
+            centered: true
+          })
+        } else if (this.$message && typeof this.$message.error === 'function') {
+          // 降级方案：使用 message
           this.$message.error(message)
         } else {
           console.error(message)
@@ -2368,7 +2378,10 @@
           let [passed, message] = res
           // !(passed == null && tooltips[inputId].visible != null)
           if (passed != null) {
-            tooltips[inputId].visible = !passed
+            // blur 验证时不自动显示 tooltip
+            if (validType !== 'blur') {
+              tooltips[inputId].visible = !passed
+            }
             tooltips[inputId].passed = passed
             let index = notPassedIds.indexOf(inputId)
             let borderColor = null, boxShadow = null
@@ -2899,8 +2912,12 @@
           }
           target.value = value
         }
-        // 做单个表单验证
+        // 做单个表单验证（但不显示tooltip）
         this.validateOneInput(value, row, column, this.notPassedIds, true, 'blur')
+        
+        // 验证后隐藏提示（如果有的话）
+        let inputId = column.key + row.id
+        this.showOrHideTooltip(inputId, false)
       },
       handleChangeCheckboxCommon(event, row, column) {
         let { id, checked } = event.target
