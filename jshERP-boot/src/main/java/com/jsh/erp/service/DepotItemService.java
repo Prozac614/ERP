@@ -275,6 +275,43 @@ public class DepotItemService {
         return result;
     }
 
+    /**
+     * 批量插入单据明细
+     * @param depotItemList 单据明细列表
+     * @return 插入成功的记录数
+     * @throws Exception
+     */
+    @Transactional(value = "transactionManager", rollbackFor = Exception.class)
+    public int batchInsertDepotItems(List<DepotItem> depotItemList) throws Exception {
+        int result = 0;
+        if (depotItemList == null || depotItemList.isEmpty()) {
+            return result;
+        }
+        
+        try {
+            // 如果数量过大，分批插入（每批500条）
+            final int BATCH_SIZE = 500;
+            if (depotItemList.size() > BATCH_SIZE) {
+                logger.info("单据明细数量较大({}条)，将分批插入", depotItemList.size());
+                for (int i = 0; i < depotItemList.size(); i += BATCH_SIZE) {
+                    int end = Math.min(i + BATCH_SIZE, depotItemList.size());
+                    List<DepotItem> batch = depotItemList.subList(i, end);
+                    int batchResult = depotItemMapper.batchInsertSelective(batch);
+                    result += batchResult;
+                    logger.debug("分批插入第{}批，本批{}条，成功{}条", (i / BATCH_SIZE + 1), batch.size(), batchResult);
+                }
+            } else {
+                // 小于500条，一次性插入
+                result = depotItemMapper.batchInsertSelective(depotItemList);
+            }
+            logger.debug("批量插入单据明细完成，总数: {}, 成功: {}", depotItemList.size(), result);
+        } catch (Exception e) {
+            logger.error("批量插入单据明细失败，数量: {}", depotItemList.size(), e);
+            JshException.writeFail(logger, e);
+        }
+        return result;
+    }
+
     @Transactional(value = "transactionManager", rollbackFor = Exception.class)
     public int updateDepotItemWithObj(DepotItem depotItem) throws Exception {
         int result = 0;
@@ -526,6 +563,9 @@ public class DepotItemService {
                 stockMap = batchGetCurrentStock(stockParams);
             }
             // ========== 批量预查询结束 ==========
+            
+            // ========== 优化：收集所有待插入的单据明细 ==========
+            List<DepotItem> depotItemsToInsert = new ArrayList<>();
             
             for (int i = 0; i < rowArr.size(); i++) {
                 DepotItem depotItem = new DepotItem();
@@ -902,17 +942,45 @@ public class DepotItemService {
                         }
                     }
                 }
-                this.insertDepotItemWithObj(depotItem);
-                // 更新当前库存（优化：传入 depotHead，避免重复查询）
-                updateCurrentStock(depotItem, depotHead);
-                // 更新当前成本价
-                // updateCurrentUnitPrice(depotItem);
-                // 更新商品的价格（只有在单据已审核的情况下才更新）
-                if (BusinessConstants.BILLS_STATUS_AUDIT.equals(depotHead.getStatus())) {
-                    updateMaterialExtendPrice(materialExtend.getId(), depotHead.getSubType(), depotHead.getBillType(),
-                            rowObj);
-                }
+                // 优化：先收集到List，不立即插入数据库
+                depotItemsToInsert.add(depotItem);
             }
+            // ========== 批量插入和批量更新库存 ==========
+            if (!depotItemsToInsert.isEmpty()) {
+                logger.debug("开始批量插入单据明细，数量: {}", depotItemsToInsert.size());
+                
+                // 1. 批量插入单据明细
+                int insertCount = batchInsertDepotItems(depotItemsToInsert);
+                if (insertCount != depotItemsToInsert.size()) {
+                    logger.warn("批量插入数量不匹配，期望: {}, 实际: {}", depotItemsToInsert.size(), insertCount);
+                }
+                
+                // 2. 批量更新库存
+                batchUpdateCurrentStock(depotItemsToInsert, depotHead);
+                
+                // 3. 更新商品价格（只有在单据已审核的情况下才更新）
+                if (BusinessConstants.BILLS_STATUS_AUDIT.equals(depotHead.getStatus())) {
+                    for (int i = 0; i < rowArr.size(); i++) {
+                        JSONObject rowObj = JSONObject.parseObject(rowArr.getString(i));
+                        String barCode = rowObj.getString("barCode");
+                        MaterialExtend materialExtend = materialExtendMap.get(barCode);
+                        if (materialExtend != null) {
+                            try {
+                                updateMaterialExtendPrice(materialExtend.getId(), depotHead.getSubType(), 
+                                    depotHead.getBillType(), rowObj);
+                            } catch (Exception e) {
+                                logger.warn("更新商品价格失败，商品ID: {}, 错误: {}", materialExtend.getId(), e.getMessage());
+                            }
+                        }
+                    }
+                }
+                
+                logger.debug("批量操作完成");
+            } else {
+                logger.warn("没有需要插入的单据明细");
+            }
+            // ========== 批量插入和批量更新库存结束 ==========
+            
             if (recalcAmounts) {
                 updateHeadTotals(depotHead, totalAllPrice);
             }
@@ -1438,6 +1506,86 @@ public class DepotItemService {
         }
         
         return stockMap;
+    }
+
+    /**
+     * 库存更新信息内部类
+     */
+    private static class StockUpdateInfo {
+        Long materialId;
+        Long depotId;
+        Date operTime;
+        Long headerId;
+    }
+
+    /**
+     * 批量更新库存（收集所有库存变动后统一处理，按商品-仓库去重）
+     * @param depotItemList 单据明细列表
+     * @param depotHead 单据头
+     * @throws Exception
+     */
+    @Transactional(value = "transactionManager", rollbackFor = Exception.class)
+    public void batchUpdateCurrentStock(List<DepotItem> depotItemList, DepotHead depotHead) throws Exception {
+        if (depotItemList == null || depotItemList.isEmpty()) {
+            return;
+        }
+        
+        // 在强制审核模式下，未审核单据的保存阶段不参与库存更新
+        try {
+            if (systemConfigService.getForceApprovalFlag() && depotHead != null) {
+                if (!"1".equals(depotHead.getStatus())) {
+                    logger.debug("skip batchUpdateCurrentStock on save: headerId={}, status={}, forceApproval=true",
+                            depotHead.getId(), depotHead.getStatus());
+                    return;
+                }
+            }
+        } catch (Exception e) {
+            logger.debug("batchUpdateCurrentStock skip-check failed, fallback to default flow, error={}", e.getMessage());
+        }
+        
+        // 获取操作时间
+        Date operTime = new Date();
+        if (depotHead != null && depotHead.getOperTime() != null) {
+            operTime = depotHead.getOperTime();
+        }
+        
+        // 收集所有需要更新的库存（按 materialId+depotId 去重）
+        Map<String, StockUpdateInfo> stockUpdateMap = new HashMap<>();
+        
+        for (DepotItem item : depotItemList) {
+            // 主仓库
+            if (item.getMaterialId() != null && item.getDepotId() != null) {
+                String key = item.getMaterialId() + "_" + item.getDepotId();
+                if (!stockUpdateMap.containsKey(key)) {
+                    StockUpdateInfo info = new StockUpdateInfo();
+                    info.materialId = item.getMaterialId();
+                    info.depotId = item.getDepotId();
+                    info.operTime = operTime;
+                    info.headerId = item.getHeaderId();
+                    stockUpdateMap.put(key, info);
+                }
+            }
+            
+            // 另一仓库（调拨单）
+            if (item.getAnotherDepotId() != null && item.getMaterialId() != null) {
+                String key = item.getMaterialId() + "_" + item.getAnotherDepotId();
+                if (!stockUpdateMap.containsKey(key)) {
+                    StockUpdateInfo info = new StockUpdateInfo();
+                    info.materialId = item.getMaterialId();
+                    info.depotId = item.getAnotherDepotId();
+                    info.operTime = operTime;
+                    info.headerId = item.getHeaderId();
+                    stockUpdateMap.put(key, info);
+                }
+            }
+        }
+        
+        // 批量更新库存
+        for (StockUpdateInfo info : stockUpdateMap.values()) {
+            updateCurrentStockFun(info.materialId, info.depotId, info.operTime, info.headerId);
+        }
+        
+        logger.debug("批量更新库存完成，处理{}个不同的商品-仓库组合", stockUpdateMap.size());
     }
 
     /**

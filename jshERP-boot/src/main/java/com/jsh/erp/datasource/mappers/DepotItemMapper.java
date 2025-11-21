@@ -27,4 +27,11 @@ public interface DepotItemMapper {
     int updateByPrimaryKeySelective(DepotItem record);
 
     int updateByPrimaryKey(DepotItem record);
+
+    /**
+     * 批量插入单据明细
+     * @param list 单据明细列表
+     * @return 插入成功的记录数
+     */
+    int batchInsertSelective(@Param("list") List<DepotItem> list);
 }
