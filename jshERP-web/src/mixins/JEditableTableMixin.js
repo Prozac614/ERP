@@ -152,7 +152,16 @@ export const JEditableTableMixin = {
           this.close()
         } else {
           const message = resolveErrorMessage(res, '操作失败，请稍后重试')
-          if (this.$message && typeof this.$message.warning === 'function') {
+          // 使用信息对话框替代消息提示
+          if (this.$info && typeof this.$info === 'function') {
+            this.$info({
+              title: '验证失败',
+              content: message,
+              okText: '知道了',
+              centered: true
+            })
+          } else if (this.$message && typeof this.$message.warning === 'function') {
+            // 降级方案：使用 message
             this.$message.warning(message)
           }
           this.confirmLoading = false
