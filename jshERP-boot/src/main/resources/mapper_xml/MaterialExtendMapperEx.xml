@@ -82,4 +82,13 @@
         where material_id=#{materialId} and default_flag='1'
         and ifnull(delete_Flag,'0') !='1'
     </select>
+
+    <select id="getInfoByBarCodeList" resultType="com.jsh.erp.datasource.entities.MaterialExtend">
+        SELECT * FROM jsh_material_extend
+        WHERE bar_code IN
+        <foreach collection="barCodeList" item="barCode" open="(" separator="," close=")">
+            #{barCode}
+        </foreach>
+        AND ifnull(delete_flag,'0') != '1'
+    </select>
 </mapper>

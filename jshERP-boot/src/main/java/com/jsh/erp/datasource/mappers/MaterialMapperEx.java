@@ -188,4 +188,6 @@ public interface MaterialMapperEx {
      * 将商品状态更新为忽略风险
      */
     int updateStockAlertToIgnored(@Param("materialId") Long materialId);
+
+    List<Material> getMaterialByIdList(@Param("materialIdList") List<Long> materialIdList);
 }

@@ -916,4 +916,13 @@
         AND IFNULL(delete_flag, '0') != '1'
     </update>
 
+    <select id="getMaterialByIdList" resultMap="com.jsh.erp.datasource.mappers.MaterialMapper.BaseResultMap">
+        SELECT * FROM jsh_material
+        WHERE id IN
+        <foreach collection="materialIdList" item="materialId" open="(" separator="," close=")">
+            #{materialId}
+        </foreach>
+        AND ifnull(delete_flag,'0') != '1'
+    </select>
+
 </mapper>

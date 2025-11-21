@@ -30,6 +30,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 public class MaterialService {
@@ -1806,5 +1807,39 @@ public class MaterialService {
         } catch (Exception e) {
             logger.error("更新商品{}信息失败", material.getId(), e);
         }
+    }
+
+    /**
+     * 根据商品ID列表批量查询商品信息
+     * 
+     * @param materialIdList 商品ID列表
+     * @return Map<商品ID, Material对象>
+     */
+    public Map<Long, Material> getMaterialByIdMap(List<Long> materialIdList) {
+        Map<Long, Material> resultMap = new HashMap<>();
+        if (materialIdList == null || materialIdList.isEmpty()) {
+            return resultMap;
+        }
+
+        try {
+            // 去重
+            List<Long> distinctIds = materialIdList.stream().distinct().collect(Collectors.toList());
+
+            // 批量查询
+            List<Material> list = materialMapperEx.getMaterialByIdList(distinctIds);
+
+            // 转换为Map
+            if (list != null && !list.isEmpty()) {
+                for (Material material : list) {
+                    if (material != null && material.getId() != null) {
+                        resultMap.put(material.getId(), material);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.error("批量查询商品信息失败", e);
+        }
+
+        return resultMap;
     }
 }

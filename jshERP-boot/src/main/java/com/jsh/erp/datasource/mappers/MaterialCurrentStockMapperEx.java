@@ -5,6 +5,7 @@ import org.apache.ibatis.annotations.Param;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 
 public interface MaterialCurrentStockMapperEx {
 
@@ -20,4 +21,7 @@ public interface MaterialCurrentStockMapperEx {
     BigDecimal getCurrentUnitPriceByMId(@Param("materialId") Long materialId);
 
     void batchDeleteByDepots(@Param("ids") String ids[]);
+
+    List<MaterialCurrentStock> getStockByMaterialAndDepotList(
+            @Param("stockParams") List<Map<String, Long>> stockParams);
 }

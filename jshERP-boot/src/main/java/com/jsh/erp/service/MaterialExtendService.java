@@ -24,6 +24,7 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 public class MaterialExtendService {
@@ -429,5 +430,35 @@ public class MaterialExtendService {
             }
         }
         return 0;
+    }
+
+    /**
+     * 根据条码列表批量查询商品扩展信息
+     * @param barCodeList 条码列表
+     * @return Map<条码, MaterialExtend对象>
+     * @throws Exception
+     */
+    public Map<String, MaterialExtend> getInfoByBarCodeMap(List<String> barCodeList) throws Exception {
+        Map<String, MaterialExtend> resultMap = new HashMap<>();
+        if (barCodeList == null || barCodeList.isEmpty()) {
+            return resultMap;
+        }
+        
+        // 去重
+        List<String> distinctBarCodes = barCodeList.stream().distinct().collect(Collectors.toList());
+        
+        // 批量查询
+        List<MaterialExtend> list = materialExtendMapperEx.getInfoByBarCodeList(distinctBarCodes);
+        
+        // 转换为Map
+        if (list != null && !list.isEmpty()) {
+            for (MaterialExtend me : list) {
+                if (me != null && StringUtil.isNotEmpty(me.getBarCode())) {
+                    resultMap.put(me.getBarCode(), me);
+                }
+            }
+        }
+        
+        return resultMap;
     }
 }

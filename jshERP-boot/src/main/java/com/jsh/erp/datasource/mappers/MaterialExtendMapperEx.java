@@ -27,4 +27,6 @@ public interface MaterialExtendMapperEx {
 
     List<MaterialExtend> getBasicInfoByMid(
             @Param("materialId") Long materialId);
+
+    List<MaterialExtend> getInfoByBarCodeList(@Param("barCodeList") List<String> barCodeList);
 }
