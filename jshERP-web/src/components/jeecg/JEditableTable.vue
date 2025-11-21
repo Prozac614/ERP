@@ -2008,7 +2008,11 @@
             if (quantityIssues.length > 0) {
               this._markQuantityIssueHighlights(quantityIssues)
               this._notifyQuantityIssues(quantityIssues)
-              const result = { error: quantityIssues.length, values: [] }
+              const result = { 
+                error: quantityIssues.length, 
+                values: [],
+                firstErrorRowIndex: quantityIssues[0].rowIndex
+              }
               if (typeof callback === 'function') {
                 callback(result)
               }
@@ -2165,11 +2169,15 @@
       /** getValues的Promise版 */
       getValuesPromise(validate = true, rowIds, deleteTempId) {
         return new Promise((resolve, reject) => {
-          this.getValuesAsync({ validate, rowIds, deleteTempId }, ({ error, values }) => {
+          this.getValuesAsync({ validate, rowIds, deleteTempId }, ({ error, values, firstErrorRowIndex }) => {
             if (error === 0) {
               resolve(values)
             } else {
-              reject(VALIDATE_NO_PASSED)
+              if (typeof firstErrorRowIndex === 'number') {
+                reject({ error: VALIDATE_NO_PASSED, firstErrorRowIndex })
+              } else {
+                reject(VALIDATE_NO_PASSED)
+              }
             }
           })
         })

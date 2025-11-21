@@ -105,8 +105,15 @@ export function validateTables(cases, deleteTempId) {
         // 出现未验证通过的表单，不再进行下一步校验，直接返回失败并跳转到该表格
         if (error === VALIDATE_NO_PASSED) {
           reject({ error: VALIDATE_NO_PASSED, index })
+        } else if (error && error.error === VALIDATE_NO_PASSED) {
+          reject({ 
+            error: VALIDATE_NO_PASSED, 
+            index,
+            firstErrorRowIndex: error.firstErrorRowIndex
+          })
+        } else {
+          reject(error)
         }
-        reject(error)
       })
     })()
   })

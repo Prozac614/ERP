@@ -187,7 +187,7 @@ export const JEditableTableMixin = {
     handleCancel() {
       // 检查是否需要显示保存确认对话框
       const needConfirm = this.shouldShowSaveConfirmation && this.shouldShowSaveConfirmation()
-      
+
       if (needConfirm) {
         const that = this
         this.$confirm({
@@ -227,10 +227,29 @@ export const JEditableTableMixin = {
         if (e.error === VALIDATE_NO_PASSED) {
           // 如果有未通过表单验证的子表，就自动跳转到它所在的tab
           this.activeKey = e.index == null ? this.activeKey : this.refKeys[e.index]
+          
+          // 如果有错误行信息，滚动到该行
+          if (typeof e.firstErrorRowIndex === 'number' && e.firstErrorRowIndex >= 0) {
+            this.scrollToErrorRow(e.index, e.firstErrorRowIndex)
+          }
         } else {
           console.error(e)
         }
       })
+    },
+
+    /** 滚动到错误行 */
+    scrollToErrorRow(tableIndex, rowIndex) {
+      // 使用防抖延迟，等待DOM更新
+      setTimeout(() => {
+        const refKey = this.refKeys[tableIndex != null ? tableIndex : 0]
+        const tableRef = this.$refs[refKey]
+        if (tableRef && typeof tableRef.resetScrollTop === 'function') {
+          // 计算滚动位置，行高为42px
+          const scrollTop = rowIndex * 42
+          tableRef.resetScrollTop(scrollTop)
+        }
+      }, 300)
     },
 
     /* --- throw --- */
