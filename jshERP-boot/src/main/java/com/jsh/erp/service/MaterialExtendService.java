@@ -11,8 +11,10 @@ import com.jsh.erp.datasource.entities.User;
 import com.jsh.erp.datasource.mappers.MaterialExtendMapper;
 import com.jsh.erp.datasource.mappers.MaterialExtendMapperEx;
 import com.jsh.erp.datasource.vo.MaterialExtendVo4List;
+import com.jsh.erp.datasource.vo.PriceChangeContext;
 import com.jsh.erp.exception.BusinessRunTimeException;
 import com.jsh.erp.exception.JshException;
+import com.jsh.erp.utils.PriceChangeContextHolder;
 import com.jsh.erp.utils.StringUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,6 +40,8 @@ public class MaterialExtendService {
     private UserService userService;
     @Resource
     private RedisService redisService;
+    @Resource
+    private MaterialPriceHistoryService materialPriceHistoryService;
 
     public MaterialExtend getMaterialExtend(long id) throws Exception {
         MaterialExtend result = null;
@@ -198,9 +202,19 @@ public class MaterialExtendService {
                 if (StringUtils.isNotEmpty(tempUpdatedJson.getString("lowDecimal"))) {
                     materialExtend.setLowDecimal(tempUpdatedJson.getBigDecimal("lowDecimal"));
                 }
-                this.updateMaterialExtend(materialExtend);
-                // 如果金额为空，此处单独置空
-                materialExtendMapperEx.specialUpdatePrice(materialExtend);
+                // 设置价格变更上下文（商品信息修改）
+                PriceChangeContext context = new PriceChangeContext();
+                context.setChangeSource(BusinessConstants.PRICE_CHANGE_SOURCE_MATERIAL_UPDATE);
+                context.setChangeReason("商品信息修改");
+                PriceChangeContextHolder.setContext(context);
+
+                try {
+                    this.updateMaterialExtend(materialExtend);
+                    // 如果金额为空，此处单独置空
+                    materialExtendMapperEx.specialUpdatePrice(materialExtend);
+                } finally {
+                    PriceChangeContextHolder.clearContext();
+                }
             }
         }
         // 处理唛头的排序，基本单位排第一个
@@ -261,9 +275,56 @@ public class MaterialExtendService {
         User user = userService.getCurrentUser();
         materialExtend.setUpdateTime(System.currentTimeMillis());
         materialExtend.setUpdateSerial(user.getLoginName());
+
+        // 查询更新前的价格
+        java.math.BigDecimal oldPrice = null;
+        if (materialExtend.getId() != null) {
+            try {
+                MaterialExtend oldExtend = materialExtendMapper.selectByPrimaryKey(materialExtend.getId());
+                if (oldExtend != null) {
+                    oldPrice = oldExtend.getCommodityDecimal();
+                }
+            } catch (Exception e) {
+                logger.warn("查询商品扩展旧价格失败: {}", e.getMessage());
+            }
+        }
+
         int res = 0;
         try {
             res = materialExtendMapper.updateByPrimaryKeySelective(materialExtend);
+
+            // 如果零售价发生变化，记录历史
+            if (res > 0 && materialExtend.getCommodityDecimal() != null) {
+                java.math.BigDecimal newPrice = materialExtend.getCommodityDecimal();
+                // 判断价格是否真正发生变化
+                if (oldPrice == null || oldPrice.compareTo(newPrice) != 0) {
+                    // 获取变更来源信息
+                    PriceChangeContext context = PriceChangeContextHolder.getContext();
+                    if (context != null) {
+                        // 有上下文信息，使用上下文中的变更来源
+                        materialPriceHistoryService.recordPriceChange(
+                                materialExtend.getId(),
+                                oldPrice,
+                                newPrice,
+                                context.getChangeSource(),
+                                context.getSourceBillId(),
+                                context.getSourceBillNumber(),
+                                context.getChangeReason(),
+                                context.getEffectiveDate());
+                    } else {
+                        // 没有上下文信息，默认为商品信息修改
+                        materialPriceHistoryService.recordPriceChange(
+                                materialExtend.getId(),
+                                oldPrice,
+                                newPrice,
+                                BusinessConstants.PRICE_CHANGE_SOURCE_MATERIAL_UPDATE,
+                                null,
+                                null,
+                                "商品信息修改",
+                                null);
+                    }
+                }
+            }
         } catch (Exception e) {
             JshException.writeFail(logger, e);
         }
@@ -434,6 +495,7 @@ public class MaterialExtendService {
 
     /**
      * 根据条码列表批量查询商品扩展信息
+     * 
      * @param barCodeList 条码列表
      * @return Map<条码, MaterialExtend对象>
      * @throws Exception
@@ -443,13 +505,13 @@ public class MaterialExtendService {
         if (barCodeList == null || barCodeList.isEmpty()) {
             return resultMap;
         }
-        
+
         // 去重
         List<String> distinctBarCodes = barCodeList.stream().distinct().collect(Collectors.toList());
-        
+
         // 批量查询
         List<MaterialExtend> list = materialExtendMapperEx.getInfoByBarCodeList(distinctBarCodes);
-        
+
         // 转换为Map
         if (list != null && !list.isEmpty()) {
             for (MaterialExtend me : list) {
@@ -458,7 +520,7 @@ public class MaterialExtendService {
                 }
             }
         }
-        
+
         return resultMap;
     }
 }

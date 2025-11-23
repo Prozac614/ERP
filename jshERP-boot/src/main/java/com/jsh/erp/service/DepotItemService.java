@@ -11,8 +11,10 @@ import com.jsh.erp.datasource.vo.DepotItemVo4Stock;
 import com.jsh.erp.datasource.vo.DepotItemVoBatchNumberList;
 import com.jsh.erp.datasource.vo.InOutPriceVo;
 import com.jsh.erp.datasource.vo.MaterialStockPeriodVo;
+import com.jsh.erp.datasource.vo.PriceChangeContext;
 import com.jsh.erp.exception.BusinessRunTimeException;
 import com.jsh.erp.exception.JshException;
+import com.jsh.erp.utils.PriceChangeContextHolder;
 import com.jsh.erp.utils.StringUtil;
 import com.jsh.erp.utils.Tools;
 import com.jsh.erp.utils.ExcelUtils;
@@ -277,6 +279,7 @@ public class DepotItemService {
 
     /**
      * 批量插入单据明细
+     * 
      * @param depotItemList 单据明细列表
      * @return 插入成功的记录数
      * @throws Exception
@@ -287,7 +290,7 @@ public class DepotItemService {
         if (depotItemList == null || depotItemList.isEmpty()) {
             return result;
         }
-        
+
         try {
             // 如果数量过大，分批插入（每批500条）
             final int BATCH_SIZE = 500;
@@ -517,7 +520,7 @@ public class DepotItemService {
             BigDecimal totalAllPrice = BigDecimal.ZERO;
             // 针对组装单、拆卸单校验是否存在组合件和普通子件
             checkAssembleWithMaterialType(rowArr, depotHead.getSubType());
-            
+
             // ========== 优化：批量预查询数据 ==========
             // 1. 收集所有条码
             List<String> barCodeList = new ArrayList<>();
@@ -530,8 +533,7 @@ public class DepotItemService {
             }
 
             // 2. 批量查询商品扩展信息
-            Map<String, MaterialExtend> materialExtendMap = 
-                materialExtendService.getInfoByBarCodeMap(barCodeList);
+            Map<String, MaterialExtend> materialExtendMap = materialExtendService.getInfoByBarCodeMap(barCodeList);
 
             // 3. 收集所有商品ID
             List<Long> materialIdList = new ArrayList<>();
@@ -552,7 +554,7 @@ public class DepotItemService {
                     JSONObject rowObj = JSONObject.parseObject(rowArr.getString(i));
                     String barCode = rowObj.getString("barCode");
                     MaterialExtend materialExtend = materialExtendMap.get(barCode);
-                    
+
                     if (materialExtend != null && StringUtil.isExist(rowObj.get("depotId"))) {
                         Map<String, Long> param = new HashMap<>();
                         param.put("materialId", materialExtend.getMaterialId());
@@ -563,10 +565,10 @@ public class DepotItemService {
                 stockMap = batchGetCurrentStock(stockParams);
             }
             // ========== 批量预查询结束 ==========
-            
+
             // ========== 优化：收集所有待插入的单据明细 ==========
             List<DepotItem> depotItemsToInsert = new ArrayList<>();
-            
+
             for (int i = 0; i < rowArr.size(); i++) {
                 DepotItem depotItem = new DepotItem();
                 JSONObject rowObj = JSONObject.parseObject(rowArr.getString(i));
@@ -948,16 +950,16 @@ public class DepotItemService {
             // ========== 批量插入和批量更新库存 ==========
             if (!depotItemsToInsert.isEmpty()) {
                 logger.debug("开始批量插入单据明细，数量: {}", depotItemsToInsert.size());
-                
+
                 // 1. 批量插入单据明细
                 int insertCount = batchInsertDepotItems(depotItemsToInsert);
                 if (insertCount != depotItemsToInsert.size()) {
                     logger.warn("批量插入数量不匹配，期望: {}, 实际: {}", depotItemsToInsert.size(), insertCount);
                 }
-                
+
                 // 2. 批量更新库存
                 batchUpdateCurrentStock(depotItemsToInsert, depotHead);
-                
+
                 // 3. 更新商品价格（只有在单据已审核的情况下才更新）
                 if (BusinessConstants.BILLS_STATUS_AUDIT.equals(depotHead.getStatus())) {
                     for (int i = 0; i < rowArr.size(); i++) {
@@ -966,21 +968,21 @@ public class DepotItemService {
                         MaterialExtend materialExtend = materialExtendMap.get(barCode);
                         if (materialExtend != null) {
                             try {
-                                updateMaterialExtendPrice(materialExtend.getId(), depotHead.getSubType(), 
-                                    depotHead.getBillType(), rowObj);
+                                updateMaterialExtendPrice(materialExtend.getId(), depotHead.getSubType(),
+                                        depotHead.getBillType(), rowObj, depotHead);
                             } catch (Exception e) {
                                 logger.warn("更新商品价格失败，商品ID: {}, 错误: {}", materialExtend.getId(), e.getMessage());
                             }
                         }
                     }
                 }
-                
+
                 logger.debug("批量操作完成");
             } else {
                 logger.warn("没有需要插入的单据明细");
             }
             // ========== 批量插入和批量更新库存结束 ==========
-            
+
             if (recalcAmounts) {
                 updateHeadTotals(depotHead, totalAllPrice);
             }
@@ -1196,10 +1198,13 @@ public class DepotItemService {
      * 
      * @param meId
      * @param subType
+     * @param billType
      * @param rowObj
+     * @param depotHead 单据头信息（用于记录价格变更历史）
      */
     @Transactional(value = "transactionManager", rollbackFor = Exception.class)
-    public void updateMaterialExtendPrice(Long meId, String subType, String billType, JSONObject rowObj)
+    public void updateMaterialExtendPrice(Long meId, String subType, String billType, JSONObject rowObj,
+            DepotHead depotHead)
             throws Exception {
         if (systemConfigService.getUpdateUnitPriceFlag()) {
             if (StringUtil.isExist(rowObj.get("unitPrice"))) {
@@ -1208,8 +1213,22 @@ public class DepotItemService {
                 materialExtend.setId(meId);
                 // 只有采购入库单据才能修改零售价
                 if (BusinessConstants.SUB_TYPE_PURCHASE.equals(subType)) {
-                    materialExtend.setCommodityDecimal(unitPrice);
-                    materialExtendService.updateMaterialExtend(materialExtend);
+                    // 设置价格变更上下文
+                    PriceChangeContext context = new PriceChangeContext();
+                    context.setChangeSource(BusinessConstants.PRICE_CHANGE_SOURCE_PURCHASE_AUDIT);
+                    context.setSourceBillId(depotHead != null ? depotHead.getId() : null);
+                    context.setSourceBillNumber(depotHead != null ? depotHead.getNumber() : null);
+                    context.setChangeReason("采购入库审核");
+                    // 生效日期使用单据的操作日期
+                    context.setEffectiveDate(depotHead != null ? depotHead.getOperTime() : null);
+                    PriceChangeContextHolder.setContext(context);
+
+                    try {
+                        materialExtend.setCommodityDecimal(unitPrice);
+                        materialExtendService.updateMaterialExtend(materialExtend);
+                    } finally {
+                        PriceChangeContextHolder.clearContext();
+                    }
                 }
                 // 其它入库-生产入库的情况更新采购单价（保留原有逻辑）
                 if (BusinessConstants.SUB_TYPE_OTHER.equals(subType)) {
@@ -1250,8 +1269,25 @@ public class DepotItemService {
                     materialExtend.setId(depotItem.getMaterialExtendId());
                     // 只有采购入库单据才能修改零售价
                     if (BusinessConstants.SUB_TYPE_PURCHASE.equals(depotHead.getSubType())) {
-                        materialExtend.setCommodityDecimal(depotItem.getUnitPrice());
-                        materialExtendService.updateMaterialExtend(materialExtend);
+                        // 设置价格变更上下文
+                        PriceChangeContext context = new PriceChangeContext();
+                        context.setChangeSource(BusinessConstants.PRICE_CHANGE_SOURCE_PURCHASE_AUDIT);
+                        context.setSourceBillId(depotHead.getId());
+                        context.setSourceBillNumber(depotHead.getNumber());
+                        context.setChangeReason("采购入库审核");
+                        // 生效日期使用单据的操作日期
+                        logger.info("🔍 采购入库审核价格变更 - 单据号: {}, 单据ID: {}, createTime: {}, operTime: {}",
+                                depotHead.getNumber(), depotHead.getId(), depotHead.getCreateTime(),
+                                depotHead.getOperTime());
+                        context.setEffectiveDate(depotHead.getOperTime());
+                        PriceChangeContextHolder.setContext(context);
+
+                        try {
+                            materialExtend.setCommodityDecimal(depotItem.getUnitPrice());
+                            materialExtendService.updateMaterialExtend(materialExtend);
+                        } finally {
+                            PriceChangeContextHolder.clearContext();
+                        }
                     }
                     // 其它入库-生产入库的情况更新采购单价（保留原有逻辑）
                     if (BusinessConstants.SUB_TYPE_OTHER.equals(depotHead.getSubType())) {
@@ -1468,34 +1504,34 @@ public class DepotItemService {
 
     /**
      * 批量查询库存信息
+     * 
      * @param materialDepotPairs 商品ID和仓库ID的组合列表
      * @return Map<"materialId_depotId", 库存数量>
      */
     private Map<String, BigDecimal> batchGetCurrentStock(List<Map<String, Long>> materialDepotPairs) {
         Map<String, BigDecimal> stockMap = new HashMap<>();
-        
+
         if (materialDepotPairs == null || materialDepotPairs.isEmpty()) {
             return stockMap;
         }
-        
+
         try {
             List<MaterialCurrentStock> stockList = materialCurrentStockMapperEx
-                .getStockByMaterialAndDepotList(materialDepotPairs);
-            
+                    .getStockByMaterialAndDepotList(materialDepotPairs);
+
             if (stockList != null && !stockList.isEmpty()) {
                 for (MaterialCurrentStock stock : stockList) {
                     String key = stock.getMaterialId() + "_" + stock.getDepotId();
-                    stockMap.put(key, stock.getCurrentNumber() != null ? 
-                        stock.getCurrentNumber() : BigDecimal.ZERO);
+                    stockMap.put(key, stock.getCurrentNumber() != null ? stock.getCurrentNumber() : BigDecimal.ZERO);
                 }
             }
-            
+
             // 对于查询不到的，检查初始库存
             for (Map<String, Long> pair : materialDepotPairs) {
                 Long materialId = pair.get("materialId");
                 Long depotId = pair.get("depotId");
                 String key = materialId + "_" + depotId;
-                
+
                 if (!stockMap.containsKey(key)) {
                     BigDecimal initStock = materialService.getInitStock(materialId, depotId);
                     stockMap.put(key, initStock);
@@ -1504,7 +1540,7 @@ public class DepotItemService {
         } catch (Exception e) {
             logger.error("批量查询库存失败", e);
         }
-        
+
         return stockMap;
     }
 
@@ -1520,8 +1556,9 @@ public class DepotItemService {
 
     /**
      * 批量更新库存（收集所有库存变动后统一处理，按商品-仓库去重）
+     * 
      * @param depotItemList 单据明细列表
-     * @param depotHead 单据头
+     * @param depotHead     单据头
      * @throws Exception
      */
     @Transactional(value = "transactionManager", rollbackFor = Exception.class)
@@ -1529,7 +1566,7 @@ public class DepotItemService {
         if (depotItemList == null || depotItemList.isEmpty()) {
             return;
         }
-        
+
         // 在强制审核模式下，未审核单据的保存阶段不参与库存更新
         try {
             if (systemConfigService.getForceApprovalFlag() && depotHead != null) {
@@ -1540,18 +1577,19 @@ public class DepotItemService {
                 }
             }
         } catch (Exception e) {
-            logger.debug("batchUpdateCurrentStock skip-check failed, fallback to default flow, error={}", e.getMessage());
+            logger.debug("batchUpdateCurrentStock skip-check failed, fallback to default flow, error={}",
+                    e.getMessage());
         }
-        
+
         // 获取操作时间
         Date operTime = new Date();
         if (depotHead != null && depotHead.getOperTime() != null) {
             operTime = depotHead.getOperTime();
         }
-        
+
         // 收集所有需要更新的库存（按 materialId+depotId 去重）
         Map<String, StockUpdateInfo> stockUpdateMap = new HashMap<>();
-        
+
         for (DepotItem item : depotItemList) {
             // 主仓库
             if (item.getMaterialId() != null && item.getDepotId() != null) {
@@ -1565,7 +1603,7 @@ public class DepotItemService {
                     stockUpdateMap.put(key, info);
                 }
             }
-            
+
             // 另一仓库（调拨单）
             if (item.getAnotherDepotId() != null && item.getMaterialId() != null) {
                 String key = item.getMaterialId() + "_" + item.getAnotherDepotId();
@@ -1579,12 +1617,12 @@ public class DepotItemService {
                 }
             }
         }
-        
+
         // 批量更新库存
         for (StockUpdateInfo info : stockUpdateMap.values()) {
             updateCurrentStockFun(info.materialId, info.depotId, info.operTime, info.headerId);
         }
-        
+
         logger.debug("批量更新库存完成，处理{}个不同的商品-仓库组合", stockUpdateMap.size());
     }
 
@@ -1611,7 +1649,7 @@ public class DepotItemService {
             logger.debug("updateCurrentStock skip-check failed, fallback to default flow, headerId={}, error={}",
                     depotItem != null ? depotItem.getHeaderId() : null, e.getMessage());
         }
-        
+
         // 获取操作时间
         Date operTime = new Date();
         if (depotHead != null && depotHead.getOperTime() != null) {
@@ -1638,7 +1676,7 @@ public class DepotItemService {
         if (depotItem.getHeaderId() != null) {
             depotHead = depotHeadMapper.selectByPrimaryKey(depotItem.getHeaderId());
         }
-        
+
         // 调用重载方法
         updateCurrentStock(depotItem, depotHead);
     }

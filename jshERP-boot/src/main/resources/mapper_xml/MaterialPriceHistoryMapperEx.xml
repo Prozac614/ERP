@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jsh.erp.datasource.mappers.MaterialPriceHistoryMapperEx">
+  
+  <resultMap id="BaseResultMap" type="com.jsh.erp.datasource.entities.MaterialPriceHistory">
+    <id column="id" jdbcType="BIGINT" property="id" />
+    <result column="material_id" jdbcType="BIGINT" property="materialId" />
+    <result column="material_extend_id" jdbcType="BIGINT" property="materialExtendId" />
+    <result column="bar_code" jdbcType="VARCHAR" property="barCode" />
+    <result column="retail_price" jdbcType="DECIMAL" property="retailPrice" />
+    <result column="effective_date" jdbcType="DATE" property="effectiveDate" />
+    <result column="change_reason" jdbcType="VARCHAR" property="changeReason" />
+    <result column="change_source" jdbcType="VARCHAR" property="changeSource" />
+    <result column="source_bill_id" jdbcType="BIGINT" property="sourceBillId" />
+    <result column="source_bill_number" jdbcType="VARCHAR" property="sourceBillNumber" />
+    <result column="create_time" jdbcType="TIMESTAMP" property="createTime" />
+    <result column="create_serial" jdbcType="VARCHAR" property="createSerial" />
+    <result column="tenant_id" jdbcType="BIGINT" property="tenantId" />
+    <result column="delete_flag" jdbcType="VARCHAR" property="deleteFlag" />
+  </resultMap>
+  
+  <!-- 根据商品扩展ID查询价格历史 -->
+  <select id="getByMaterialExtendId" parameterType="java.lang.Long" resultMap="BaseResultMap">
+    SELECT
+      id, material_id, material_extend_id, bar_code, retail_price, effective_date,
+      change_reason, change_source, source_bill_id, source_bill_number, create_time,
+      create_serial, tenant_id, delete_flag
+    FROM jsh_material_price_history
+    WHERE material_extend_id = #{materialExtendId,jdbcType=BIGINT}
+      AND delete_flag = '0'
+    ORDER BY effective_date DESC, create_time DESC
+  </select>
+  
+  <!-- 根据商品ID查询价格历史 -->
+  <select id="getByMaterialId" parameterType="java.lang.Long" resultMap="BaseResultMap">
+    SELECT
+      id, material_id, material_extend_id, bar_code, retail_price, effective_date,
+      change_reason, change_source, source_bill_id, source_bill_number, create_time,
+      create_serial, tenant_id, delete_flag
+    FROM jsh_material_price_history
+    WHERE material_id = #{materialId,jdbcType=BIGINT}
+      AND delete_flag = '0'
+    ORDER BY effective_date DESC, create_time DESC
+  </select>
+  
+  <!-- 根据时间范围查询价格变更记录 -->
+  <select id="getByDateRange" resultMap="BaseResultMap">
+    SELECT
+      id, material_id, material_extend_id, bar_code, retail_price, effective_date,
+      change_reason, change_source, source_bill_id, source_bill_number, create_time,
+      create_serial, tenant_id, delete_flag
+    FROM jsh_material_price_history
+    WHERE delete_flag = '0'
+      <if test="beginDate != null">
+        AND effective_date >= #{beginDate,jdbcType=DATE}
+      </if>
+      <if test="endDate != null">
+        AND effective_date &lt;= #{endDate,jdbcType=DATE}
+      </if>
+    ORDER BY effective_date DESC, create_time DESC
+  </select>
+  
+  <!-- 查询最近的价格记录 -->
+  <select id="getLatestByMaterialExtendId" parameterType="java.lang.Long" resultMap="BaseResultMap">
+    SELECT
+      id, material_id, material_extend_id, bar_code, retail_price, effective_date,
+      change_reason, change_source, source_bill_id, source_bill_number, create_time,
+      create_serial, tenant_id, delete_flag
+    FROM jsh_material_price_history
+    WHERE material_extend_id = #{materialExtendId,jdbcType=BIGINT}
+      AND delete_flag = '0'
+    ORDER BY effective_date DESC, create_time DESC
+    LIMIT 1
+  </select>
+  
+</mapper>
+

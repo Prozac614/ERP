@@ -227,4 +227,16 @@ public class BusinessConstants {
      * 验证码有效期（分钟）
      */
     public static final Integer CAPTCHA_EXPIRATION = 2;
+
+    /**
+     * 价格变更来源
+     */
+    public static final String PRICE_CHANGE_SOURCE_PURCHASE_AUDIT = "PURCHASE_AUDIT";  // 采购入库审核
+    public static final String PRICE_CHANGE_SOURCE_MATERIAL_UPDATE = "MATERIAL_UPDATE"; // 商品信息修改
+    public static final String PRICE_CHANGE_SOURCE_MATERIAL_IMPORT = "MATERIAL_IMPORT"; // 商品导入
+
+    /**
+     * 删除标记（通用）
+     */
+    public static final String DELETE_FLAG_NORMAL = "0";
 }

@@ -8,6 +8,7 @@ import com.jsh.erp.constants.ExceptionConstants;
 import com.jsh.erp.datasource.entities.*;
 import com.jsh.erp.datasource.mappers.*;
 import com.jsh.erp.datasource.vo.MaterialVoSearch;
+import com.jsh.erp.datasource.vo.PriceChangeContext;
 import com.jsh.erp.exception.BusinessRunTimeException;
 import com.jsh.erp.exception.JshException;
 import com.jsh.erp.utils.*;
@@ -1060,10 +1061,20 @@ public class MaterialService {
             if (meId == 0L) {
                 materialExtendMapper.insertSelective(materialExtend);
             } else {
-                materialExtend.setId(meId);
-                materialExtendMapper.updateByPrimaryKeySelective(materialExtend);
-                // 如果金额为空，此处单独置空
-                materialExtendMapperEx.specialUpdatePrice(materialExtend);
+                // 设置价格变更上下文（导入场景）
+                PriceChangeContext context = new PriceChangeContext();
+                context.setChangeSource(BusinessConstants.PRICE_CHANGE_SOURCE_MATERIAL_IMPORT);
+                context.setChangeReason("商品导入");
+                PriceChangeContextHolder.setContext(context);
+
+                try {
+                    materialExtend.setId(meId);
+                    materialExtendMapper.updateByPrimaryKeySelective(materialExtend);
+                    // 如果金额为空，此处单独置空
+                    materialExtendMapperEx.specialUpdatePrice(materialExtend);
+                } finally {
+                    PriceChangeContextHolder.clearContext();
+                }
             }
         }
     }

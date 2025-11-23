@@ -1,0 +1,355 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.jsh.erp.datasource.mappers.MaterialPriceHistoryMapper">
+  <resultMap id="BaseResultMap" type="com.jsh.erp.datasource.entities.MaterialPriceHistory">
+    <id column="id" jdbcType="BIGINT" property="id" />
+    <result column="material_id" jdbcType="BIGINT" property="materialId" />
+    <result column="material_extend_id" jdbcType="BIGINT" property="materialExtendId" />
+    <result column="bar_code" jdbcType="VARCHAR" property="barCode" />
+    <result column="retail_price" jdbcType="DECIMAL" property="retailPrice" />
+    <result column="effective_date" jdbcType="DATE" property="effectiveDate" />
+    <result column="change_reason" jdbcType="VARCHAR" property="changeReason" />
+    <result column="change_source" jdbcType="VARCHAR" property="changeSource" />
+    <result column="source_bill_id" jdbcType="BIGINT" property="sourceBillId" />
+    <result column="source_bill_number" jdbcType="VARCHAR" property="sourceBillNumber" />
+    <result column="create_time" jdbcType="TIMESTAMP" property="createTime" />
+    <result column="create_serial" jdbcType="VARCHAR" property="createSerial" />
+    <result column="tenant_id" jdbcType="BIGINT" property="tenantId" />
+    <result column="delete_flag" jdbcType="VARCHAR" property="deleteFlag" />
+  </resultMap>
+  
+  <sql id="Example_Where_Clause">
+    <where>
+      <foreach collection="oredCriteria" item="criteria" separator="or">
+        <if test="criteria.valid">
+          <trim prefix="(" prefixOverrides="and" suffix=")">
+            <foreach collection="criteria.criteria" item="criterion">
+              <choose>
+                <when test="criterion.noValue">
+                  and ${criterion.condition}
+                </when>
+                <when test="criterion.singleValue">
+                  and ${criterion.condition} #{criterion.value}
+                </when>
+                <when test="criterion.betweenValue">
+                  and ${criterion.condition} #{criterion.value} and #{criterion.secondValue}
+                </when>
+                <when test="criterion.listValue">
+                  and ${criterion.condition}
+                  <foreach close=")" collection="criterion.value" item="listItem" open="(" separator=",">
+                    #{listItem}
+                  </foreach>
+                </when>
+              </choose>
+            </foreach>
+          </trim>
+        </if>
+      </foreach>
+    </where>
+  </sql>
+  
+  <sql id="Update_By_Example_Where_Clause">
+    <where>
+      <foreach collection="example.oredCriteria" item="criteria" separator="or">
+        <if test="criteria.valid">
+          <trim prefix="(" prefixOverrides="and" suffix=")">
+            <foreach collection="criteria.criteria" item="criterion">
+              <choose>
+                <when test="criterion.noValue">
+                  and ${criterion.condition}
+                </when>
+                <when test="criterion.singleValue">
+                  and ${criterion.condition} #{criterion.value}
+                </when>
+                <when test="criterion.betweenValue">
+                  and ${criterion.condition} #{criterion.value} and #{criterion.secondValue}
+                </when>
+                <when test="criterion.listValue">
+                  and ${criterion.condition}
+                  <foreach close=")" collection="criterion.value" item="listItem" open="(" separator=",">
+                    #{listItem}
+                  </foreach>
+                </when>
+              </choose>
+            </foreach>
+          </trim>
+        </if>
+      </foreach>
+    </where>
+  </sql>
+  
+  <sql id="Base_Column_List">
+    id, material_id, material_extend_id, bar_code, retail_price, effective_date, 
+    change_reason, change_source, source_bill_id, source_bill_number, create_time, 
+    create_serial, tenant_id, delete_flag
+  </sql>
+  
+  <select id="selectByExample" parameterType="com.jsh.erp.datasource.entities.MaterialPriceHistoryExample" resultMap="BaseResultMap">
+    select
+    <if test="distinct">
+      distinct
+    </if>
+    <include refid="Base_Column_List" />
+    from jsh_material_price_history
+    <if test="_parameter != null">
+      <include refid="Example_Where_Clause" />
+    </if>
+    <if test="orderByClause != null">
+      order by ${orderByClause}
+    </if>
+  </select>
+  
+  <select id="selectByPrimaryKey" parameterType="java.lang.Long" resultMap="BaseResultMap">
+    select 
+    <include refid="Base_Column_List" />
+    from jsh_material_price_history
+    where id = #{id,jdbcType=BIGINT}
+  </select>
+  
+  <delete id="deleteByPrimaryKey" parameterType="java.lang.Long">
+    delete from jsh_material_price_history
+    where id = #{id,jdbcType=BIGINT}
+  </delete>
+  
+  <delete id="deleteByExample" parameterType="com.jsh.erp.datasource.entities.MaterialPriceHistoryExample">
+    delete from jsh_material_price_history
+    <if test="_parameter != null">
+      <include refid="Example_Where_Clause" />
+    </if>
+  </delete>
+  
+  <insert id="insert" parameterType="com.jsh.erp.datasource.entities.MaterialPriceHistory">
+    insert into jsh_material_price_history (id, material_id, material_extend_id, 
+      bar_code, retail_price, effective_date, 
+      change_reason, change_source, source_bill_id, 
+      source_bill_number, create_time, create_serial, 
+      delete_flag)
+    values (#{id,jdbcType=BIGINT}, #{materialId,jdbcType=BIGINT}, #{materialExtendId,jdbcType=BIGINT}, 
+      #{barCode,jdbcType=VARCHAR}, #{retailPrice,jdbcType=DECIMAL}, #{effectiveDate,jdbcType=DATE}, 
+      #{changeReason,jdbcType=VARCHAR}, #{changeSource,jdbcType=VARCHAR}, #{sourceBillId,jdbcType=BIGINT}, 
+      #{sourceBillNumber,jdbcType=VARCHAR}, #{createTime,jdbcType=TIMESTAMP}, #{createSerial,jdbcType=VARCHAR}, 
+      #{deleteFlag,jdbcType=VARCHAR})
+  </insert>
+  
+  <insert id="insertSelective" parameterType="com.jsh.erp.datasource.entities.MaterialPriceHistory">
+    insert into jsh_material_price_history
+    <trim prefix="(" suffix=")" suffixOverrides=",">
+      <if test="id != null">
+        id,
+      </if>
+      <if test="materialId != null">
+        material_id,
+      </if>
+      <if test="materialExtendId != null">
+        material_extend_id,
+      </if>
+      <if test="barCode != null">
+        bar_code,
+      </if>
+      <if test="retailPrice != null">
+        retail_price,
+      </if>
+      <if test="effectiveDate != null">
+        effective_date,
+      </if>
+      <if test="changeReason != null">
+        change_reason,
+      </if>
+      <if test="changeSource != null">
+        change_source,
+      </if>
+      <if test="sourceBillId != null">
+        source_bill_id,
+      </if>
+      <if test="sourceBillNumber != null">
+        source_bill_number,
+      </if>
+      <if test="createTime != null">
+        create_time,
+      </if>
+      <if test="createSerial != null">
+        create_serial,
+      </if>
+      <if test="deleteFlag != null">
+        delete_flag,
+      </if>
+    </trim>
+    <trim prefix="values (" suffix=")" suffixOverrides=",">
+      <if test="id != null">
+        #{id,jdbcType=BIGINT},
+      </if>
+      <if test="materialId != null">
+        #{materialId,jdbcType=BIGINT},
+      </if>
+      <if test="materialExtendId != null">
+        #{materialExtendId,jdbcType=BIGINT},
+      </if>
+      <if test="barCode != null">
+        #{barCode,jdbcType=VARCHAR},
+      </if>
+      <if test="retailPrice != null">
+        #{retailPrice,jdbcType=DECIMAL},
+      </if>
+      <if test="effectiveDate != null">
+        #{effectiveDate,jdbcType=DATE},
+      </if>
+      <if test="changeReason != null">
+        #{changeReason,jdbcType=VARCHAR},
+      </if>
+      <if test="changeSource != null">
+        #{changeSource,jdbcType=VARCHAR},
+      </if>
+      <if test="sourceBillId != null">
+        #{sourceBillId,jdbcType=BIGINT},
+      </if>
+      <if test="sourceBillNumber != null">
+        #{sourceBillNumber,jdbcType=VARCHAR},
+      </if>
+      <if test="createTime != null">
+        #{createTime,jdbcType=TIMESTAMP},
+      </if>
+      <if test="createSerial != null">
+        #{createSerial,jdbcType=VARCHAR},
+      </if>
+      <if test="deleteFlag != null">
+        #{deleteFlag,jdbcType=VARCHAR},
+      </if>
+    </trim>
+  </insert>
+  
+  <select id="countByExample" parameterType="com.jsh.erp.datasource.entities.MaterialPriceHistoryExample" resultType="java.lang.Long">
+    select count(*) from jsh_material_price_history
+    <if test="_parameter != null">
+      <include refid="Example_Where_Clause" />
+    </if>
+  </select>
+  
+  <update id="updateByExampleSelective" parameterType="map">
+    update jsh_material_price_history
+    <set>
+      <if test="record.id != null">
+        id = #{record.id,jdbcType=BIGINT},
+      </if>
+      <if test="record.materialId != null">
+        material_id = #{record.materialId,jdbcType=BIGINT},
+      </if>
+      <if test="record.materialExtendId != null">
+        material_extend_id = #{record.materialExtendId,jdbcType=BIGINT},
+      </if>
+      <if test="record.barCode != null">
+        bar_code = #{record.barCode,jdbcType=VARCHAR},
+      </if>
+      <if test="record.retailPrice != null">
+        retail_price = #{record.retailPrice,jdbcType=DECIMAL},
+      </if>
+      <if test="record.effectiveDate != null">
+        effective_date = #{record.effectiveDate,jdbcType=DATE},
+      </if>
+      <if test="record.changeReason != null">
+        change_reason = #{record.changeReason,jdbcType=VARCHAR},
+      </if>
+      <if test="record.changeSource != null">
+        change_source = #{record.changeSource,jdbcType=VARCHAR},
+      </if>
+      <if test="record.sourceBillId != null">
+        source_bill_id = #{record.sourceBillId,jdbcType=BIGINT},
+      </if>
+      <if test="record.sourceBillNumber != null">
+        source_bill_number = #{record.sourceBillNumber,jdbcType=VARCHAR},
+      </if>
+      <if test="record.createTime != null">
+        create_time = #{record.createTime,jdbcType=TIMESTAMP},
+      </if>
+      <if test="record.createSerial != null">
+        create_serial = #{record.createSerial,jdbcType=VARCHAR},
+      </if>
+      <if test="record.deleteFlag != null">
+        delete_flag = #{record.deleteFlag,jdbcType=VARCHAR},
+      </if>
+    </set>
+    <if test="_parameter != null">
+      <include refid="Update_By_Example_Where_Clause" />
+    </if>
+  </update>
+  
+  <update id="updateByExample" parameterType="map">
+    update jsh_material_price_history
+    set id = #{record.id,jdbcType=BIGINT},
+      material_id = #{record.materialId,jdbcType=BIGINT},
+      material_extend_id = #{record.materialExtendId,jdbcType=BIGINT},
+      bar_code = #{record.barCode,jdbcType=VARCHAR},
+      retail_price = #{record.retailPrice,jdbcType=DECIMAL},
+      effective_date = #{record.effectiveDate,jdbcType=DATE},
+      change_reason = #{record.changeReason,jdbcType=VARCHAR},
+      change_source = #{record.changeSource,jdbcType=VARCHAR},
+      source_bill_id = #{record.sourceBillId,jdbcType=BIGINT},
+      source_bill_number = #{record.sourceBillNumber,jdbcType=VARCHAR},
+      create_time = #{record.createTime,jdbcType=TIMESTAMP},
+      create_serial = #{record.createSerial,jdbcType=VARCHAR},
+      delete_flag = #{record.deleteFlag,jdbcType=VARCHAR}
+    <if test="_parameter != null">
+      <include refid="Update_By_Example_Where_Clause" />
+    </if>
+  </update>
+  
+  <update id="updateByPrimaryKeySelective" parameterType="com.jsh.erp.datasource.entities.MaterialPriceHistory">
+    update jsh_material_price_history
+    <set>
+      <if test="materialId != null">
+        material_id = #{materialId,jdbcType=BIGINT},
+      </if>
+      <if test="materialExtendId != null">
+        material_extend_id = #{materialExtendId,jdbcType=BIGINT},
+      </if>
+      <if test="barCode != null">
+        bar_code = #{barCode,jdbcType=VARCHAR},
+      </if>
+      <if test="retailPrice != null">
+        retail_price = #{retailPrice,jdbcType=DECIMAL},
+      </if>
+      <if test="effectiveDate != null">
+        effective_date = #{effectiveDate,jdbcType=DATE},
+      </if>
+      <if test="changeReason != null">
+        change_reason = #{changeReason,jdbcType=VARCHAR},
+      </if>
+      <if test="changeSource != null">
+        change_source = #{changeSource,jdbcType=VARCHAR},
+      </if>
+      <if test="sourceBillId != null">
+        source_bill_id = #{sourceBillId,jdbcType=BIGINT},
+      </if>
+      <if test="sourceBillNumber != null">
+        source_bill_number = #{sourceBillNumber,jdbcType=VARCHAR},
+      </if>
+      <if test="createTime != null">
+        create_time = #{createTime,jdbcType=TIMESTAMP},
+      </if>
+      <if test="createSerial != null">
+        create_serial = #{createSerial,jdbcType=VARCHAR},
+      </if>
+      <if test="deleteFlag != null">
+        delete_flag = #{deleteFlag,jdbcType=VARCHAR},
+      </if>
+    </set>
+    where id = #{id,jdbcType=BIGINT}
+  </update>
+  
+  <update id="updateByPrimaryKey" parameterType="com.jsh.erp.datasource.entities.MaterialPriceHistory">
+    update jsh_material_price_history
+    set material_id = #{materialId,jdbcType=BIGINT},
+      material_extend_id = #{materialExtendId,jdbcType=BIGINT},
+      bar_code = #{barCode,jdbcType=VARCHAR},
+      retail_price = #{retailPrice,jdbcType=DECIMAL},
+      effective_date = #{effectiveDate,jdbcType=DATE},
+      change_reason = #{changeReason,jdbcType=VARCHAR},
+      change_source = #{changeSource,jdbcType=VARCHAR},
+      source_bill_id = #{sourceBillId,jdbcType=BIGINT},
+      source_bill_number = #{sourceBillNumber,jdbcType=VARCHAR},
+      create_time = #{createTime,jdbcType=TIMESTAMP},
+      create_serial = #{createSerial,jdbcType=VARCHAR},
+      delete_flag = #{deleteFlag,jdbcType=VARCHAR}
+    where id = #{id,jdbcType=BIGINT}
+  </update>
+</mapper>
+

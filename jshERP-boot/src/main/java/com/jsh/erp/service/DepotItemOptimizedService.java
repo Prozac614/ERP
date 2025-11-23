@@ -1394,5 +1394,4 @@ public class DepotItemOptimizedService {
             return totalAmount;
         }
     }
-
 }
