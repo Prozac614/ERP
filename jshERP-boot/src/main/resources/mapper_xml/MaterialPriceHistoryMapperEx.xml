@@ -73,5 +73,16 @@
     LIMIT 1
   </select>
   
+  <!-- 查询指定日期该商品的有效价格 -->
+  <select id="getPriceByMaterialIdAndDate" resultType="java.math.BigDecimal">
+    SELECT retail_price
+    FROM jsh_material_price_history
+    WHERE material_id = #{materialId,jdbcType=BIGINT}
+      AND effective_date &lt;= #{targetDate,jdbcType=VARCHAR}
+      AND delete_flag = '0'
+    ORDER BY effective_date DESC, create_time DESC
+    LIMIT 1
+  </select>
+  
 </mapper>
 

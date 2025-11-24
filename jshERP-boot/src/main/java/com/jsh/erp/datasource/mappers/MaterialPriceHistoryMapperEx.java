@@ -36,5 +36,16 @@ public interface MaterialPriceHistoryMapperEx {
      * @return 最近的价格记录
      */
     MaterialPriceHistory getLatestByMaterialExtendId(@Param("materialExtendId") Long materialExtendId);
+    
+    /**
+     * 查询指定日期该商品的有效价格
+     * 查询逻辑：返回 effective_date <= targetDate 的最新一条价格记录
+     * 
+     * @param materialId 商品ID
+     * @param targetDate 目标日期（格式：yyyy-MM-dd）
+     * @return 有效价格，查不到返回null
+     */
+    java.math.BigDecimal getPriceByMaterialIdAndDate(@Param("materialId") Long materialId, 
+                                                      @Param("targetDate") String targetDate);
 }
 

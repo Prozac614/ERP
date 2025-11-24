@@ -38,6 +38,9 @@ public class DepotItemOptimizedService {
     @Resource
     private UserService userService;
 
+    @Resource
+    private com.jsh.erp.datasource.mappers.MaterialPriceHistoryMapperEx materialPriceHistoryMapperEx;
+
     /**
      * 获取商品库存统计与每日出库数据 - 实时数据版本
      * 直接查询数据库，无缓存机制
@@ -1306,33 +1309,39 @@ public class DepotItemOptimizedService {
         }
     }
 
+    /**
+     * 解析每日价格（从历史价格表查询）
+     * 查询逻辑：返回 effective_date <= date 的最新一条价格记录
+     * 
+     * @param date 目标日期（格式：yyyy-MM-dd）
+     * @param materialId 商品ID
+     * @param dateMaterialPriceMap 废弃参数（保持签名兼容）
+     * @param defaultPriceMap 废弃参数（保持签名兼容）
+     * @return 有效价格，查不到返回 BigDecimal.ZERO
+     */
     private BigDecimal resolveDailyPrice(String date, Long materialId,
             Map<String, Map<Long, DailyPriceInfo>> dateMaterialPriceMap, Map<Long, BigDecimal> defaultPriceMap) {
-        if (materialId == null) {
+        if (materialId == null || date == null) {
             return BigDecimal.ZERO;
         }
-        Map<Long, DailyPriceInfo> materialPriceMap = dateMaterialPriceMap.get(date);
-        DailyPriceInfo dailyPriceInfo = materialPriceMap != null ? materialPriceMap.get(materialId) : null;
-        if (dailyPriceInfo != null) {
-            BigDecimal latestInPrice = dailyPriceInfo.getLatestInPrice();
-            if (latestInPrice != null && latestInPrice.compareTo(BigDecimal.ZERO) > 0) {
-                return latestInPrice;
+        
+        try {
+            BigDecimal price = materialPriceHistoryMapperEx.getPriceByMaterialIdAndDate(materialId, date);
+            if (price != null) {
+                return price;
             }
-            BigDecimal latestOutPrice = dailyPriceInfo.getLatestOutPrice();
-            if (latestOutPrice != null && latestOutPrice.compareTo(BigDecimal.ZERO) > 0) {
-                return latestOutPrice;
-            }
+        } catch (Exception e) {
+            logger.error("查询商品{}在日期{}的历史价格失败", materialId, date, e);
         }
-        BigDecimal defaultPrice = defaultPriceMap.get(materialId);
-        if (defaultPrice != null) {
-            return defaultPrice;
-        }
-        if (dailyPriceInfo != null && dailyPriceInfo.isLatestOutPriceZero()) {
-            return BigDecimal.ZERO;
-        }
+        
+        // 查询失败或查不到记录，返回0
         return BigDecimal.ZERO;
     }
 
+    /**
+     * @deprecated 此类已废弃，价格现在直接从历史价格表查询
+     */
+    @Deprecated
     private static class DailyPriceInfo {
         private BigDecimal latestInPrice;
         private BigDecimal latestOutPrice;
