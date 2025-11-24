@@ -47,5 +47,15 @@ public interface MaterialPriceHistoryMapperEx {
      */
     java.math.BigDecimal getPriceByMaterialIdAndDate(@Param("materialId") Long materialId, 
                                                       @Param("targetDate") String targetDate);
+    
+    /**
+     * 批量查询指定商品在指定日期之前的价格历史
+     * 
+     * @param materialIds 商品ID列表
+     * @param endDate 结束日期（格式：yyyy-MM-dd）
+     * @return 价格历史列表（按 material_id, effective_date DESC, create_time DESC 排序）
+     */
+    List<MaterialPriceHistory> batchGetPriceHistory(@Param("materialIds") List<Long> materialIds,
+                                                     @Param("endDate") String endDate);
 }
 

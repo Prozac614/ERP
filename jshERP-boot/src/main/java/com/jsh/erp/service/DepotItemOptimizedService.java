@@ -1096,6 +1096,21 @@ public class DepotItemOptimizedService {
                     impactQueryEndDate, tenantId);
             logger.info("【步骤2】单据影响查询完成 - 单据明细数: {}", billImpactList.size());
 
+            // 步骤2.5：生成日期范围内的所有日期列表
+            List<String> dateList = new ArrayList<>();
+            Calendar cal = Calendar.getInstance();
+            cal.setTime(begin);
+            while (!cal.getTime().after(end)) {
+                dateList.add(sdf.format(cal.getTime()));
+                cal.add(Calendar.DAY_OF_MONTH, 1);
+            }
+            logger.info("【步骤2.5】生成日期列表完成 - 日期数量: {}", dateList.size());
+
+            // 步骤2.6：批量预加载历史价格
+            List<Long> materialIdList = new ArrayList<>(priceMap.keySet());
+            Map<String, Map<Long, BigDecimal>> historicalPriceCache = 
+                preloadHistoricalPrices(materialIdList, dateList, endDate);
+
             // 步骤3：按日期分组构建数据结构
             // dateMaterialImpactMap: 每天每个商品的单据影响
             // dateMaterialExcludeShopOutMap: 每天每个商品指定店铺的销售出库
@@ -1161,13 +1176,35 @@ public class DepotItemOptimizedService {
                         dailyPriceInfo.updateLatestOutPrice(unitPrice);
                     }
 
+                    // 优先使用历史价格，只有当历史价格不存在或为0时，才使用单据单价
+                    BigDecimal historicalPrice = resolveDailyPrice(billDate, materialId, historicalPriceCache);
                     BigDecimal effectivePrice;
-                    if (unitPrice != null && unitPrice.compareTo(BigDecimal.ZERO) > 0) {
+                    String priceSource;
+                    
+                    if (historicalPrice != null && historicalPrice.compareTo(BigDecimal.ZERO) > 0) {
+                        effectivePrice = historicalPrice;
+                        priceSource = "历史价格";
+                    } else if (unitPrice != null && unitPrice.compareTo(BigDecimal.ZERO) > 0) {
                         effectivePrice = unitPrice;
+                        priceSource = "单据单价";
                     } else {
-                        effectivePrice = resolveDailyPrice(billDate, materialId, dateMaterialPriceMap, priceMap);
+                        effectivePrice = BigDecimal.ZERO;
+                        priceSource = "默认0";
                     }
+                    
                     BigDecimal amount = quantity.multiply(effectivePrice);
+                    
+                    // 调试日志：跟踪单据ID=465的明细计算
+                    if (billId != null && billId == 465L) {
+                        logger.info("【单据465明细】商品ID={}, 数量={}, 单价(原始)={}, 历史价格={}, 有效单价={}({}), 金额={}", 
+                                materialId, quantity.setScale(2, BigDecimal.ROUND_HALF_UP),
+                                unitPrice != null ? unitPrice.setScale(2, BigDecimal.ROUND_HALF_UP) : "null",
+                                historicalPrice != null ? historicalPrice.setScale(2, BigDecimal.ROUND_HALF_UP) : "null",
+                                effectivePrice.setScale(2, BigDecimal.ROUND_HALF_UP),
+                                priceSource,
+                                amount.setScale(2, BigDecimal.ROUND_HALF_UP));
+                    }
+                    
                     if (billId != null) {
                         BillAmountSummary summary = billAmountSummaryMap.computeIfAbsent(billId,
                                 k -> new BillAmountSummary(billId, billNumber, billDate));
@@ -1181,19 +1218,24 @@ public class DepotItemOptimizedService {
                         summary.getBillNumber(), summary.getBillId(),
                         summary.getTotalAmount().setScale(2, BigDecimal.ROUND_HALF_UP));
             }
-
-            // 步骤4：生成日期范围内的所有日期列表
-            List<String> dateList = new ArrayList<>();
-            Calendar cal = Calendar.getInstance();
-            cal.setTime(begin);
-            while (!cal.getTime().after(end)) {
-                dateList.add(sdf.format(cal.getTime()));
-                cal.add(Calendar.DAY_OF_MONTH, 1);
+            
+            // 统计排除店铺单据的总体情况
+            int totalExcludeShopDateCount = dateMaterialExcludeShopOutMap.size();
+            BigDecimal totalExcludeShopOutQuantity = BigDecimal.ZERO;
+            int totalExcludeShopMaterialCount = 0;
+            for (Map<Long, BigDecimal> dateMap : dateMaterialExcludeShopOutMap.values()) {
+                for (BigDecimal quantity : dateMap.values()) {
+                    totalExcludeShopOutQuantity = totalExcludeShopOutQuantity.add(quantity);
+                    totalExcludeShopMaterialCount++;
+                }
             }
-            logger.info("【步骤4】生成日期列表完成 - 日期数量: {}", dateList.size());
+            logger.info("【步骤3】排除店铺单据统计 - 涉及日期数: {}, 累计出库数量: {}, 累计商品次数: {}", 
+                    totalExcludeShopDateCount,
+                    totalExcludeShopOutQuantity.setScale(2, BigDecimal.ROUND_HALF_UP),
+                    totalExcludeShopMaterialCount);
 
-            // 步骤5：使用前缀和算法从后往前计算每一天的库存总金额
-            logger.info("【步骤5】开始使用前缀和算法计算每一天的库存总金额...");
+            // 步骤4：使用前缀和算法从后往前计算每一天的库存总金额
+            logger.info("【步骤4】开始使用前缀和算法计算每一天的库存总金额...");
             List<Map<String, Object>> resultList = new ArrayList<>();
 
             Map<Long, BigDecimal> runningStockMap = new HashMap<>(currentStockMap);
@@ -1218,6 +1260,8 @@ public class DepotItemOptimizedService {
                 BigDecimal beforeStockSum = BigDecimal.ZERO;
                 BigDecimal afterStockSum = BigDecimal.ZERO;
                 BigDecimal excludeShopOutSum = BigDecimal.ZERO;
+                BigDecimal excludeShopOutValue = BigDecimal.ZERO; // 排除店铺的出库总金额
+                int excludeShopOutMaterialCount = 0; // 排除店铺涉及的商品数量
 
                 for (Map.Entry<Long, BigDecimal> entry : priceMap.entrySet()) {
                     Long materialId = entry.getKey();
@@ -1232,13 +1276,27 @@ public class DepotItemOptimizedService {
                     afterStockSum = afterStockSum.add(excludeAfterStock);
                     excludeShopOutSum = excludeShopOutSum.add(excludeShopOut);
 
-                    BigDecimal effectivePrice = resolveDailyPrice(date, materialId, dateMaterialPriceMap, priceMap);
+                    BigDecimal effectivePrice = resolveDailyPrice(date, materialId, historicalPriceCache);
 
                     BigDecimal baseBeforeValue = excludeBeforeStock.multiply(effectivePrice);
                     excludeBeforeValue = excludeBeforeValue.add(baseBeforeValue);
 
                     BigDecimal afterValueForMaterial = excludeAfterStock.multiply(effectivePrice);
                     excludeAfterValue = excludeAfterValue.add(afterValueForMaterial);
+                    
+                    // 计算排除店铺的出库金额
+                    if (excludeShopOut.compareTo(BigDecimal.ZERO) > 0) {
+                        BigDecimal excludeShopOutAmount = excludeShopOut.multiply(effectivePrice);
+                        excludeShopOutValue = excludeShopOutValue.add(excludeShopOutAmount);
+                        excludeShopOutMaterialCount++;
+                        
+                        // 调试日志：显示每个排除店铺商品的计算明细
+                        logger.info("【排除店铺明细】日期={}, 商品ID={}, 出库数量={}, 有效单价={}, 出库金额={}", 
+                                date, materialId,
+                                excludeShopOut.setScale(2, BigDecimal.ROUND_HALF_UP),
+                                effectivePrice.setScale(2, BigDecimal.ROUND_HALF_UP),
+                                excludeShopOutAmount.setScale(2, BigDecimal.ROUND_HALF_UP));
+                    }
                 }
 
                 // 记录当日关联单据金额
@@ -1250,6 +1308,12 @@ public class DepotItemOptimizedService {
                 logger.info("库存金额汇总 | 日期={}, 排除前={}, 排除后={}, 关联单据={}", date,
                         excludeBeforeValue.setScale(2, BigDecimal.ROUND_HALF_UP),
                         excludeAfterValue.setScale(2, BigDecimal.ROUND_HALF_UP), relatedBillSummary);
+                
+                // 输出排除店铺单据的详细信息
+                logger.info("排除店铺单据 | 日期={}, 出库数量={}, 出库金额={}, 涉及商品数={}", date,
+                        excludeShopOutSum.setScale(2, BigDecimal.ROUND_HALF_UP),
+                        excludeShopOutValue.setScale(2, BigDecimal.ROUND_HALF_UP),
+                        excludeShopOutMaterialCount);
 
                 // 添加到结果列表
                 Map<String, Object> resultItem = new HashMap<>();
@@ -1272,8 +1336,7 @@ public class DepotItemOptimizedService {
                                 ? ((Number) detail.get("materialId")).longValue()
                                 : null;
                         if (materialId != null) {
-                            BigDecimal effectivePrice = resolveDailyPrice(date, materialId, dateMaterialPriceMap,
-                                    priceMap);
+                            BigDecimal effectivePrice = resolveDailyPrice(date, materialId, historicalPriceCache);
                             BigDecimal amount = quantity.multiply(effectivePrice);
                             todayImpactValue = todayImpactValue.add(amount);
                         }
@@ -1282,8 +1345,7 @@ public class DepotItemOptimizedService {
                     for (Map.Entry<Long, BigDecimal> impactEntry : dateImpactMap.entrySet()) {
                         BigDecimal impact = impactEntry.getValue();
                         todayImpactTotal = todayImpactTotal.add(impact);
-                        BigDecimal effectivePrice = resolveDailyPrice(date, impactEntry.getKey(), dateMaterialPriceMap,
-                                priceMap);
+                        BigDecimal effectivePrice = resolveDailyPrice(date, impactEntry.getKey(), historicalPriceCache);
                         todayImpactValue = todayImpactValue.add(impact.multiply(effectivePrice));
                     }
                 }
@@ -1310,6 +1372,69 @@ public class DepotItemOptimizedService {
     }
 
     /**
+     * 批量预加载历史价格到缓存
+     * 
+     * @param materialIds 商品ID列表
+     * @param dateList 日期列表（格式：yyyy-MM-dd）
+     * @param endDate 结束日期（格式：yyyy-MM-dd）
+     * @return 价格缓存 Map<日期, Map<商品ID, 价格>>
+     */
+    private Map<String, Map<Long, BigDecimal>> preloadHistoricalPrices(
+            List<Long> materialIds, List<String> dateList, String endDate) {
+        
+        logger.info("【步骤4.5】开始批量预加载历史价格 - 商品数: {}, 日期数: {}", 
+                    materialIds.size(), dateList.size());
+        
+        long startTime = System.currentTimeMillis();
+        
+        // 1. 批量查询所有价格记录
+        List<com.jsh.erp.datasource.entities.MaterialPriceHistory> priceHistoryList = 
+            materialPriceHistoryMapperEx.batchGetPriceHistory(materialIds, endDate);
+        
+        logger.info("【步骤4.5】批量查询完成 - 查询到 {} 条价格记录", priceHistoryList.size());
+        
+        // 2. 按商品ID分组
+        Map<Long, List<com.jsh.erp.datasource.entities.MaterialPriceHistory>> groupedByMaterial = 
+            priceHistoryList.stream()
+                .collect(java.util.stream.Collectors.groupingBy(
+                    com.jsh.erp.datasource.entities.MaterialPriceHistory::getMaterialId));
+        
+        // 3. 为每个日期、每个商品找到有效价格
+        Map<String, Map<Long, BigDecimal>> priceCache = new HashMap<>();
+        
+        for (String date : dateList) {
+            Map<Long, BigDecimal> datePriceMap = new HashMap<>();
+            
+            for (Long materialId : materialIds) {
+                List<com.jsh.erp.datasource.entities.MaterialPriceHistory> materialPrices = 
+                    groupedByMaterial.get(materialId);
+                
+                if (materialPrices != null && !materialPrices.isEmpty()) {
+                    // 找到 effective_date <= date 的第一条记录（已按日期降序排序）
+                    for (com.jsh.erp.datasource.entities.MaterialPriceHistory price : materialPrices) {
+                        if (price.getEffectiveDate() != null && price.getRetailPrice() != null) {
+                            String effectiveDate = new SimpleDateFormat("yyyy-MM-dd")
+                                .format(price.getEffectiveDate());
+                            if (effectiveDate.compareTo(date) <= 0) {
+                                datePriceMap.put(materialId, price.getRetailPrice());
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            priceCache.put(date, datePriceMap);
+        }
+        
+        long endTime = System.currentTimeMillis();
+        logger.info("【步骤4.5】价格缓存构建完成 - 耗时: {}ms, 缓存条目数: {}", 
+                    endTime - startTime, priceCache.size());
+        
+        return priceCache;
+    }
+
+    /**
      * 解析每日价格（从历史价格表查询）
      * 查询逻辑：返回 effective_date <= date 的最新一条价格记录
      * 
@@ -1318,7 +1443,9 @@ public class DepotItemOptimizedService {
      * @param dateMaterialPriceMap 废弃参数（保持签名兼容）
      * @param defaultPriceMap 废弃参数（保持签名兼容）
      * @return 有效价格，查不到返回 BigDecimal.ZERO
+     * @deprecated 已废弃，使用带缓存参数的版本
      */
+    @Deprecated
     private BigDecimal resolveDailyPrice(String date, Long materialId,
             Map<String, Map<Long, DailyPriceInfo>> dateMaterialPriceMap, Map<Long, BigDecimal> defaultPriceMap) {
         if (materialId == null || date == null) {
@@ -1335,6 +1462,36 @@ public class DepotItemOptimizedService {
         }
         
         // 查询失败或查不到记录，返回0
+        return BigDecimal.ZERO;
+    }
+
+    /**
+     * 解析每日价格（从缓存读取）
+     * 
+     * @param date 目标日期（格式：yyyy-MM-dd）
+     * @param materialId 商品ID
+     * @param historicalPriceCache 历史价格缓存
+     * @return 有效价格，查不到返回 BigDecimal.ZERO
+     */
+    private BigDecimal resolveDailyPrice(String date, Long materialId,
+            Map<String, Map<Long, BigDecimal>> historicalPriceCache) {
+        if (materialId == null || date == null) {
+            return BigDecimal.ZERO;
+        }
+        
+        // 优先从缓存读取
+        if (historicalPriceCache != null) {
+            Map<Long, BigDecimal> datePriceMap = historicalPriceCache.get(date);
+            if (datePriceMap != null) {
+                BigDecimal price = datePriceMap.get(materialId);
+                if (price != null) {
+                    return price;
+                }
+            }
+        }
+        
+        // 缓存未命中，返回0（理论上不应该发生，因为已预加载）
+        logger.warn("价格缓存未命中 - 日期: {}, 商品ID: {}", date, materialId);
         return BigDecimal.ZERO;
     }
 

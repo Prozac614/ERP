@@ -84,5 +84,21 @@
     LIMIT 1
   </select>
   
+  <!-- 批量查询指定商品在指定日期之前的价格历史 -->
+  <select id="batchGetPriceHistory" resultMap="BaseResultMap">
+    SELECT
+      id, material_id, material_extend_id, bar_code, retail_price, effective_date,
+      change_reason, change_source, source_bill_id, source_bill_number, create_time,
+      create_serial, tenant_id, delete_flag
+    FROM jsh_material_price_history
+    WHERE material_id IN
+    <foreach collection="materialIds" item="id" separator="," open="(" close=")">
+      #{id,jdbcType=BIGINT}
+    </foreach>
+      AND effective_date &lt;= #{endDate,jdbcType=VARCHAR}
+      AND delete_flag = '0'
+    ORDER BY material_id, effective_date DESC, create_time DESC
+  </select>
+  
 </mapper>
 
