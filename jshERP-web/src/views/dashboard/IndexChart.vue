@@ -1177,6 +1177,59 @@ import { getAction, postAction, downFile } from '@/api/manage'
         this.searchQuery()
       },
 
+      // 根据维度类型调整日期范围
+      adjustDateRangeByDimension(beginMoment, endMoment, dimensionType) {
+        if (!beginMoment || !endMoment) {
+          return [beginMoment, endMoment]
+        }
+        
+        // 开始日期保持为月/季度/年的第一天
+        let adjustedBegin = beginMoment.clone().startOf('day')
+        let adjustedEnd = endMoment.clone()
+        
+        // 根据维度类型调整结束日期
+        switch(dimensionType) {
+          case 'monthly':
+            // 月维度：结束日期调整为选中月份的最后一天
+            adjustedEnd = adjustedEnd.endOf('month').startOf('day').add(1, 'day').subtract(1, 'second')
+            break
+            
+          case 'quarter':
+            // 季度维度：结束日期调整为选中季度的最后一天
+            adjustedEnd = adjustedEnd.endOf('quarter').startOf('day').add(1, 'day').subtract(1, 'second')
+            break
+            
+          case 'halfYear':
+            // 半年维度：结束日期调整为选中半年的最后一天
+            const endQuarter = adjustedEnd.quarter()
+            if (endQuarter <= 2) {
+              // H1: 结束于6月30日
+              adjustedEnd = adjustedEnd.month(5).endOf('month').startOf('day').add(1, 'day').subtract(1, 'second')
+            } else {
+              // H2: 结束于12月31日
+              adjustedEnd = adjustedEnd.month(11).endOf('month').startOf('day').add(1, 'day').subtract(1, 'second')
+            }
+            break
+            
+          case 'year':
+            // 年维度：结束日期调整为选中年份的最后一天
+            adjustedEnd = adjustedEnd.endOf('year').startOf('day').add(1, 'day').subtract(1, 'second')
+            break
+            
+          case 'daily':
+          default:
+            // 日维度：保持不变
+            break
+        }
+        
+        console.log(`日期范围调整 [${dimensionType}]:`, {
+          原始: `${beginMoment.format('YYYY-MM-DD')} ~ ${endMoment.format('YYYY-MM-DD')}`,
+          调整后: `${adjustedBegin.format('YYYY-MM-DD')} ~ ${adjustedEnd.format('YYYY-MM-DD')}`
+        })
+        
+        return [adjustedBegin, adjustedEnd]
+      },
+
       // 加载库存数据（性能优化版本）
       loadStockData(page) {
         if (page) {
@@ -1208,9 +1261,16 @@ import { getAction, postAction, downFile } from '@/api/manage'
         
         // 根据维度类型处理时间参数
         if (this.queryParam.createTimeRange && this.queryParam.createTimeRange.length === 2) {
-          // 所有维度都使用用户选择的时间范围
-          params.beginTime = this.queryParam.createTimeRange[0].format('YYYY-MM-DD')
-          params.endTime = this.queryParam.createTimeRange[1].format('YYYY-MM-DD')
+          // 根据维度类型调整日期范围
+          const [adjustedBegin, adjustedEnd] = this.adjustDateRangeByDimension(
+            this.queryParam.createTimeRange[0],
+            this.queryParam.createTimeRange[1],
+            this.queryParam.dimensionType
+          )
+          
+          // 所有维度都使用调整后的时间范围
+          params.beginTime = adjustedBegin.format('YYYY-MM-DD')
+          params.endTime = adjustedEnd.format('YYYY-MM-DD')
         } else {
           // 如果没有选择时间范围，获取最近几年的完整数据
           const now = moment()

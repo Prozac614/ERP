@@ -1776,7 +1776,7 @@
         AND dh.status = '1'
         AND IFNULL(di.delete_flag, '0') != '1'
         AND IFNULL(dh.delete_flag, '0') != '1'
-        AND dh.oper_time >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
+        AND dh.oper_time >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
         <if test="tenantId != null">
             AND dh.tenant_id = #{tenantId}
         </if>
@@ -1794,7 +1794,7 @@
           AND dh.status = '1'
           AND IFNULL(di.delete_flag, '0') != '1'
           AND IFNULL(dh.delete_flag, '0') != '1'
-          AND dh.oper_time >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
+          AND dh.oper_time >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
           <if test="tenantId != null">
               AND dh.tenant_id = #{tenantId}
           </if>
